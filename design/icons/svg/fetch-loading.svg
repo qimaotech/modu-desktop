@@ -1,0 +1,21 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  color="#8A8A8A"
+  stroke="currentColor"
+  stroke-width="1.8"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 2.5v3.5" opacity="0.72" />
+  <path d="m16.25 7.75 2.5-2.5" opacity="0.56" />
+  <path d="M18 12h3.5" opacity="0.40" />
+  <path d="m16.25 16.25 2.5 2.5" opacity="0.28" />
+  <path d="M12 18v3.5" opacity="0.20" />
+  <path d="m5.25 18.75 2.5-2.5" opacity="0.32" />
+  <path d="M2.5 12H6" opacity="0.52" />
+  <path d="m5.25 5.25 2.5 2.5" />
+</svg>

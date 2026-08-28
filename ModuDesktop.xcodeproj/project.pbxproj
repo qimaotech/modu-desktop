@@ -1,0 +1,665 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		C1A044F3303D25F600CF777D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1A044E4303D25F500CF777D;
+			remoteInfo = ModuDesktop;
+		};
+		C1A044FD303D25F600CF777D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1A044E4303D25F500CF777D;
+			remoteInfo = ModuDesktop;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C1A6FFDC303D6BB000965082 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		C1A044E5303D25F500CF777D /* ModuDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ModuDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A6FFDE303D6BB000965082 /* ModuCLI */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ModuCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C1A044E7303D25F500CF777D /* ModuDesktop */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ModuDesktop;
+			sourceTree = "<group>";
+		};
+		C1A044F5303D25F600CF777D /* ModuDesktopTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ModuDesktopTests;
+			sourceTree = "<group>";
+		};
+		C1A044FF303D25F600CF777D /* ModuDesktopUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ModuDesktopUITests;
+			sourceTree = "<group>";
+		};
+		C1A6FFDF303D6BB000965082 /* ModuCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ModuCLI;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C1A044E2303D25F500CF777D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044EF303D25F600CF777D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044F9303D25F600CF777D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A6FFDB303D6BB000965082 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C1A044DC303D25F500CF777D = {
+			isa = PBXGroup;
+			children = (
+				C1A044E7303D25F500CF777D /* ModuDesktop */,
+				C1A044F5303D25F600CF777D /* ModuDesktopTests */,
+				C1A044FF303D25F600CF777D /* ModuDesktopUITests */,
+				C1A6FFDF303D6BB000965082 /* ModuCLI */,
+				C1A044E6303D25F500CF777D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C1A044E6303D25F500CF777D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C1A044E5303D25F500CF777D /* ModuDesktop.app */,
+				C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */,
+				C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */,
+				C1A6FFDE303D6BB000965082 /* ModuCLI */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C1A044E4303D25F500CF777D /* ModuDesktop */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A04506303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktop" */;
+			buildPhases = (
+				C1A044E1303D25F500CF777D /* Sources */,
+				C1A044E2303D25F500CF777D /* Frameworks */,
+				C1A044E3303D25F500CF777D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C1A044E7303D25F500CF777D /* ModuDesktop */,
+			);
+			name = ModuDesktop;
+			packageProductDependencies = (
+			);
+			productName = ModuDesktop;
+			productReference = C1A044E5303D25F500CF777D /* ModuDesktop.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C1A044F1303D25F600CF777D /* ModuDesktopTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A04509303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopTests" */;
+			buildPhases = (
+				C1A044EE303D25F600CF777D /* Sources */,
+				C1A044EF303D25F600CF777D /* Frameworks */,
+				C1A044F0303D25F600CF777D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1A044F4303D25F600CF777D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C1A044F5303D25F600CF777D /* ModuDesktopTests */,
+			);
+			name = ModuDesktopTests;
+			packageProductDependencies = (
+			);
+			productName = ModuDesktopTests;
+			productReference = C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C1A044FB303D25F600CF777D /* ModuDesktopUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A0450C303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopUITests" */;
+			buildPhases = (
+				C1A044F8303D25F600CF777D /* Sources */,
+				C1A044F9303D25F600CF777D /* Frameworks */,
+				C1A044FA303D25F600CF777D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1A044FE303D25F600CF777D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C1A044FF303D25F600CF777D /* ModuDesktopUITests */,
+			);
+			name = ModuDesktopUITests;
+			packageProductDependencies = (
+			);
+			productName = ModuDesktopUITests;
+			productReference = C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		C1A6FFDD303D6BB000965082 /* ModuCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A6FFE4303D6BB000965082 /* Build configuration list for PBXNativeTarget "ModuCLI" */;
+			buildPhases = (
+				C1A6FFDA303D6BB000965082 /* Sources */,
+				C1A6FFDB303D6BB000965082 /* Frameworks */,
+				C1A6FFDC303D6BB000965082 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C1A6FFDF303D6BB000965082 /* ModuCLI */,
+			);
+			name = ModuCLI;
+			packageProductDependencies = (
+			);
+			productName = ModuCLI;
+			productReference = C1A6FFDE303D6BB000965082 /* ModuCLI */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C1A044DD303D25F500CF777D /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					C1A044E4303D25F500CF777D = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					C1A044F1303D25F600CF777D = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = C1A044E4303D25F500CF777D;
+					};
+					C1A044FB303D25F600CF777D = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = C1A044E4303D25F500CF777D;
+					};
+					C1A6FFDD303D6BB000965082 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = C1A044E0303D25F500CF777D /* Build configuration list for PBXProject "ModuDesktop" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = C1A044DC303D25F500CF777D;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C1A044E6303D25F500CF777D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C1A044E4303D25F500CF777D /* ModuDesktop */,
+				C1A044F1303D25F600CF777D /* ModuDesktopTests */,
+				C1A044FB303D25F600CF777D /* ModuDesktopUITests */,
+				C1A6FFDD303D6BB000965082 /* ModuCLI */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C1A044E3303D25F500CF777D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044F0303D25F600CF777D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044FA303D25F600CF777D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C1A044E1303D25F500CF777D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044EE303D25F600CF777D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A044F8303D25F600CF777D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C1A6FFDA303D6BB000965082 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C1A044F4303D25F600CF777D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1A044E4303D25F500CF777D /* ModuDesktop */;
+			targetProxy = C1A044F3303D25F600CF777D /* PBXContainerItemProxy */;
+		};
+		C1A044FE303D25F600CF777D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1A044E4303D25F500CF777D /* ModuDesktop */;
+			targetProxy = C1A044FD303D25F600CF777D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C1A04504303D25F600CF777D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C1A04505303D25F600CF777D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		C1A04507303D25F600CF777D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C5SRYZNQTC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C1A04508303D25F600CF777D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C5SRYZNQTC;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C1A0450A303D25F600CF777D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ModuDesktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ModuDesktop";
+			};
+			name = Debug;
+		};
+		C1A0450B303D25F600CF777D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ModuDesktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ModuDesktop";
+			};
+			name = Release;
+		};
+		C1A0450D303D25F600CF777D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ModuDesktop;
+			};
+			name = Debug;
+		};
+		C1A0450E303D25F600CF777D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ModuDesktop;
+			};
+			name = Release;
+		};
+		C1A6FFE2303D6BB000965082 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = C5SRYZNQTC;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "modu-cli";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C1A6FFE3303D6BB000965082 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = C5SRYZNQTC;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "modu-cli";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C1A044E0303D25F500CF777D /* Build configuration list for PBXProject "ModuDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A04504303D25F600CF777D /* Debug */,
+				C1A04505303D25F600CF777D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1A04506303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A04507303D25F600CF777D /* Debug */,
+				C1A04508303D25F600CF777D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1A04509303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A0450A303D25F600CF777D /* Debug */,
+				C1A0450B303D25F600CF777D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1A0450C303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A0450D303D25F600CF777D /* Debug */,
+				C1A0450E303D25F600CF777D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1A6FFE4303D6BB000965082 /* Build configuration list for PBXNativeTarget "ModuCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A6FFE2303D6BB000965082 /* Debug */,
+				C1A6FFE3303D6BB000965082 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C1A044DD303D25F500CF777D /* Project object */;
+}
