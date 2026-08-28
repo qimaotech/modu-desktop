@@ -73,12 +73,14 @@ Modu Desktop 是面向多仓库、跨仓库需求开发的 macOS 原生工作区
 
 - `.modu-worktrees.yaml` 按 group 管理 linked worktree。
 - 无论由 CLI 生成还是手工写入，group 都必须是合法单段目录名和可安全作为字面量使用的 Git 分支名；group 的规范化身份在配置内唯一，并统一用于目录映射、幂等判断和 group 锁键。任一 group 或记录分支非法或碰撞时，整份 `.modu-worktrees.yaml` 无效，不能进入 worktree 生命周期操作。
+- GUI 新建 group 时原样保存 Group Name，不自动 slug 化；新建和编辑都必须至少选择一个仓库。未选择仓库时只禁用提交，不显示额外错误提示。
 - `created-at` 使用本地时间 `YYYY-MM-DD HH:MM:SS`，不附带时区。
 - 已有 group 的 `created-at` 不重写；省略 `document` 保留原值，相同规范化路径幂等，不同路径在 Git 副作用前报冲突。
 - 创建流程必须幂等、可重试，并保留多仓库操作中的成功项。
 - `git worktree add` 已成功但 YAML 写入失败时，只有路径、Git 注册、主仓库、分支和 group 元数据都精确匹配才能补写记录；不匹配项必须标记冲突。
 - 同一 group 的 create/remove 使用跨 App/CLI 的 group 操作锁；同一仓库的 clone/staging 提交、origin 更新、Fetch、Pull、worktree 创建/删除、记录分支删除和 repository cleanup/Trash 移动统一使用跨进程仓库生命周期锁。锁按规范化仓库身份生成，目标目录不存在时也必须生效；多锁按规范化标识排序获取。
-- 删除单个 linked worktree 或整个 group 时，无论 dirty 与否都必须二次确认。
+- 从独立 Delete Linked Worktree 或 Delete Worktree Group 命令删除时，无论 dirty 与否都必须二次确认。Edit Worktree Group 中取消勾选已有仓库并提交，以本次 Save Changes 作为移除对应 linked worktree 和本地分支的明确授权，不再展示第二个确认页。
+- Edit Worktree Group 的 Working Tree 列只显示 Clean、Dirty、Unknown 或 Not Created；Dirty 与 Unknown 都允许取消勾选并保存，且 Clean 不表示没有 ignored content 或未推送提交。执行前在 group/仓库锁内重读身份与 working tree 状态；状态变化的 removal 不执行并刷新对应行，其他不受影响项继续。
 - 用户确认后先执行 `git worktree remove --force`，成功后再对仍存在的记录分支执行 `git branch -D`。
 - 删除弹窗必须列出 worktree、对应本地分支、dirty 状态、ignored content 风险和可检测到的未推送提交风险。
 - dirty 包含 staged、unstaged 和 untracked；ignored content 不计入 dirty，但会被 `git worktree remove --force` 一并删除，必须独立检测并在无法读取时显示 Unknown。未推送风险覆盖当前 worktree HEAD 与记录分支，detached HEAD 必须单独展示并纳入统计，无法读取时显示 Unknown。worktree 附着到不同于记录的分支属于 identity conflict。
@@ -92,9 +94,9 @@ Modu Desktop 是面向多仓库、跨仓库需求开发的 macOS 原生工作区
 
 - 只操作 `repositories/` 和 `worktrees/` 的受管后代；标准化路径后校验边界并拒绝路径逃逸和异常符号链接。
 - 声明式对账清理必须移动到 macOS Trash，不执行递归永久删除。
-- `git worktree remove --force` 仅可在用户明确确认的 worktree 删除流程中使用。
+- `git worktree remove --force` 仅可在用户明确确认的独立删除流程，或用户在 Edit Worktree Group 中取消勾选后提交 Save Changes 的成员移除流程中使用。
 - 编辑或删除配置文件本身不构成 cleanup 或强制删除授权；规划阶段不得产生副作用。
-- Remove Repository… 确认后先原子更新 `.modu.yaml`；写入失败不得执行 worktree 删除或 Trash 操作，计划变化、重启或稍后重试都必须重新确认。
+- Delete Repository 确认后先原子更新 `.modu.yaml`；写入失败不得执行 worktree 删除或 Trash 操作，计划变化、重启或稍后重试都必须重新确认。
 - YAML 写入采用工作区级 advisory lock、同目录临时文件、重新校验和原子替换。
 - `.modu.yaml` 的 GUI Add/Remove 必须 source-preserving，保留未改动条目的顺序和注释并重新解析候选内容；无法安全修改时拒绝写入并提供 Open Config。`.modu-worktrees.yaml` 可规范化输出。
 - `.modu.yaml` 错误冻结仓库对账和 repositories 操作；最后一次有效状态仅保留在内存中，错误解除前隐藏整个侧栏，并在标题栏下显示占满窗口主体的阻断恢复页。`.modu-worktrees.yaml` 错误冻结 worktree 创建、删除、修复和依赖关联 worktree 的 repository cleanup，但不冻结 Add、Fetch、Pull 或 additive 对账，并继续显示明确标记为 Stale 的最后一次有效 worktree 列表。
@@ -104,13 +106,15 @@ Modu Desktop 是面向多仓库、跨仓库需求开发的 macOS 原生工作区
 
 - 使用原生 macOS 控件和 `NavigationSplitView`，保持紧凑、工作导向，避免卡片式仪表盘。
 - 标题栏正常时居中显示当前工作区目录名；hover 有点击态，点击重新选择工作区；名称右侧不显示三角图标。手动 Fetch/Pull 期间同一位置仅显示 spinner 与 `Fetch/Pull 'origin'`，成功后显示 `Already up to date` 3 秒再恢复目录名。
-- 左侧只显示 `Repositories` 和 `Worktrees`。两个分区标题左侧都依次显示 chevron 和 open/closed folder，二者共同表达展开状态；标题整行都可切换展开/折叠，但 `Repositories` 右侧的 Add、Fetch、Pull 操作区不触发折叠。
+- 左侧只显示 `Repositories` 和 `Worktrees`。两个分区标题左侧都依次显示 chevron 和 open/closed folder，二者共同表达展开状态；标题整行都可切换展开/折叠，但标题右侧操作区不触发折叠。`Repositories` 右侧提供 Add、Fetch、Pull，`Worktrees` 右侧提供 Create Worktree Group 的 plus 图标按钮。
 - Repositories 的 Add、Fetch、Pull 分别使用简洁的 plus、clockwise refresh 和 down-to-line 图形；任一 Repositories 异步操作运行时三个按钮保持原尺寸并统一置灰禁用。Fetch/Pull 的 loading 与成功反馈只占用标题栏 workspace-title，不在按钮、仓库行或内容区重复表达。
 - 主仓库和 linked worktree 使用固定蓝色的仓库/工作树图标；图标不支持自定义颜色，也不是独立操作入口。
 - group 左侧依次显示 chevron 和 open/closed folder，整行点击展开或折叠；展开使用橙色 open-folder，折叠使用蓝色 closed-folder，不支持自定义颜色。
 - 主仓库、group 和 linked worktree 侧栏行高统一为 32px。主工作树或 linked worktree 存在 staged、unstaged 或 untracked 变化时，在行尾固定槽位显示 `#AAAAAA` 的 6px 圆点；ignored content 不触发圆点，圆点不得替代可访问状态描述。
-- 点击主仓库或 linked worktree 行执行选择；仓库和 worktree 的 Reveal in Finder、Copy Path、删除等低频操作放入右键菜单，右侧详情不重复 Reveal。
-- group 有有效 `document` 时提供 Open Plan 和 Reveal Plan in Finder；主仓库 Remove Repository… 必须先展示 cleanup 计划。
+- 点击主仓库或 linked worktree 行执行选择；路径和删除等低频操作放入右键菜单，右侧详情不重复 Reveal。经边界和符号链接校验后，Copy Path 复制规范化绝对路径；路径异常时不显示 Copy Path。Reveal in Finder 无法执行时保留但禁用，并说明原因。
+- group 右键菜单固定为 Copy Path、Reveal in Finder、Edit Worktree Group、Delete Worktree Group，始终不显示方案文档相关操作且文案不带省略号。主仓库右键菜单固定为 Copy Path、Reveal in Finder、Delete Repository；linked worktree 右键菜单提供 Copy Path、Reveal in Finder、Delete Linked Worktree。
+- Create Worktree Group sheet 只显示 Group Name、32px 仓库 checkbox 列表及底部操作，不显示选择数量、路径/分支预览、document 或帮助文案。Edit Worktree Group 中名称只读，列表增加 Working Tree 状态列；存在 removal 时 Save Changes 使用 destructive 样式，但不再二次确认。
+- Delete Worktree Group 确认页标题固定为 `Delete Worktree Group?`，不包含 group 名称；Delete Repository 必须先展示 cleanup 计划。
 - 顶部四类分裂按钮为 Agent、Git GUI、编辑器、终端，只展示检测成功的内置目标。点击主要区域时使用当前类别的全局默认软件打开当前选中的主工作树或 linked worktree 路径；点击右侧 chevron 只打开目标菜单。菜单不显示 check 图标或选中态，仅在 hover 时显示浅灰背景；点击菜单项后立即尝试用该软件打开当前路径，只有启动成功才更新默认软件。
 - 未选择主仓库或 linked worktree 时，右侧正常状态只显示居中的静态图标和 `What should we build?`，不显示工作区概览、统计、列表、操作按钮或外部工具入口；阻断性配置错误和必须处理的安全流程可覆盖该静态状态。只有选中主仓库或 linked worktree 后，才显示适用于当前受管目录的 Agent、Git GUI、编辑器和终端入口。
 - 四类默认软件保存在应用私有数据中的同一份全局偏好配置内，不按工作区、仓库或 worktree 分别保存。外部工具只有启动成功后才更新对应类别的默认值；启动前重新验证目标仍是当前工作区的受管仓库/worktree，且没有符号链接逃逸。

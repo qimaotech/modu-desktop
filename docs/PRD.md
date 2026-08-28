@@ -167,6 +167,7 @@ groups:
 - group 标识默认同时作为 linked worktree 分支名和需求目录名。
 - 无论由 CLI 生成还是手工写入，group 标识都必须是合法单段目录名；作为字面量拼接到 `refs/heads/<group>` 后必须通过 `git check-ref-format`，且不能以 `-` 开头。
 - group 身份按 Unicode 规范化及工作区所在文件系统的大小写规则比较，在 `groups` 内必须唯一；同一规范化身份必须用于 YAML 身份、目录映射、幂等判断和 group 锁键，不能让等价名称映射到不同操作对象。
+- GUI 新建 group 时原样保存用户输入的 Group Name，不自动 slug 化。GUI 新建和编辑都必须至少选择一个仓库；空选择只禁用提交，不显示额外错误提示。CLI 删除完整 group 后仍按生命周期规则移除空 group 记录。
 - 单仓库可覆盖 `branch`；记录分支同样必须能作为字面量 `refs/heads/<branch>` 通过 `git check-ref-format`，且不能以 `-` 开头，但不受 group 的单段目录名限制。
 - 任一 group、记录分支非法或 group 身份碰撞时，整份 `.modu-worktrees.yaml` 视为配置错误并按 5.4 冻结相关操作，不能只在 CLI 创建入口校验。
 - `document` 可选，保存工作区相对技术方案路径。
@@ -239,7 +240,7 @@ App 和 CLI 执行每个 additive 或 cleanup 项前，都按规范化仓库身�
 
 确认仓库 cleanup 后，先按 9.3 的规则逐个移除关联 linked worktree；只有全部关联 worktree 及其 YAML 记录都成功移除后，才把主仓库移入 macOS Trash。任一步失败都保留未完成的 worktree 记录和由当前文件状态重新派生的 cleanup 项供重试，并在 `Needs Attention` 中汇总，不把残留目录静默隐藏。
 
-从主仓库右键菜单发起 Remove Repository… 时，确认窗口展示的是锁内重新计算的当前计划。用户确认后先原子移除 `.modu.yaml` 中对应声明；配置写入失败则不执行任何 worktree 删除或 Trash 操作。配置写入成功后才执行上述 cleanup。对于用户已手工移除声明而产生的 cleanup，不再写配置。确认只授权当次未变化的计划；计划内容变化、应用重启或稍后重试都必须重新展示当前风险并再次确认。
+从主仓库右键菜单发起 Delete Repository 时，`Delete Repository?` 确认窗口展示的是锁内重新计算的当前计划。用户确认后先原子移除 `.modu.yaml` 中对应声明；配置写入失败则不执行任何 worktree 删除或 Trash 操作。配置写入成功后才执行上述 cleanup。对于用户已手工移除声明而产生的 cleanup，不再写配置。确认只授权当次未变化的计划；计划内容变化、应用重启或稍后重试都必须重新展示当前风险并再次确认。没有关联 linked worktree 时确认按钮为 `Delete Repository`；存在关联项时为 `Delete Repository & <N> Worktrees`。
 
 单仓库失败不阻断其他仓库的 additive 项。若配置仍声明某主仓库但 clone 暂时失败，只标记异常，不清理它的 linked worktree。目标路径存在但不是预期 Git 仓库、符号链接异常或 origin 身份冲突时，标记 conflict 并等待用户处理。
 
@@ -315,9 +316,13 @@ CLI 从当前目录向上查找 `.modu.yaml`，并支持全局 `--workspace <pat
 
 默认目录为 `worktrees/<group>/<repo-name>`，默认分支为 `<group>`。
 
+桌面端从 Worktrees 标题的 Add 按钮进入创建流程。Create Worktree Group 只接受 Group Name 和仓库多选列表；Group Name 按 5.2 原样校验并保存，仓库顺序沿用 `.modu.yaml`，列表行高固定为 32px，不展示选择数量、路径或分支预览、`document` 或帮助文案。提交后逐仓库执行既有幂等创建流程，保留成功项并允许重试失败项。
+
+Edit Worktree Group 的 Group Name 只读，仓库列表增加 Working Tree 状态列：`Clean`、`Dirty`、`Unknown` 和新选仓库的 `Not Created`。状态只覆盖 staged、unstaged 和 untracked；`Clean` 不代表不存在 ignored content 或未推送提交。用户可以取消勾选 Dirty 或 Unknown 项；存在移除项时 `Save Changes` 使用 destructive 样式，但提交后不展示第二个确认页。新增项复用本节创建流程，移除项复用 9.3 的强制 worktree 移除和本地分支删除顺序。
+
 ### 9.3 删除
 
-用户删除单个 linked worktree 时，无论是否 dirty，都必须二次确认。确认内容列出：
+用户从独立 Delete Linked Worktree 或 Delete Worktree Group 命令发起删除时，无论是否 dirty，都必须二次确认。确认内容列出：
 
 - 仓库名。
 - worktree 路径。
@@ -328,7 +333,9 @@ CLI 从当前目录向上查找 `.modu.yaml`，并支持全局 `--workspace <pat
 
 dirty 统计包含 staged、unstaged 和 untracked 文件。Git 默认 dirty/status 不包含 ignored 文件，但 `git worktree remove --force` 会删除整个 linked worktree，因此 ignored content 必须作为独立的本地数据风险检测；`clean` 不能暗示没有本地内容，读取失败也不能按 `None` 处理。未推送风险以当前 worktree HEAD 和记录中的本地分支（若存在）为风险根，统计可达但任何本地 remote-tracking ref 都不可达的提交并去重；它是基于最近一次已知 refs 的保守检查，不声称代表服务器实时状态。detached HEAD 显示 `Detached at <short-sha>` 并纳入风险，不能只检查记录分支。若 worktree 附着到不同于记录的本地分支则标记 identity conflict，不执行删除；无法读取 refs、HEAD 或分支时必须显示 `Unknown`，不能按零风险处理。
 
-用户确认后先获取 group 与仓库锁，并立即重算路径、Git 注册、分支、dirty、ignored content 清单和未推送风险；任一项与确认页不同都不执行破坏性命令，而是返回更新后的计划要求再次确认。仓库 cleanup 在移动主仓库到 Trash 前也重新检查主工作树和所有本地分支风险；若风险变化则保留已完成的 worktree 删除结果，暂停主仓库移动并重新确认。
+独立删除流程在用户确认后先获取 group 与仓库锁，并立即重算路径、Git 注册、分支、dirty、ignored content 清单和未推送风险；任一项与确认页不同都不执行破坏性命令，而是返回更新后的计划要求再次确认。仓库 cleanup 在移动主仓库到 Trash 前也重新检查主工作树和所有本地分支风险；若风险变化则保留已完成的 worktree 删除结果，暂停主仓库移动并重新确认。
+
+Edit Worktree Group 是明确例外：取消勾选已有成员并提交 `Save Changes` 即构成本次强制移除授权，不再展示 ignored content、未推送提交或第二个风险确认页。执行前仍必须在 group 与仓库锁内重新校验路径、Git 注册、记录分支和 working tree 状态；锁内状态与编辑列表不同的 removal 不执行并刷新对应行，其他不受影响项继续。Dirty 与 Unknown 不禁止取消勾选或保存。成功移除 worktree 并删除本地分支后才移除 YAML 记录；失败项保留并支持 Retry Failed。编辑流程不能移除最后一个成员。
 
 确认后依次执行：
 
@@ -363,7 +370,7 @@ skill 不直接拼接 `git worktree` shell 流程，避免提示词承担易变�
 左侧默认宽度 320px，可拖动，只分为：
 
 - `Repositories`：按仓库展示名列出主工作树，标题右侧固定提供 Add、全局 Fetch 和全局 Pull 三个无边框 SVG 图标按钮；三个图形分别为 plus、clockwise refresh 和 down-to-line，浅色外观默认图标色为 `#4D4D4D`。
-- `Worktrees`：按 group 展开，再列出带缩进的仓库 linked worktree。
+- `Worktrees`：按 group 展开，再列出带缩进的仓库 linked worktree；标题右侧提供 Create Worktree Group 的无边框 plus 图标按钮。
 
 `Repositories` 和 `Worktrees` 标题左侧都依次显示 chevron 和 open/closed folder。chevron 与 folder 共同表达 Expanded/Collapsed：展开时 chevron 向下并使用橙色 open-folder，折叠时 chevron 向右并使用蓝色 closed-folder。标题整行都是折叠命中区，但 `Repositories` 右侧 Add、Fetch、Pull 操作区只执行各自动作，不触发折叠。键盘焦点落在分区标题时，`Left/Right` 折叠或展开，`Return` 切换当前状态；VoiceOver label/value 必须同时读出分区名和 Expanded/Collapsed。
 
@@ -371,7 +378,7 @@ skill 不直接拼接 `git worktree` shell 流程，避免提示词承担易变�
 
 主仓库和 linked worktree 使用固定蓝色的仓库/工作树图标；图标不支持用户自定义颜色，也不承担独立点击动作。点击整行选择节点，右键菜单继续承载路径和删除等低频操作。
 
-group 左侧依次显示 chevron 和 open/closed folder，使用与分区一致的状态映射：展开为向下 chevron 与橙色 open-folder，折叠为向右 chevron 与蓝色 closed-folder。group 整行点击切换展开/折叠，不提供自定义颜色或独立图标操作。节点的打开方案、定位方案和删除等低频操作通过右键菜单提供，不在行内增加操作按钮。状态异常、dirty 和缺失使用 32px 稳定行高内的固定状态槽位表达。
+group 左侧依次显示 chevron 和 open/closed folder，使用与分区一致的状态映射：展开为向下 chevron 与橙色 open-folder，折叠为向右 chevron 与蓝色 closed-folder。group 整行点击切换展开/折叠，不提供自定义颜色或独立图标操作。路径、编辑和删除等低频操作通过右键菜单提供，不在行内增加操作按钮。状态异常、dirty 和缺失使用 32px 稳定行高内的固定状态槽位表达。
 
 任一由 Repositories 标题操作组触发的异步操作运行时，Add、Fetch 和 Pull 三个按钮都保持原有 24px 命中尺寸并统一置灰禁用，不能再次触发。Fetch/Pull 的当前操作与完成反馈只占用标题栏 workspace-title；不在标题按钮、主仓库行或右侧内容区重复显示进度。
 
@@ -381,7 +388,7 @@ group 左侧依次显示 chevron 和 open/closed folder，使用与分区一致�
 - 选择主仓库或 linked worktree：顶部显示外部工具操作区；下方复用相同的 Git Browser 卡片骨架。`Worktrees` 摘要卡先显示当前工作树相对工作区根目录的路径，再显示 Base、Branch、Status；非 clean 时显示 `Changes` 卡，存在可展示提交时显示 `Commits` 卡。
 - 主工作树的 `Commits` 卡显示当前分支历史；linked worktree 的 `Commits` 卡只显示相对默认分支的独有提交。两者只改变数据范围，不改变卡片顺序、行结构或交互模型。
 
-主仓库和 linked worktree 的右键菜单都提供 Reveal in Finder 和 Copy Path；右侧详情不重复提供 Reveal 按钮。group 的右键菜单在 `document` 有效时提供 Open Plan 和 Reveal Plan in Finder；文件缺失或路径不安全时禁用并显示原因。主仓库右键菜单提供 Remove Repository…，它先展示第 7 节定义的 cleanup 计划，确认后再更新 `.modu.yaml` 并执行清理。group 和 linked worktree 的 Delete… 均进入第 9.3 节的确认流程。
+右键菜单中的 `Copy Path` 复制经安全校验的规范化绝对路径；路径不存在、越过受管边界或存在符号链接逃逸时隐藏该命令。`Reveal in Finder` 无法执行时保留但禁用，并提供具体原因。group 菜单固定且均不带省略号：`Copy Path`、`Reveal in Finder`、`Edit Worktree Group`、`Delete Worktree Group`；无论 `document` 是否有效都不显示 Open Plan 或 Reveal Plan in Finder。主仓库菜单固定为 `Copy Path`、`Reveal in Finder`、`Delete Repository`，后者进入第 7 节 cleanup 确认流程。linked worktree 菜单提供 `Copy Path`、`Reveal in Finder`、`Delete Linked Worktree…`，其独立删除与 group 独立删除均进入第 9.3 节确认流程。右侧详情不重复提供 Reveal 按钮。
 
 摘要卡中的定位与分支信息统一分为：
 
