@@ -1,349 +1,511 @@
-# Modu Desktop 原型设计
+# Modu Desktop Design Specification
 
-- 日期：2026-08-28
-- 状态：Worktree Group 管理、上下文菜单与删除流程已确认，并已同步至 Figma `04 Screens` 页面与本地原型
-- 范围：v0.1 客户端原型，不包含逐行 diff、完整 Git GUI 或多工作区
-- Figma 原生设计：[Modu Desktop / 04 Screens](https://www.figma.com/design/eK0CqTm1y4jk6thzqBdUV5/Modu-Desktop?node-id=16-6)
-- 字体：Figma 原型主体使用 Inter，Git Browser Detail 文件树沿用 SF Pro typography token；SwiftUI 客户端仍必须使用 PingFang HK
+- 日期：2026-09-01
+- 状态：v0.1 设计规范；本地原型 18 张
+- Figma：[Modu Desktop](https://www.figma.com/design/eK0CqTm1y4jk6thzqBdUV5/Modu-Desktop?node-id=16-6)
 
-## 1. 设计方向
+## 0. 文档职责
 
-Modu Desktop 采用克制、紧凑、工作导向的 macOS 原生界面。原型以系统窗口、列表、sheet、popover、menu 和分裂按钮为主要构件，不使用营销式首屏、装饰插画、渐变背景或卡片式仪表盘。Git Browser Detail 使用少量功能卡片划分摘要、变更和提交，它们是连续工作区中的信息分组，不扩展为仪表盘。Figma 设计仅覆盖浅色主题，暂不包含暗黑主题。
+本文回答“用户如何看到和操作 Modu”，是以下内容的唯一事实源：
 
-界面的首要任务是让用户在 5–20 个主仓库、约 5 个活跃需求组和最多约 30 个 linked worktree 中快速定位当前目录，并立即交给 Agent、Git GUI、编辑器或终端。
+- 信息架构、布局、组件和密度。
+- 用户可见的交互、状态、文案和反馈。
+- 键盘、焦点、VoiceOver 和系统外观适配。
+- Figma 与本地原型索引。
 
-本文定义交互与状态规则，`PRD.md` 定义业务和安全规则，仓库根目录的 `design/prototypes/` 图片只展示代表性视觉状态。图片中未出现的空、错误、取消和部分失败状态仍必须按本文实现；图片与文字冲突时先修正二者，不能以图片中的偶然细节替代规则。
+产品范围、数据语义、生命周期、删除授权、安全、并发和恢复由 [`PRD.md`](PRD.md) 定义。本文只描述这些规则的用户界面，不重复内部 Git/YAML 执行算法。原型是代表性视觉证据，不是完整状态机或逐像素实现要求；文字规则覆盖未单独出图的状态。
 
-## 2. 主窗口结构
+## 1. 设计基础
 
-### 2.1 标题栏
+### 1.1 原生方向
 
-- 标题栏高度固定为 36px，不随页面状态、任务状态或标题内容增高。
-- 标题栏不显示 `Modu`。
-- 正常状态居中显示当前工作区目录名，例如 `platform-workspace`；手动 Fetch/Pull 运行时，同一 workspace-title 区域替换为 spinner 和 `Fetch 'origin'` 或 `Pull 'origin'`。
-- 手动 Fetch/Pull 全部成功后，workspace-title 显示 `Already up to date` 3 秒，再恢复工作区目录名；不叠加成功图标、toast 或第二处提示。
-- workspace-title 区域在正常与暂态下都保留同一点击命中区和 hover 反馈，点击后重新选择工作区。有批量任务运行时先请求取消；原子写入或目录迁移完成前保持当前工作区和明确的 switching 状态，禁止旧任务结果写入新工作区。
-- 名称右侧不显示三角、箭头或 disclosure 图标。
-- 尚未选择工作区时，标题栏中部保持空白。
+- 优先复用 macOS 26 UI Kits 对应的 SwiftUI/AppKit Window、Title Bar、Sheet、Alert、Menu、Toolbar、Button、Toggle、TextField、GroupBox、Outline/Table、`NavigationSplitView` 和 SF Symbols。
+- 系统有等价组件时不自绘；保持紧凑、工作导向，避免卡片式仪表盘、网页式大标题或装饰性容器。
+- 原型确认信息架构、密度、层级和交互方向；实现遵循原生控件真实行为，不逐像素复制 UI Kit 的阴影、材质或字体渲染。
 
-### 2.2 左侧栏
+### 1.2 字体
 
-左侧栏默认宽度为 320px，可调整，只包含两个分区：
+- Figma 普通文本使用 SF Pro 系列。
+- Figma 中路径、分支、短哈希和状态值等 mono 文本使用 Roboto Mono。
+- SwiftUI/AppKit 实现使用系统语义字体和系统 monospaced font，不硬编码 SF Pro、Roboto Mono 或 Inter。
+- 设计规范只使用上述字体约束；实现使用对应的系统语义字体。
 
-- `Repositories`
-- `Worktrees`
+### 1.3 密度与尺寸
 
-除首次启动外，所有主窗口状态都以 Figma `Window Shell` 组件实例为根；状态画板不得复制、detach 或重新绘制标题栏与侧栏。画板只通过实例覆盖表达工作区名称、当前选中行和行状态，并在 shell 的 content 区叠加详情、空状态、sheet、menu、toast 或进度内容。
+输入框、表格行和列表项只使用 28 / 32 / 36px 三档稳定高度：
 
-两个分区标题左侧都依次显示 chevron 和 open/closed folder。展开时 chevron 向下、folder 使用橙色 open 状态；折叠时 chevron 向右、folder 使用蓝色 closed 状态。chevron、folder 和标题共同属于整行折叠命中区；`Repositories` 右侧操作组不触发折叠。键盘焦点落在分区标题时，`Left/Right` 折叠或展开，`Return` 切换状态；VoiceOver label 和 value 必须包含分区名及 Expanded/Collapsed 状态。
+| 高度 | 用途 |
+| --- | --- |
+| 28px | 侧栏节点、仓库选择项、cleanup 行、Changes/Commits 行 |
+| 32px | 侧栏分区标题、摘要信息行、常规紧凑列表 |
+| 36px | Group Name 与其他带标签的表单输入行 |
 
-`Repositories` 标题右侧固定显示三个 SVG 图标按钮：
+长文本、状态、hover、focus、错误和动态计数不得撑高控件。优先单行截断、tooltip、accessibility value 和原生滚动。
 
-- Add：添加主仓库。
-- Fetch：对全部主仓库执行 Fetch。
-- Pull：对符合安全条件的主仓库执行 Pull。
+### 1.4 颜色与图标
 
-三个图形分别使用 plus、clockwise refresh 和 down-to-line 的简洁轮廓 SVG，图形为 16px，命中框固定为 24px，不显示按钮边框或背景，浅色外观默认使用 `#4D4D4D`。图标按钮在 hover 时显示 tooltip，并分别提供 `Add Repository`、`Fetch All Repositories`、`Pull Eligible Repositories` accessibility label。没有主仓库时 Fetch/Pull 禁用；配置错误或待切换工作区时按受影响范围禁用。任一 Repositories 异步操作运行时三个按钮保持尺寸和位置并统一采用系统 disabled 置灰状态，不接受点击。手动 Fetch/Pull 的 loading 与完成反馈只在 workspace-title 表达，不在按钮、仓库行或内容区重复显示。
+- 使用系统语义色和 SF Symbols；只有系统没有等价物的 Git 文件状态图标使用统一 vector asset。
+- 主仓库和 linked worktree 使用原生仓库/文件夹语义图标并默认使用橙色强调。
+- 分区与 Worktree Group 使用蓝色 folder。
+- `design/icons/` 中的导出文件仅用于原型对照；实现优先使用系统 SF Symbols，除非本文明确要求状态 vector asset。
+- 用户不可自定义上述图标或颜色；图标本身不是独立操作入口。
+- 状态不得只依赖颜色；图标、形状、文字或 accessibility value 至少提供一种冗余表达。
 
-`Worktrees` 标题右侧固定显示一个无边框 plus 图标按钮，图形 16px、命中框 24px，tooltip 和 accessibility label 均为 `Create Worktree Group`。点击按钮只打开创建 sheet，不触发分区折叠。没有主仓库、`.modu-worktrees.yaml` 无效、工作区正在切换或已有 Group 变更操作进行中时禁用，并保持原尺寸和位置。
+### 1.5 列表与树排序
 
-### 2.3 仓库节点
+- 所有可见文件系统实体列表使用同一排序：按当前层级的可见 basename 做 Finder 风格、忽略大小写的自然升序；数字片段按数值比较。
+- basename 相同时，以规范化后的完整工作区相对路径作为稳定次级排序键。
+- 侧栏保留 Group 与成员层级，Changes 保留目录树层级；只在同一父节点内排序，不展平路径。
+- 仓库选择、Working Tree 状态、勾选、dirty 和结果类型不改变顺序，也不形成额外分组。
+- Figma 图层顺序、视觉顺序、键盘遍历和 VoiceOver 顺序必须一致；选中、焦点和状态绑定实体身份，不绑定可见行号。
 
-- 主工作树和 linked worktree 使用固定蓝色的仓库/工作树图标；同一图标规则覆盖 Default、Selected、dirty 和同步状态。
-- 图标不支持自定义颜色，不提供独立点击动作；点击整行选择节点。
-- 主仓库右键菜单固定为 `Copy Path`、`Reveal in Finder`、`Delete Repository`；linked worktree 右键菜单为 `Copy Path`、`Reveal in Finder`、`Delete Linked Worktree…`。Group 与主仓库菜单文案不带省略号，右侧详情不重复提供 Reveal 按钮，也不在行内显示删除按钮。
-- 主仓库、group 和 linked worktree 行高统一为 32px，图标、文字、选择背景和行尾状态都不得改变行高。
-- 主工作树或 linked worktree 存在 staged、unstaged 或 untracked 变化时，最右侧固定变化槽位显示直径 6px、颜色 `#AAAAAA` 的圆点；ignored content 不触发圆点，group 不聚合子项圆点。Fetch/Pull 不在节点行增加同步状态或 spinner。
-- 圆点只是视觉提示；对应行的 tooltip 和 accessibility value 必须明确给出 `Working tree has changes`，不能只用颜色、圆点或 spinner 让用户猜测。
+## 2. 窗口与导航
 
-### 2.4 Group 节点
+### 2.1 Setup Window
 
-- group 左侧依次显示 chevron 和 open/closed folder；展开时 chevron 向下且 folder 为橙色 open 状态，折叠时 chevron 向右且 folder 为蓝色 closed 状态。
-- chevron、folder 与标题共同构成整行折叠命中区，点击任意非右键菜单区域都切换展开/折叠；不支持自定义颜色。
-- group 下的 linked worktree 保持一级缩进。
-- group 右键菜单固定为 `Copy Path`、`Reveal in Finder`、`Edit Worktree Group`、`Delete Worktree Group`，均不带省略号；无论 `document` 是否存在或有效，菜单都不显示 Open Plan、Reveal Plan in Finder 或其他方案文档操作。路径操作和编辑/删除操作之间使用原生分隔线。
-- `Copy Path` 复制规范化绝对路径，只在路径存在、位于受管边界内且没有符号链接逃逸时显示；路径异常时从菜单隐藏。`Reveal in Finder` 无法执行时保留但禁用，并提供具体原因。
-- group 行可获得键盘焦点；`Left/Right` 折叠或展开，`Return` 执行相同切换。
-- 主仓库、linked worktree 和 group 的全部右键菜单命令同步到随当前选择更新的应用主菜单，并复用相同的可用状态和禁用原因；纯键盘用户可从菜单栏触发，VoiceOver 用户还可通过 Actions 访问。危险命令仍进入同一确认流程。
+首次设置使用独立的 720×520 原生窗口，与主窗口状态隔离。安装 CLI 和选择工作区为有顺序的两个步骤；下一步未满足时保持禁用，不提供跳过或稍后处理。
 
-### 2.5 右侧内容
+配置检查、失败与重试均留在 Setup Window。进入主窗口前的 `.modu.yaml` 加载失败使用阻断 Alert，不在错误状态下短暂显示主窗口。
 
-未选择节点时，右侧正常状态只显示居中的静态图标和 `What should we build?`。不显示工作区概览标题、仓库或 group 列表、统计、Add Repository 主操作、Agent、Git GUI、编辑器或终端分裂按钮；空工作区使用相同静态内容，添加入口统一位于侧栏 Repositories 标题。阻断性配置错误和必须处理的安全流程可覆盖静态内容。选中主仓库或 linked worktree 后才显示全部适用于该目录的外部工具分裂按钮和目录详情。
+底部次级按钮统一使用 `Quit`。点击 `Quit`、点击窗口红色关闭按钮或按 Cmd-W 的语义相同：退出 Modu，不进入主窗口；不额外显示确认。CLI 安装与候选工作区的副作用规则按 PRD 4.1 执行。
 
-未选择状态必须始终可返回：应用的 View 菜单提供 `Clear Selection`，清除当前仓库或 linked worktree 选择但不切换工作区，也不改变 group 展开状态和侧栏滚动位置。主窗口内没有 sheet、popover、menu 或确认窗口时，`Escape` 执行同一命令；存在临时界面时仍优先关闭该界面，不得顺带清除节点选择。返回后焦点落到静态内容区域，并通过 VoiceOver 宣布 `No Repository or Worktree Selected`。
+### 2.2 主窗口框架
 
-四类分裂按钮依次为：
+#### 窗口基线
 
-1. Agent：Codex、Claude Code。
-2. Git GUI：Fork。
-3. 编辑器：VS Code、Cursor。
-4. 终端：Warp、Terminal。
+主窗口使用 `NavigationSplitView` 与 32px 原生 Title Bar：
 
-分裂按钮主要区域显示当前类别全局默认目标的图标和名称；点击后直接使用该软件打开当前选中的主工作树或 linked worktree 路径。右侧 chevron 是独立命中区，点击只打开目标菜单，不同时触发主要区域命令。
+- 标题栏正常时居中显示当前工作区目录名。
+- workspace title hover 显示可点击反馈；点击进入重新选择工作区。
+- 标题或暂态文案右侧不显示三角、箭头或 disclosure。
+- 左侧默认宽度 320px，可拖动；900px 最小窗口使用 240px 紧凑侧栏，右侧为当前上下文内容。
 
-目标菜单只包含检测成功且适用于当前路径的目标，不显示 check 图标、选中态或其他持久默认标记；默认值只通过分裂按钮主要区域表达。菜单项默认透明，鼠标 hover 时使用 `#F5F5F5` 浅灰背景；键盘焦点沿用原生菜单焦点反馈，但不转化为选中态。点击菜单项后立即尝试用该软件打开当前路径，只有启动成功后才更新默认目标；失败时保留原默认值并显示非模态错误。
+#### 紧凑布局与滚动
 
-应用私有数据中只维护一份外部工具全局偏好配置，其中分别保存 Agent、Git GUI、编辑器和终端四个类别的默认目标；不按工作区、仓库或 worktree 分别保存。当前默认目标未检测到或不适用于当前目录时，主要区域临时回退到该类别第一个可用内置目标；只有回退目标成功打开目录后才写回对应类别。未检测到任何适用目标的类别不显示按钮。
+主窗口最小尺寸为 900×600，应容纳 240px 侧栏、四类工具入口和详情摘要。进入紧凑宽度时：
 
-启动前路径复核失败、Automation 权限被拒绝或目标应用启动失败时，错误紧邻外部工具操作区显示，明确失败目标和经过凭据清理的简短原因，并提供 Copy Details。错误保持到用户关闭、再次尝试或上下文改变；相同目标和相同原因在状态改变前不重复堆叠，只通过 accessibility announcement 宣布一次，且不移动当前键盘焦点。
+- `repositories` 的 Add、Fetch、Pull 与 `worktrees` 的 Create Worktree Group 仍保留在分区标题，不因空间有限隐藏。
+- 四类工具入口优先保持单行；若本地化文字或系统字号导致空间不足，使用原生 overflow 或自适应布局，不压缩到文字裁切，也不覆盖下方摘要。
+- 摘要路径独占首行；Base branch 与 Head branch 保持同一信息行，仅显示 Path、Base branch 和 Head branch。紧凑摘要保持两条信息行和 28px 节奏，不因差异计数扩高。
+- 右侧详情本身不滚动；Changes 与 Commits 共享摘要下方剩余高度。Changes Outline 与 Commits 列表内容溢出时各自在卡片内部使用原生纵向滚动，不改为横向滚动或压缩表格列。
+- 侧栏、Changes 与 Commits 是三个独立滚动视口。只要当前视口下方仍有内容，就在底部叠加 40px 渐隐：从透明过渡到对应系统 surface 背景色，并允许下一行局部透出；滚到底后移除。`scrollOffset > 0` 时，在视口顶部叠加 1px 系统分隔线和 40px 顶部渐隐：从对应系统 surface 背景色过渡到透明；回到顶部后移除顶部渐隐与分隔线。顶部/底部渐隐与分隔线均为 overlay，不占布局空间、不拦截指针或辅助功能命中，也不作为唯一的可滚动提示。
+- 滚动指示器遵循系统自动隐藏的 overlay 行为，暂态显示在各自视口右侧且位于渐隐上层，不出现在详情外层，也不常驻占宽或预留固定 gutter。原型按场景捕捉需要说明的暂态；未显示 indicator 的溢出视口仍通过渐隐表达后续内容。
+- 分区标题、节点层级和关键操作不因窗口变窄而被删除。
 
-### 2.6 Git Browser 摘要
+#### Changes / Commits 高度分配
 
-选中主工作树或 linked worktree 后，工具区下方的 `Worktrees` 摘要卡固定显示：
+Changes 与 Commits 使用同一套内容驱动高度算法。`A` 表示扣除摘要以及当前可见卡片间距后，两张卡片可使用的总高度。两类 Group Box 共用紧凑标题结构：标题保持 15px SF Pro Semibold，水平内边距 16px、垂直内边距 12px、标题与内容间距 8px，卡片固定结构为 52px；标准数据行高为 28px，自然高度等于固定结构加内容自然高度。摘要保持两条信息行，释放的空间计入 `A`，不留作详情底部空白。
 
-- `Path`：首行显示当前工作树相对工作区根目录的路径。主工作树使用 `repositories/<repo-name>`，linked worktree 使用 `worktrees/<group>/<repo-name>`。
-- `Base`：默认分支。
-- `Branch`：当前分支；detached HEAD 显示 `Detached at <short-sha>`，不伪造分支名。
-- `Status`：当前分支相对 Base 的文件变化统计。
+1. 空卡片隐藏，并按实际可见卡片重新计算 `A`。
+2. 只有一张卡片可见：使用 `min(自然高度, A)`；超过 `A` 时只滚动卡片内容。
+3. 两张卡片的自然高度之和不超过 `A`：均完整展示并随内容收缩，不人为拉伸。
+4. 两张均可见且仅一张溢出：另一张按自然高度完整展示，全部剩余高度分配给溢出卡片。
+5. 两张卡片都溢出：`Commits = clamp(A × 40%, 156px, 212px)`，`Changes = A - Commits`。156px 保证至少 104px 内容视口，212px 限制提交历史对文件变化的挤占；900×600 最小窗口保证 `A` 不低于 312px。
 
-Path 是只读定位信息，不显示 `Path` 标签，也不是独立操作入口。路径使用规范化仓库身份和 group 身份派生，不使用展示名，不显示工作区绝对路径；空间不足时中部截断，hover tooltip 和 accessibility value 提供完整相对路径。Figma `Git Browser Detail` 的每个实例必须显式覆盖 `path` property，禁止依赖组件默认值，以免不同画板错误继承主工作树示例。
+900×600 最小窗口的紧凑摘要高度为 88px，`A=347px`。两张卡片均溢出时，`Commits = clamp(347 × 40%, 156px, 212px) = 156px`，因此 `Changes=191px`；对应内容视口为 Changes 139px、Commits 104px。两张卡片各自滚动、显示边界渐隐和按需出现的 overlay indicator；当 Changes 已向上滚动时，同时显示顶部 1px 分隔线与 40px 顶部渐隐。
 
-Status 只显示状态图标和数字，不显示 Added、Moved、Modified、Deleted 文字。图标使用状态色；数字只有在与当前背景达到 4.5:1 对比度时才可使用同色，否则回退到系统主文字色：
+### 2.3 侧栏分区
 
-- Added：绿色。
-- Moved：紫色 `#B262ED`。
-- Modified：橙色。
-- Deleted：红色。
+左侧只包含：
 
-颜色始终与不同图标形状和数字同时出现，不把颜色作为唯一状态信号。Moved 图标在浅色原型中使用 `#B262ED`；深色外观使用对比度合格的浅色变体。
+- `repositories`：主工作树；标题右侧为 Add、Fetch、Pull。
+- `worktrees`：Worktree Group 及其 linked worktree；标题右侧为 Create Worktree Group 的 plus。
 
-`A/C/untracked → Added`、`R → Moved`、`M/T → Modified`、`D → Deleted` 是全产品唯一映射，详情头和 Changes 文件区不得出现第五种无定义图标。Git 返回冲突或无法映射的状态时不计入任一四类，也不伪装成零变化；对应位置显示中性的 `Unknown` 占位并提供明确 accessibility label，同时记录诊断，不借用任一状态图标或颜色。四个 Status 计数组合为一个可访问元素，accessibility value 读作例如 “3 added, 1 moved, 2 modified, 1 deleted”；视觉 tooltip 可补足省略的文字标签。
+`worktrees` 只是界面标签，不改变 Worktree Group 数据模型。
 
-默认分支无法安全解析或对应 Base ref 不存在时，`Base` 显示 `Unknown`；缺少可用 Base 或 Git diff 读取失败时，`Status` 以中性 `Unavailable` 占位替代四个零计数。详情区同时显示具体原因：可重试的读取错误提供 Retry，需用户修正配置的异常提供 Open Config 或 Copy Details；占位和原因建立可访问关系，不把失败状态只藏在 tooltip 中。
+- 没有主仓库时 Fetch 与 Pull 保持原尺寸但禁用；`.modu.yaml` 错误、工作区切换或其他 repositories 级操作运行时，Add、Fetch、Pull 按受影响范围禁用并提供对应的 accessibility value。
+- `.modu-worktrees.yaml` 错误、没有主仓库、工作区切换或 Group 变更运行时，Create Worktree Group 的 plus 保持原尺寸但禁用，并说明受影响原因。
 
-## 3. Git Browser Detail
+分区标题固定 32px。左侧依次显示 chevron 与 folder：展开时 chevron 向下，折叠时向右。标题整行可点击切换；右侧操作区只执行按钮动作，不触发折叠。
 
-选中主工作树或 linked worktree 时复用同一页面骨架：
+键盘焦点在标题时，`Left/Right` 折叠或展开，`Return` 切换状态。VoiceOver 同时读出分区名与 Expanded/Collapsed。
 
-1. 顶部为外部工具操作区。
-2. `Worktrees` 摘要卡首行显示当前工作树的工作区相对路径，再显示 Base / Branch / Status。
-3. 当前工作树非 clean 时显示展开的 `Changes` 卡；clean 时不保留该卡。
-4. 存在可展示提交时显示 `Commits` 卡。主工作树显示当前分支历史，linked worktree 显示当前分支相对默认分支的独有提交。
+### 2.4 侧栏节点
 
-切换主工作树或 linked worktree 时，Path 与摘要信息立即切换到新选择，Changes 与提交列表进入绑定新选择的稳定 loading 状态并取消旧请求；旧路径和旧内容不得继续显示在新选择下，迟到结果必须丢弃。HEAD / Base 变化只重载依赖它们的 Status 与提交列表，工作树文件事件只重载 Changes。loading 提供明确 accessibility label，因导航触发的自动取消不显示为错误，也不移动当前焦点。
+主仓库、Group 和 linked worktree 行统一为 28px：
 
-Changes 与提交列表是两个有明确名称的键盘与 VoiceOver 区域。Changes 使用 `Up/Down` 移动平铺文件行焦点；每个文件行的 accessibility value 读出 staged/unstaged 状态和仓库相对路径，Moved 同时读出新旧路径。提交列表使用 `Up/Down` 移动行焦点，不存在选择提交后刷新文件树的联动。Load More 追加结果后保持触发控件的焦点并宣布新增条数，不把焦点重置到列表顶部。
+- 主仓库与 linked worktree：点击整行选择。
+- Group：左侧依次为 chevron 与 folder；点击整行展开/折叠，不进入详情选择。
+- 侧栏使用原生 Outline 层级槽位：主仓库处于根层级；Group 的 chevron 从行内容起点 16px 开始，Group folder 与其 linked worktree folder 对齐在 38px，二者文本统一从 60px 开始。紧凑侧栏不得减少或重排这些层级缩进。
+- staged、unstaged 或 untracked 变化在主仓库/linked worktree 行尾固定槽位显示 `#AAAAAA` 的 6px 圆点；ignored content 不触发，Group 不聚合。
+- 圆点通过 tooltip 与 accessibility value 表达 `Working tree has changes`，不作为唯一状态说明。
+- 状态异常、缺失和 Stale 使用固定状态槽位，不改变行高。
 
-Changes 文件行和 Commits 提交行统一使用固定 28px 行高。键盘焦点、hover、状态图标、长文本或 loading 不得改变行高；超出空间的完整内容通过 tooltip 和 accessibility value 提供。
+### 2.5 右键菜单
 
-Changes 规则：
+路径和删除等低频操作只放在右键菜单；右侧详情不重复 Reveal。
 
-- 计数包含 staged、unstaged 和 untracked 的不同路径，同一路径只计一次；ignored 文件不计入。
-- 默认展开；工作树 clean 时整个区域隐藏，不显示 `Changes 0`。
-- 每行显示完整仓库相对路径；空间不足时中部截断，hover 和 accessibility value 提供完整路径。
-- 状态通过文件名前的图标和颜色表达。
-- Moved 使用 `#B262ED`。
-- Moved 在同一 28px 行内显示新路径，并用次级文本显示 `from <old-path>`；空间不足时截断，复制路径和 Reveal 操作使用新路径。
-- 最右侧不重复显示状态 label 文字。
-- Changes 读取失败时保留区域并显示 `Unavailable`、原因和 Retry，不能按 clean 隐藏。
+Group 菜单固定且不带省略号：
 
-提交列表规则：
+1. `Copy Path`
+2. `Reveal in Finder`
+3. `Edit Worktree Group`
+4. `Delete Worktree Group`
 
-- `Commits` 卡只显示通用标题，不显示 `Commits unique from <base>`、提交总数、HEAD 或分支 badge。主工作树与 linked worktree 的数据范围差异不增加额外说明行。
-- 每个提交固定为一行 28px，依次显示提交信息、提交人、提交时间和短哈希；四列在可用宽度内稳定对齐，提交信息优先获得剩余空间。
-- 长内容保持单行并使用尾部截断，hover 显示完整内容；每行 accessibility value 按相同顺序读出四项完整值。
-- 没有可展示提交时隐藏整个 `Commits` 卡，不显示零提交空状态。
-- linked worktree 的 Base ref 缺失、Git 读取失败或仓库处于未完成 merge/rebase 时显示原因、Retry 和可用的外部工具入口，不能伪装成没有提交；主工作树当前分支历史读取失败使用相同错误框架，但不依赖 Base。Changes 不受该错误冻结。
-- 首批提交最多显示 100 条；存在更多时使用 Load More，不让长历史撑开窗口或阻塞首次渲染。
-- v0.1 不显示单个提交的文件树，也不实现逐行 diff。
+Group 菜单始终不显示方案文档相关操作。
 
-## 4. 反馈与异常
+主仓库菜单固定为：
 
-### 4.1 Loading
+1. `Copy Path`
+2. `Reveal in Finder`
+3. `Delete Repository`
 
-- Repositories 操作组触发 Add、Fetch 或 Pull 后，三个全局按钮统一置灰禁用并保持原尺寸；按钮区域不显示 spinner。
-- 手动 Fetch/Pull 只在 workspace-title 显示 spinner 和 `Fetch/Pull 'origin'`。主仓库行、linked worktree 行和右侧内容区都不显示同步状态、进度条、完成数或 Stop。
-- 操作结束前不弹出结果窗口。
-- Add Repository 提交后 sheet 切换为稳定的 clone 进度并提供 Cancel；失败或取消保留仓库声明和 Retry，但不能在最终路径留下半成品目录。
+Linked worktree 菜单固定为：
 
-### 4.2 结果反馈
+1. `Copy Path`
+2. `Reveal in Finder`
+3. `Delete Linked Worktree`
 
-- 手动 Fetch/Pull 全部仓库成功：workspace-title 显示 `Already up to date` 3 秒，通过 accessibility announcement 宣布结果，然后恢复工作区目录名；不显示成功 toast。
-- 手动 Fetch/Pull 存在 skipped 或 failed：先恢复工作区目录名，再显示一次结果汇总弹窗，按主仓库列出成功、跳过和失败原因。
-- 自动 Fetch 成功保持静默，不使用手动标题栏暂态；失败不弹窗，只更新可关联的非模态异常状态，同一原因在状态改变前不重复打扰。
-- 汇总明确说明 linked worktree 未被修改。
-- 不自动 checkout、merge 或 rebase，不在结果弹窗中暗示这些行为。
+`Copy Path` 复制通过安全校验的规范化绝对路径；路径不存在、越界或存在符号链接逃逸时隐藏。`Reveal in Finder` 无法执行时保留但禁用，并说明原因。
 
-结果汇总弹窗使用本次操作完成时的稳定结果快照：标题明确是 Fetch 或 Pull，顶部以一个可访问摘要读出成功、跳过和失败数量，并说明 linked worktree 未被修改；下方结果列表保持 `.modu.yaml` 顺序，不因状态或滚动位置重排。结果列表只读，行不提供选中、聚焦或按下态，也不响应 `Up/Down` 切换；每一行仍作为单一可访问元素依次读出仓库展示名、结果状态和原因。弹窗打开时通过 accessibility announcement 宣布汇总，键盘焦点落到唯一的 `Done` 按钮；底部不显示 Copy Details、Review Repository 或其他行级操作。点击 `Done`、按 `Return` 或按 `Escape` 关闭弹窗，随后焦点恢复到触发本次操作的 Fetch 或 Pull 按钮；若该按钮因上下文变化已不存在，则恢复到 Repositories 分区标题。
+Context Menu 原型展示 Linked Worktree 场景；Group 与主仓库菜单复用相同原生 Menu 视觉，并以本文菜单项为实现依据。
 
-### 4.3 配置错误
+## 3. 右侧内容与外部工具
 
-- `.modu.yaml` 无法加载或解析时，最后一次有效状态仅保留在内存中，错误解除前隐藏整个侧栏；标题栏保持显示，阻断恢复页占满标题栏下方的窗口主体，不渲染任何仓库、group 或 linked worktree 行。
-- Add、Fetch、Pull 暂停且不可触发；恢复页不重复显示已隐藏的 Repositories 操作控件。
-- 阻断恢复页显示文件路径、错误行号和可操作的错误原因。
-- 提供 Open Config、Reveal in Finder 和 Reload，不内置 YAML 编辑器；无法定位行号时省略行号，不显示虚假值。
-- 错误期间不执行 clone、remote 更新或仓库 cleanup。
-- `.modu-worktrees.yaml` 错误使用独立错误页：主仓库 Add/Fetch/Pull 和 additive 对账保持可用，最后一次有效 worktree 列表标记为 Stale，worktree 创建、删除、repair 和依赖关联 worktree 的 repository cleanup 禁用并说明原因。
-- 配置文件缺失、版本过高和 schema 错误都使用同一恢复框架，但标题、原因和可用操作必须具体。
+### 3.1 未选择状态
 
-### 4.4 危险操作
+未选择主仓库或 linked worktree 时，右侧正常状态只显示居中的启动操作区：
 
-Edit Worktree Group 中取消勾选已有仓库并点击 `Save Changes`，即授权本次移除对应 linked worktree 和本地分支，不再展示第二个风险确认页。列表只显示 `Clean`、`Dirty`、`Unknown`、`Not Created` 四种 Working Tree 状态；Dirty 和 Unknown 都允许取消勾选并保存，Clean 不暗示没有 ignored content 或 local-only commit。存在 removal 时 `Save Changes` 使用 destructive 样式。执行前若锁内 working tree 状态与列表不同，只中止并刷新受影响 removal，其他项继续。
+1. `Let's start`
+2. 第一行 `Codex` 分裂按钮
+3. 第二行 `Add Repository` 与 `Create Worktree Group`
 
-删除单个 linked worktree 的确认窗口必须显示：
+`Codex` 分裂按钮保持组件原生 44px 高；两个次级按钮为 36px 高。三个入口均使用白底与低对比度边框，次级按钮通过更小高度、常规字重与无图标保持弱于 `Codex` 的视觉层级。`Let's start` 与 `Codex`、`Codex` 与次级按钮行的垂直间距均为 24px，两个次级按钮间距为 8px；按钮按各自文案自适应宽度，整组居中。
 
-- 仓库名。
-- worktree 路径。
-- 本地分支。
-- dirty 状态。
-- ignored content 状态：`None`、`Present` 或 `Unknown — could not verify`；`Present` 时可展开查看受影响路径摘要，不能因 dirty 为 clean 而隐藏。
-- 可检测到的未推送提交风险；风险同时覆盖当前 HEAD 和记录分支，detached HEAD 显示 `Detached at <short-sha>`；无法读取时显示 `Unknown — could not verify`，不显示为 0。
-- 远端分支不会删除的说明。
-- destructive 确认按钮使用 `Delete Worktree & Local Branch`，完整表达目录与本地分支都会被删除；不能只写 `Delete Worktree`。
+`Codex` 以当前工作区根目录为目标；`Add Repository` 与 `Create Worktree Group` 分别进入对应 Sheet。工作区尚未添加任何仓库时，`Create Worktree Group` 保持显示但禁用；其他两个入口保持可用。此状态不显示工作区概览、统计、仓库/Group 列表、Git GUI、编辑器或终端入口。阻断配置错误或必须处理的安全流程可以覆盖该状态。
 
-删除 group 的确认窗口标题固定为 `Delete Worktree Group?`，不显示 group 名称；窗口必须逐项列出全部相关 worktree、本地分支、ignored content 和其他风险。无论 dirty 与否都展示二次确认；确认按钮使用 `Delete <N> Worktrees & Local Branches` 并采用 destructive 样式，不能省略本地分支删除范围。
+### 3.2 已选择状态
 
-`Delete Repository` 使用独立的 `Delete Repository?` 确认页，逐项列出主仓库名称和受管路径、关联 linked worktree 及本地分支、主工作树和关联 worktree 的 dirty / ignored content / local-only commit 风险，以及将执行的配置更新、强制移除、本地分支删除和主仓库 Trash 移动。页面明确远端仓库与远端分支不会删除。没有关联项时确认按钮为 `Delete Repository`；存在关联项时为 `Delete Repository & <N> Worktrees`。手工修改 `.modu.yaml` 产生的仓库 cleanup 复用相同 Review Cleanup 信息结构。仅编辑配置文件不会自动打开确认或执行删除。
+选中主仓库或 linked worktree 后，自上而下显示：
 
-确认后先在操作锁内重新计算当前风险；路径、Git 注册、分支、dirty、ignored content 清单或未推送风险变化时不执行删除，原确认页就地更新并要求再次确认。删除执行期间确认窗口切换为稳定进度状态，禁止重复提交。存在部分失败时显示逐项结果和 Retry Failed；成功项保持完成，失败项及其配置记录保留。若 worktree 目录已成功移除但本地分支删除失败，重试确认页把目录步骤标为已完成，并重新展示当前分支风险后从分支删除继续。全部成功后关闭弹窗，并将选择与键盘焦点移到被删除项原位置之后的相邻可见安全节点；没有后继节点时移到前一相邻可见安全节点，均不存在时才回到未选择状态。不得保留已删除节点为选择项，也不得无条件清除仍有效的选择。
+1. Agent、Git GUI、编辑器、终端四类工具分裂按钮中当前可用的类别。
+2. Git Browser 摘要 Group Box。
+3. 存在相对 Base 文件差异时的 Changes Outline。
+4. 存在 `Base..HEAD` 差异提交时的 Commits Table/List。
 
-### 4.5 创建 Worktree Group
+主工作树与 linked worktree 只改变数据范围，不改变布局骨架。
 
-点击 Worktrees 标题右侧 plus 打开 `Create Worktree Group` sheet。正文自上而下只包含可编辑的 `Group Name`、`Repositories` 标签、仓库 checkbox 列表，以及 `Cancel` / `Create Group`。不显示已选择数量、Group 路径、分支预览或编辑、`document`、帮助文案或派生值摘要。
+### 3.3 分裂按钮
 
-Group Name 原样保存并在输入框处就地校验合法单段目录名、安全 Git ref、前导 `-` 和规范化身份碰撞；不自动 slug 化。仓库列表沿用 `.modu.yaml` 顺序，每行固定 32px，依次显示 checkbox、固定蓝色仓库图标、展示名和右侧次级内部身份。没有勾选仓库时只禁用 `Create Group`，不显示错误或选择数量。提交后 sheet 原位进入逐仓库进度；成功项保留，失败项提供 `Retry Failed`。全部完成后展开并聚焦新 Group 行。
+- 只展示检测成功且适用于当前路径的内置目标；类别无可用目标时隐藏。
+- 主要区域显示该类当前默认目标的图标与名称，点击后直接打开当前路径。
+- 右侧 chevron 是独立命中区，只打开原生目标菜单，不同时启动默认目标。
+- 纵向 divider 固定在 chevron 命中区左边界并约束到组件尾缘；分裂按钮压缩到紧凑宽度时 divider 必须随尾缘移动，不得落入按钮间距。
+- 菜单不显示 check、持久选中态或默认 badge；hover 使用原生浅灰反馈。
+- 点击菜单项立即尝试打开；成功后菜单关闭并更新默认，失败时保留原默认并给出非模态错误。
+- menu 关闭后焦点回到触发的 chevron；启动外部工具不永久改变当前选择。
 
-### 4.6 编辑 Worktree Group
+## 4. 表单与管理流程
 
-`Edit Worktree Group` sheet 复用创建 sheet 的尺寸与列表密度。Group Name 可选择和复制但不可编辑，并以 accessibility value 表达 read only。仓库列表增加 `Working Tree` 列，每项以图标、文字和可访问值表达 `Clean`、`Dirty`、`Unknown` 或 `Not Created`，不只依赖颜色。
+### 4.1 Add Repository
 
-没有成员变化时禁用 `Save Changes`；取消全部勾选时也只禁用提交，不显示提示。只有 additions 时使用普通主操作样式，存在 removals 时保持 `Save Changes` 文案并使用 destructive 样式。点击后原位显示逐仓库进度，直接执行新增或移除，不增加风险页；成功项保留，失败项提供 `Retry Failed`。状态变化导致某项移除中止时刷新该行，保持 sheet 可继续提交。
+Sheet 标题下显示一行：
 
-## 5. 状态原型
+`Enter the repository URL and an optional display name.`
 
-### 5.1 首次启动
+正文只包含两个 36px 表单行：
 
-先安装 `modu-cli`，成功后再允许选择工作区。流程直接呈现为两个设置步骤，不展示产品营销信息。
+- `Repository URL`
+- `Display Name`，placeholder 为 `Optional`
 
-两个设置步骤的图标使用相同的 48px 稳定槽位，并按实际可见轮廓统一视觉大小和居中位置，不能只统一图标外框尺寸。
+底部为 Cancel 与 `Add`。不显示字段级帮助、派生仓库名、目标目录、路径预览或默认分支；派生校验错误关联到 URL 字段。
 
-CLI 安装失败或安装目标冲突时停留在第一步，就地显示简短原因、Retry 和错误详情，不允许带着失败状态继续选择工作区。没有可安全写入的现有 PATH 目录而改用 `~/.local/bin` 时，安装成功后先显示一次性 PATH 配置说明，再进入工作区选择；应用不代改 shell 配置。首次设置不显示 `Not Now` 或其他跳过入口，安装成功并完成工作区选择与检查前都不能进入主窗口。
+提交后 Sheet 原位进入稳定 clone 进度并提供 Cancel。失败或取消保留可重试状态，不切换为另一个窗口。
 
-选定工作区目录后，第二步原位进入 `Checking Workspace…`，完成无副作用检查前不进入主窗口。不包含任何 Modu 配置和受管目录的可写目录，或配置完整有效的已有工作区，通过检查后才初始化或载入；仅存在一份配置、任一配置无效，或配置缺失但受管目录或 skill 目标已有内容时，停留在第二步，显示所选路径和具体冲突，并提供 `Choose Another Folder` 与运行 Doctor 的明确指引。阻断状态不得创建或补写配置、受管目录和 skill 链接；检查中与阻断结果均通过 accessibility announcement 传达且不抢走当前焦点。
+### 4.2 Create Worktree Group
 
-![首次启动](../design/prototypes/01-onboarding.png)
+点击 `worktrees` 标题 plus 打开 `Create Worktree Group` Sheet。正文自上而下只包含：
 
-### 5.2 未选择状态
+1. 36px `Group Name` 输入框。
+2. `Repositories` 标题与右对齐的 `<selected> / <total> selected`。
+3. 按第 1.5 节统一自然顺序排列的 28px checkbox 列表。
+4. Cancel 与 `Create`。
 
-没有节点被选中时，右侧内容区不再提供工作区概览。正常状态仅显示一个 56px 的中性灰色线性 Agent/Terminal 图标，并在下方显示 `What should we build?`；组合在右侧内容区水平居中、略高于垂直中点。标题使用约 32px 的常规或中等字重，不使用 hero 字号，也不放入卡片或其他容器。
+每个列表项依次显示 checkbox 和仓库展示名。7 个仓库以内完整展示；目标规模内的 8–20 个仓库固定显示最多 7 行，并使用原生纵向滚动。列表下方不重复选择数量，不显示路径/分支预览、document、帮助文案或派生摘要。
 
-静态内容不显示仓库状态、活跃 group、计数、时间、成功信息、Add Repository 主操作或其他说明。侧栏保持完整并且没有选中行；用户通过侧栏完成定位或点击 Repositories 标题的 Add 图标进入添加流程。
+Group Name 原样保存并在输入框就地校验，不自动 slug 化。示例应使用合法单段名称，如 `feature-store-pickup`、`fix-overselling`。没有选择仓库时只禁用 `Create`，不显示错误。
 
-静态组合是单一可访问区域，accessibility label 为 `No Repository or Worktree Selected`，value 读出 `What should we build?`。阻断性配置错误、待确认 repository cleanup 或 cleanup 部分失败可替换静态内容并沿用各自既有恢复流程；手动 Fetch/Pull 暂态只替换 workspace-title，不恢复概览列表或在侧栏增加同步状态。
+提交后 Sheet 原位显示逐仓库进度；成功项保留，失败项提供 `Retry Failed`。全部完成后关闭 Sheet，展开并聚焦新 Group。
 
-![未选择状态](../design/prototypes/02-unselected-state.png)
+### 4.3 Edit Worktree Group
 
-### 5.3 配置错误
+`Edit Worktree Group` 复用创建 Sheet 的尺寸，输入框为 36px、仓库列表为 28px：
 
-该原型展示 `.modu.yaml` 错误：最后有效状态仅保留在内存中，侧栏隐藏，阻断恢复页占满标题栏下方的窗口主体；仓库派生操作冻结，并提供 Open Config、定位文件和重新加载入口。`.modu-worktrees.yaml` 错误只冻结 worktree 及依赖其记录的 cleanup 操作，仍显示明确标记为 Stale 的最后有效 worktree 列表，不能复用该全宽阻断状态。
+- Group Name 可选择和复制但不可编辑，使用更深的输入框背景，并通过 accessibility value 表达 read only。
+- 仓库列表复用第 4.2 节的数据范围和第 1.5 节的排序，不因 Checkbox 或 Working Tree 状态重排。
+- `Repositories` 标题右侧显示 `<selected> / <total> selected`。
+- Checkbox 表示保存后的目标成员关系；`Working Tree` 表示保存前当前本地状态，两者相互独立。
+- 列表增加 `Working Tree` 状态，以图标、等宽文字和可访问值显示 `Clean`、`Dirty`、`Other` 或 `Unset`；`Unset` 表示该 Group 尚未创建对应 linked worktree，与当前是否勾选无关。
+- 没有变化时禁用 `Save Changes`；取消全部勾选时也只禁用，不显示提示。
+- Dirty 与 Other 允许取消勾选并提交。
 
-![配置错误](../design/prototypes/03-config-error.png)
+仅 additions 时使用普通 `Save Changes`；存在 removal 时仍使用 `Save Changes` 文案并采用 destructive 样式。点击后直接在原 Sheet 显示逐仓库进度，不增加风险页；成功项保留，失败项提供 `Retry Failed`。状态变化导致某项中止时刷新该行，Sheet 保持可继续操作。
 
-### 5.4 添加仓库
+### 4.4 表单通则
 
-sheet 正文只包含 `Repository URL`、`Display Name (Optional)` 两个标签和对应输入框，不显示帮助文案、仓库名、目标目录、路径预览或默认分支说明。仓库名和目标目录仍从 URL 内部派生，默认分支仍在 clone 后从 origin 解析。不同远端的同名仓库在 v0.1 中不受支持，重复身份必须在 URL 字段就地提示，且不能暗示修改展示名可以解决；凭据 URL、非法仓库名和目录冲突同样在提交前就地提示。无法保留 `.modu.yaml` 未改动内容时不写入并提供 Open Config；提交后 clone 失败保留声明并提供 Retry。
+- 校验尽量与字段就近；只在可操作信息需要跨字段说明时使用 Sheet 级错误。
+- 主操作只在必填输入有效且提交有意义时启用。
+- 提交中禁用重复触发，保留稳定布局和明确的 accessibility announcement。
+- 关闭 Sheet 后焦点回到触发控件；创建成功可按流程转移到新节点。
 
-URL 本地派生出的仓库名和目标路径不在 sheet 中展示。派生仍用于提交前校验；相关错误统一关联回 URL 字段，不新增第三个只读信息区。
+## 5. Git Browser
 
-sheet 打开时键盘焦点落在 URL。用户提交且验证失败时保持 sheet 打开，将焦点移到第一个无效字段；仓库身份或目标目录等由 URL 派生的错误关联回 URL 字段。每条行内错误都与对应字段建立可访问关系，并在首次出现或内容变化时通过 accessibility announcement 宣布一次；更正输入后只清除已经解决的错误，不重复播报未变化的问题。无法安全写回配置属于表单级错误，焦点移到错误摘要，Open Config 保持在同一键盘顺序中。
+### 5.1 摘要
 
-![添加仓库](../design/prototypes/04-add-repository.png)
+摘要使用原生 Group Box，自上而下显示：
 
-### 5.5 删除 Repository
+1. 当前工作树的工作区相对路径。
+2. `Base branch`（已解析默认分支对应的 remote-tracking ref，例如 `origin/main`）
+3. `Head branch`
 
-独立确认页展示主仓库、关联 worktree、风险与执行顺序；示例包含关联项，确认按钮显示 `Delete Repository & <N> Worktrees`。
+路径规则：
 
-![删除 Repository](../design/prototypes/05-delete-repository.png)
+- 主工作树：`repositories/<repo-name>`
+- linked worktree：`worktrees/<group>/<repo-name>`
+- 不显示绝对路径、前导 `./` 或尾随 `/`。
+- 长路径中部截断；tooltip 与 accessibility value 提供完整相对路径。
 
-### 5.6 主仓库详情
+detached HEAD 的 Head branch 显示 `Detached at <short-sha>`。
 
-选中主工作树时显示工具操作区，以及与 linked worktree 相同的 Worktrees / Changes / Commits 卡片骨架。摘要卡 Path 为 `repositories/web-console`；该示例工作树 clean，因此不显示 Changes；Commits 显示当前 `main` 分支历史。右侧不提供 Reveal in Finder 按钮。
+摘要不显示独立的 Status 计数。差异文件的状态图标只在 Changes 列表中出现，并遵循下方 Changes 的状态与无障碍规则。
 
-![主仓库详情](../design/prototypes/06-main-repository.png)
+### 5.2 Changes
 
-### 5.7 Fetch Running
+- 存在相对 Base 的文件差异时显示 `Changes` Group Box，默认展开；无差异时隐藏整个区域，不显示零计数空态。标题区使用第 2.2 节的 52px 紧凑固定结构，不随窗口尺寸或内容量改变密度。
+- 差异范围覆盖当前工作树（包含 HEAD 与未提交内容）相对 Base 的文件变化；同一路径只显示一次，ignored 不计入。
+- 使用 28px 原生 Outline 按仓库相对路径展示目录层级。
+- 每个目录的直接子项按第 1.5 节排序；目录与文件共同参与同级排序，不按状态分组，也不展平层级。
+- 目录行显示 disclosure 与 folder；文件叶子在文件名前显示 Added、Moved、Modified、Deleted 图标，最右侧不重复状态文字。
+- Moved 叶子显示新路径，旧路径通过 tooltip 与 accessibility value 读作 `from <old-path>`；复制和 Reveal 使用新路径。
+- 同一文件只显示一次。长路径保持单行，目录行显示当前层名称，完整相对路径放在 tooltip/accessibility value。
+- Added、Moved、Modified、Deleted 使用状态色图标，图标与背景至少保持 3:1 对比度；自定义状态 asset 保持“状态色容器 + 白色字形”的结构，不使用会将内部字形染成系统文字色的 template image。Moved 浅色图标使用 `#B262ED`。
+- Unknown 使用中性可访问占位，不新增第五种状态图标。
+- 读取失败时保留区域，显示 `Unavailable`、整理后的原因与 Retry，不能按无差异隐藏。
+- 紧凑窗口中按第 2.2 节分配卡片高度；内容溢出时在卡片内部独立滚动。滚动到中部或底部时显示顶部 1px 分隔线与 40px 顶部渐隐；下方仍有内容时保留 40px 底部渐隐。两种渐隐均不改变内容视口高度。
 
-Repositories 三个操作按钮统一置灰禁用，按钮和 32px 列表行尺寸保持稳定；workspace-title 替换为 spinner 与 `Fetch 'origin'`。侧栏行和内容区不显示同步状态、进度或 Stop。
+### 5.3 Commits
 
-![Fetch Running](../design/prototypes/07-fetch-running.png)
+- 标题只显示 `Commits`，不显示 `unique from <base>`、总数、HEAD 或分支 badge；标题区与 Changes 共用第 2.2 节的 52px 紧凑固定结构。
+- 差异范围固定为 `Base..HEAD`；主工作树与 linked worktree 使用同一范围。
+- 每条固定 28px，不增加额外纵向行间距；依次为提交信息、提交人、提交时间和短哈希，四列稳定对齐，提交信息优先获得剩余宽度。
+- 900×600 紧凑窗口中列间距为 12px；提交人、提交时间和短哈希列分别固定为 84px、160px、60px，提交信息列填充剩余宽度。不得为保留宽间距而过早截断提交信息。
+- 长内容单行尾部截断；hover 与 accessibility value 提供四项完整值。
+- 没有可展示提交时隐藏整个 Group Box，不显示零提交空态。
+- 读取失败、Base 缺失或未完成 merge/rebase 时显示原因、Retry 和仍可用的外部工具入口；Changes 与 Commits 各自保持独立，不因另一方失败而无条件清空。
+- 首批最多显示 100 条，更多时使用 `Load More`。
+- 紧凑窗口中按第 2.2 节分配 Group Box 高度；提交列表溢出时独立滚动并显示底部渐隐，可局部露出下一行作为连续内容线索。
+- v0.1 不显示提交文件树或逐行 diff。
 
-### 5.8 全部成功暂态
+### 5.4 选择与刷新
 
-全部成功时 workspace-title 显示 `Already up to date` 3 秒，不显示 toast，随后恢复工作区目录名。
+- 切换节点时，Path 与详情使用同一 selection generation 更新，不在新选择下短暂显示旧内容。
+- 加载中保持当前结构稳定；旧请求完成后不得覆盖新选择。
+- Changes、Commits 或摘要任一读取失败不无条件清空其他可用区域。
 
-![Fetch 全部成功暂态](../design/prototypes/08-fetch-success.png)
+## 6. 反馈与异常
 
-### 5.9 Pull 部分跳过或失败
+用户发起的操作或当前可见状态读取失败，且该流程没有专用的字段/区域就地状态、后台非模态异常、删除确认或配置阻断反馈时，统一复用“通用结果提示”原生 Alert：
 
-存在 skipped 或 failed 项时，workspace-title 先恢复工作区目录名，再使用单次汇总弹窗，并明确 linked worktree 不受影响。结果列表只读且不显示选中态，底部只保留 `Done` 关闭按钮；弹窗后的主窗口仍使用与主工作树一致的卡片详情。
+- 标题说明失败的操作或状态，不使用无上下文的 `Error`。
+- 正文只显示 Modu 能可靠识别的结果信息，以及可执行时的一条操作建议；不展示未经整理的 Git、文件系统或进程输出。
+- 底部只提供当前可用的操作，如 `Retry`、`Reload`、`Open Config`、`Reveal in Finder` 或 `Done`，不为凑齐按钮数量显示无效入口。
+- 无法识别或匹配的外部文件状态不推断、不自动修复；需要用户自行恢复工作区文件时，正文只说明修复后重新加载或重新选择工作区，不加入归责性长文。
+- 同一次操作只显示一次结果 Alert；关闭后按第 7 节恢复焦点。
 
-![Pull 部分跳过或失败](../design/prototypes/09-pull-result-issues.png)
+### 6.1 Repositories 操作
 
-### 5.10 创建 Worktree Group
+Add、Fetch 或 Pull 任一运行时，`repositories` 的三个 28px 图标命中框保持原尺寸并统一置灰禁用。
 
-sheet 使用紧凑原生表单和 32px 仓库行；空选择只表现为禁用 `Create Group`，列表下方不显示选择数量。
+手动 Fetch/Pull：
 
-![创建 Worktree Group](../design/prototypes/10-create-worktree-group.png)
+- workspace title 替换为 spinner 与 `Fetch 'origin'` 或 `Pull 'origin'`。
+- 侧栏行、按钮和右侧内容不重复显示进度、完成数或 Stop。
+- 全部成功后 title 显示 `Already up to date` 3 秒并 announcement，再恢复工作区名；不显示成功 toast。
+- 存在 skipped/failed 时先恢复工作区名，再显示一次原生 Alert。正文只列受影响仓库及 `failed`/`skipped` 状态，不显示简短原因，并说明 linked worktree 未修改；底部只有 `Done`。
+- `Done` 是初始焦点；Return/Escape 关闭后焦点回到 Fetch/Pull 触发按钮，不存在时回到 `repositories` 标题。
 
-### 5.11 编辑 Worktree Group
+自动 Fetch 成功保持静默；失败只更新去重的非模态异常，不复用手动 title 或弹窗。
 
-Group Name 只读，列表展示 Working Tree 状态列；示例同时覆盖 Dirty、Unknown、Clean 和 Not Created，并展示存在 removal 时的 destructive `Save Changes`。
+### 6.2 配置错误
 
-![编辑 Worktree Group](../design/prototypes/11-edit-worktree-group.png)
+启动或运行期间 `.modu.yaml` 缺失、不可读、版本不支持或无法通过语法/schema 校验时，统一复用 04 Parse Config Error 的原生阻断 Alert：
 
-### 5.12 删除 Worktree Group
+- 启动期间保持 Setup Window；运行期间阻断当前主窗口，在问题解决或切换工作区前不继续显示或操作当前工作区状态。
+- 显示原生阻断 Alert，标题为 `.modu.yaml couldn't be loaded`。
+- 正文显示能够识别的具体状态，并提示用户修复工作区文件后 `Reload`，或重新选择工作区；不承诺自动恢复外部文件改动。
+- 按钮为 `Reload`、destructive `Quit`、`Choose Another...`。`Reload` 重新读取并校验当前工作区，`Choose Another...` 返回工作区选择。
+- 不自动创建、修复、重命名或移动 `.modu.yaml`，也不根据最后有效内存状态继续写入。
 
-弹窗逐项列出即将删除的 worktree、本地分支、dirty、ignored content 与 local-only commit 风险；clean 行仍明确 ignored content 和 local-only commits 的检测结果。
+`.modu-worktrees.yaml` 错误使用独立恢复状态：主仓库能力保留，最后有效 worktree 列表明确标为 Stale；被产品规则冻结的创建、删除和 repair 入口禁用并说明原因。
 
-![删除 Worktree Group](../design/prototypes/12-delete-worktree-group.png)
+两类配置错误中的缺失、版本过高和 schema 错误均复用各自既定的视觉框架；正文中的可识别状态与可用操作按错误域具体化。
 
-### 5.13 删除单个 Linked Worktree
+### 6.3 危险操作通则
 
-弹窗明确 force-remove、本地分支删除、可能永久丢失的 dirty 与 ignored 本地内容，以及远端分支不受影响。
+- 使用原生 Sheet/Alert、destructive 主操作和简洁的确认内容，不用 toast 承载确认。确认页不要求逐项展开 dirty 的具体内容、ignored content、仅本地提交或 detached HEAD 等风险明细；这些信息仍由当前计划在执行前读取和校验。
+- 确认内容使用操作开始前的稳定快照；若 PRD 要求执行前计划变化，原窗口就地更新并要求再次确认。
+- 执行中切换为原位进度并禁止重复提交。
+- 部分失败显示逐项结果与 `Retry Failed`；成功项保持完成，不伪装为全部失败或全部成功。
+- 全部完成后，选择与焦点优先移动到删除位置后的相邻可见安全节点，其次前一节点；均不存在才回到未选择状态。
 
-![删除单个 Linked Worktree](../design/prototypes/13-delete-linked-worktree.png)
+内部配置、Git、锁与恢复顺序以 PRD 第 5.4、7.2、7.3 节为准。
 
-### 5.14 Linked Worktree Git 浏览
+### 6.4 Delete Linked Worktree
 
-选中 linked worktree 时，使用与主工作树一致的卡片骨架；摘要卡 Path 为 `worktrees/feature-report/fronted`，Changes 显示非 clean 工作树文件，Commits 显示相对 Base 的独有提交。提交不显示范围说明或选择后文件树；原型数据中的短 SHA 必须只使用十六进制字符，文件状态严格使用四类映射，rename 同时表达新旧路径。
+确认页显示目标 worktree 路径与简洁的 Working Tree 状态；不要求显示本地分支、ignored content、仅本地提交风险、detached HEAD 或远端分支说明。
 
-同一张代表性原型同时展示 Status 与 Changes 时，示例 Status 四类计数必须与可见 Changes 文件行逐项汇总一致，避免原型数据自相矛盾；这只约束原型数据一致性，不改变第 2.6 节中 Status 相对 Base、Changes 表示当前工作树的独立语义。
+确认按钮统一为 destructive `Delete`。执行前仍须按 PRD 在锁内重算当前计划，远端分支永不删除。
 
-![Linked worktree Git 浏览](../design/prototypes/14-linked-worktree-git-browser.png)
+### 6.5 Delete Worktree Group
 
-### 5.15 Agent 分裂按钮
+- 标题固定为 `Delete Worktree Group?`，不显示 Group 名称。
+- 列表首行显示 Group 相对路径 `worktrees/<group-name>`，用于明确删除范围；该行右侧不显示状态。
+- 后续可列出受影响 worktree 路径与简洁的 Working Tree 状态，但不要求展示本地分支、ignored content 或仅本地提交风险明细。
+- 路径使用单行展示，超出可用宽度时尾部截断；列表行高为 28px。
+- 无论 dirty 与否都二次确认。
+- 确认按钮统一为 destructive `Delete`。
 
-该原型展示 Agent 分裂按钮的下拉菜单。Codex 行使用 `#F5F5F5` 浅灰背景表示 hover；菜单无 check 图标和选中态。点击 Codex 或 Claude Code 都会立即用对应软件打开当前工作树路径，成功后把该软件写入同一份全局偏好配置，作为 Agent 分裂按钮的新默认值。
+### 6.6 Delete Repository
 
-![Agent 分裂按钮](../design/prototypes/15-agent-split-menu.png)
+使用独立 `Delete Repository?` 页面，展示：
 
-### 5.16 Linked Worktree 右键菜单
+- 主仓库名称与受管路径。
+- 关联 linked worktree 路径与简洁的 Working Tree 状态（如有）。
+- 不要求展开 dirty 的具体内容、ignored content、仅本地提交风险、配置更新、强制移除、Trash 移动或远端删除说明等风险明细；这些动作仍按当前计划执行。
 
-该画板作为 Group、主仓库和 linked worktree 三类右键菜单的共同视觉参考，统一使用紧凑的原生菜单，并以原生分隔线区分路径操作与编辑或删除操作。画板实际展示的 linked worktree 菜单依次为 `Copy Path`、`Reveal in Finder`、`Delete Linked Worktree…`；Group 和主仓库的具体菜单项分别以第 2.4、2.3 节及 `PRD.md` 为准，不再单独出图。Group 菜单始终不显示方案文档相关操作。
+确认按钮统一为 destructive `Delete`。手工修改 `.modu.yaml` 产生的 cleanup 复用同一信息结构。
+
+## 7. 可访问性与系统适配
+
+- 核心流程必须可仅用键盘完成：侧栏选择/展开、工具分裂按钮、表单、结果 Alert 和配置恢复。仅存在于右键菜单的 Edit、Delete、Copy Path、Reveal 操作不要求提供独立键盘路径、Commands 或快捷键。
+- Sheet、Menu、Popover 和 Alert 关闭后恢复触发控件焦点；删除后的焦点遵循第 6.3 节。
+- workspace title 暂态、异步完成、失败和取消使用 accessibility announcement，不无故抢焦点。
+- 图标按钮提供 accessibility label 与 tooltip；tooltip 不是唯一说明。
+- 展开状态、行尾圆点、Stale、spinner 和文件状态提供明确 label/value。
+- 支持浅色、深色、提高对比度和减少透明度；图标与背景至少 3:1，正文与小字号数字至少 4.5:1。
+- 动态类型不要求突破桌面密度层级；放大或长文本优先通过截断、tooltip、滚动和系统可访问值保证信息完整。
+
+## 8. 原型索引
+
+本节按 Figma 画布从左到右、从上到下编号。Setup Window 画板为 720×520，标准主窗口为 1200×800，小窗口为 900×600；导出 PNG 含原生窗口阴影，因此文件尺寸分别为 800×600、1280×880 和 980×680。示例 group 与受管路径必须符合 PRD 身份规则。
+
+### 8.1 Onboarding - 1
+
+CLI 未安装；第二步与 Continue 禁用，不提供跳过；底部次级按钮为 `Quit`。
+
+![Onboarding 第一步](../design/prototypes/01-onboarding-1.png)
+
+### 8.2 Onboarding - 2
+
+CLI 显示 `Installed`，工作区选择启用；底部次级按钮为 `Quit`。
+
+![Onboarding CLI 已安装](../design/prototypes/02-onboarding-2.png)
+
+### 8.3 Onboarding - 3
+
+显示 `Selected: <path>`，Continue 启用；点击后先执行无副作用检查；底部次级按钮为 `Quit`。
+
+![Onboarding 工作区已选择](../design/prototypes/03-onboarding-3.png)
+
+### 8.4 Parse Config Error
+
+代表 `.modu.yaml` 缺失、不可读或无法解析等关键工作区状态加载失败；启动与运行期间复用同一阻断 Alert，提供 Reload、Quit、Choose Another。
+
+![配置解析错误](../design/prototypes/04-parse-config-error.png)
+
+### 8.5 Unselected State
+
+右侧居中显示 `Let's start`；其下先显示以工作区根为目标的 `Codex` 分裂按钮，再显示并排的 `Add Repository` 与 `Create Worktree Group` 白底细边框次级按钮。工作区没有仓库时，`Create Worktree Group` 保持显示但禁用。
+
+![未选择状态](../design/prototypes/05-unselected-state.png)
+
+### 8.6 Add Repository
+
+两个 36px 表单行与紧凑 `Add`，不展示派生信息。
+
+![添加仓库](../design/prototypes/06-add-repository.png)
+
+### 8.7 Delete Repository
+
+原生 Sheet 与 28px cleanup 计划行；显示路径与简洁的 Working Tree 状态，确认按钮统一为 `Delete`，不要求显示更详细的风险提示。
+
+![删除 Repository](../design/prototypes/07-delete-repository.png)
+
+### 8.8 Create Worktree Group
+
+36px Group Name 与仓库 checkbox 列表；按第 1.5 节展示 `catalog-service`、`inventory-service`、`ios-client`、`macos-client`、`order-service`、`payment-service`、`storefront-web`，勾选 `order-service` 与 `storefront-web`，标题右侧为 `2 / 7 selected`。
+
+![创建 Worktree Group](../design/prototypes/08-create-worktree-group.png)
+
+### 8.9 Edit Worktree Group
+
+只读 Group Name 为 `feature-store-pickup`；仓库按第 1.5 节展示，目标成员为除 `catalog-service` 外的 6 个仓库，标题右侧为 `6 / 7 selected`。保存前状态为：`storefront-web`、`order-service` 为 `Dirty`，`ios-client`、`macos-client`、`inventory-service` 为 `Clean`，`catalog-service`、`payment-service` 为 `Unset`。`Other` 仅在真实状态无法读取或分类时出现。该场景只包含 additions，因此按钮为普通 `Save Changes`；存在 removal 时按第 4.3 节采用 destructive 样式。
+
+![编辑 Worktree Group](../design/prototypes/09-edit-worktree-group.png)
+
+### 8.10 Delete Worktree Group
+
+标题固定为 `Delete Worktree Group?`。列表首行展示 Group 相对路径 `worktrees/feature-store-pickup`，后续列出受影响 worktree 路径与简洁的 Working Tree 状态；不要求显示更详细的风险提示，确认按钮统一为 `Delete`。
+
+![删除 Worktree Group](../design/prototypes/10-delete-worktree-group.png)
+
+### 8.11 Delete Linked Worktree
+
+展示目标 worktree 路径与简洁的 Working Tree 状态；不要求显示更详细的风险提示，确认按钮统一为 `Delete`。
+
+![删除单个 Linked Worktree](../design/prototypes/11-delete-linked-worktree.png)
+
+### 8.12 Repository Selected
+
+四类工具与摘要；路径为 `repositories/order-service`，Base branch 示例为 `origin/main`，摘要只显示 Path、Base branch 和 Head branch，不显示 Status 计数。不存在 `Base..HEAD` 差异提交时隐藏 Commits；Changes 仅在存在相对 Base 的文件差异时显示。
+
+![主仓库详情](../design/prototypes/12-repository-selected.png)
+
+### 8.13 Fetch Running
+
+repositories 操作统一禁用，workspace title 显示 spinner 与 `Fetch 'origin'`。
+
+![Fetch Running](../design/prototypes/13-fetch-running.png)
+
+### 8.14 Pull Result Issues
+
+workspace title 已恢复；原生 Alert 只按 `order-service`、`storefront-web` 列出 failed/skipped 状态，不显示简短原因，底部为 `Done`。
+
+![Pull 部分跳过或失败](../design/prototypes/14-pull-result-issues.png)
+
+### 8.15 Linked Worktree Selected
+
+路径为 `worktrees/feature-store-pickup/order-service`；Base branch 示例为 `origin/main`，摘要只显示 Path、Base branch 和 Head branch。Changes 展示当前工作树相对 Base 的差异文件，Commits 展示 `Base..HEAD` 的差异提交；`internal/order` 下按 `application`、`domain`、`infrastructure`、`interfaces` 排列并保留各自子树。
+
+![Linked worktree Git 浏览](../design/prototypes/15-linked-worktree-selected.png)
+
+### 8.16 Linked Worktree Context Menu
+
+Context Menu 原型展示 `Copy Path`、`Reveal in Finder`、`Delete Linked Worktree`；其他节点复用该视觉并按第 2.5 节配置菜单项。
 
 ![Linked worktree 右键菜单](../design/prototypes/16-linked-worktree-context-menu.png)
 
-## 6. 实现说明
+### 8.17 Split Menu Open
 
-- 原型用于确认信息架构、交互位置、状态和视觉方向，不要求逐像素复刻图像生成中的偶然字体差异。
-- 实现优先使用 SwiftUI/AppKit 原生控件、SF Symbols 和系统 material；Git 标识使用项目内统一的 SVG/vector asset。
-- 支持系统浅色、深色、提高对比度和减少透明度设置；状态色使用外观对应的语义变体，图标与相邻背景至少满足 3:1，对正文和小字号数字至少满足 4.5:1。
-- 图标按钮必须提供 accessibility label 和 tooltip；tooltip 不是唯一说明方式。workspace-title 暂态、异步完成、失败和取消通过 accessibility announcement 传达，但不抢走当前焦点。
-- 所有核心流程必须可仅用键盘完成：侧栏选择与展开、工具分裂按钮、Add sheet、结果弹窗、配置恢复和危险操作确认。sheet/menu/popover 关闭后把焦点恢复到触发控件；删除后把焦点移到相邻安全节点或未选择状态。
-- 展开/折叠状态、无文字 Status 计数、workspace-title spinner、行尾异常和文件状态都提供明确 accessibility label/value；同一状态不只依赖颜色。
-- 动态状态、长路径和长仓库名不得改变工具栏、计数器或列表行的稳定尺寸；必要时使用中部截断和原生滚动。
-- 主窗口设置能容纳侧栏、四类工具按钮和详情头的最小尺寸；窗口更窄时工具按钮允许换到下一行或进入原生 overflow，不裁切文字、不覆盖 Status。
-- sheet、popover、menu 和 toast 只覆盖当前任务所需信息，不在其中增加新的产品能力。
+原生 Agent menu 展示检测成功的 Codex 与 Claude Code，不显示 check 或持久选中态。
 
-## 7. 必须实现但未单独出图的状态
+![Agent 分裂按钮](../design/prototypes/17-split-menu-open.png)
 
-- 空工作区和空 Worktrees。
-- CLI 安装冲突、失败与重试。
-- 仓库 clone 中、可取消进度、clone 失败、遗留 staging 和目标目录冲突。
-- 待确认 repository cleanup 及其部分失败。
-- `.modu-worktrees.yaml` 错误和陈旧列表。
-- 自动 Fetch 非模态失败、工作区切换或退出导致的批量任务取消。
-- 无独有提交、Base ref 缺失和 Git 读取失败。
-- worktree 删除中、分支删除失败和 Retry Failed。
+### 8.18 Small Window — Linked Worktree Selected
 
-这些状态复用现有窗口结构、列表密度、sheet 和结果汇总样式；除 Git Browser Detail 已确认的功能卡片外，不新增卡片式容器或独立导航层级。
+900×600 最小主窗口中的 linked worktree 选中态。侧栏使用 240px 紧凑宽度，按原生 Outline 槽位保留 Group 与 linked worktree 层级缩进及标题操作；四类工具入口保持可用，divider 与下拉命中区边界对齐。Base branch 示例为 `origin/main`，摘要只显示 Path、Base branch 和 Head branch，固定为 88px。Changes 与 Commits 均溢出，按第 2.2 节分配为 191px 与 156px，使用 52px 紧凑标题结构，对应内容视口为 139px 与 104px。Changes 示例滚动到中部（`scrollOffset≈112px`，总可滚动范围约 225px），视口顶部显示 1px 分隔线和 40px 顶部渐隐，底部继续显示 40px 渐隐；其 overlay indicator 使用 `Page Height=x4 / Position=Middle`。Commits 保持顶部滚动状态，使用 `Page Height=x2 / Position=Top`，包含 5 条 `Base..HEAD` 差异提交，使用 28px 行高与 12px 列间距。侧栏仅以渐隐示意后续内容，详情外层不显示 indicator。
+
+![小窗口 Linked worktree Git 浏览](../design/prototypes/18-small-window-linked-worktree-selected.png)
+
+## 9. 必须实现但未单独出图
+
+- 空工作区和空 `worktrees`。
+- CLI 安装冲突、失败、PATH 说明与重试。
+- clone 中、取消、失败、遗留 staging 和目标冲突。
+- 运行中的 `.modu.yaml` 阻断 Alert 与 `.modu-worktrees.yaml` Stale 状态。
+- 自动 Fetch 非模态失败、切换/退出取消和全部成功暂态。
+- Group 创建/编辑部分失败，removal 时 destructive Save Changes。
+- 无提交、Base 缺失、Git 读取失败和 merge/rebase 未完成。
+- linked worktree/Group/repository 删除中、风险变化、分支删除失败和 Retry Failed。
+
+这些状态复用既有 Window、Sheet、Alert、Menu、Group Box 和密度体系，不新增卡片式容器或导航层级。
