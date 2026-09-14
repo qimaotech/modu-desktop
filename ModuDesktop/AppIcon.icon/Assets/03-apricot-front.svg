@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="200 176 857 857">
+  <defs>
+    <linearGradient id="apricot-fill" gradientUnits="userSpaceOnUse" x1="400" y1="378" x2="650" y2="817">
+      <stop offset="0" stop-color="#FFBF74" />
+      <stop offset="0.35" stop-color="#FDA248" />
+      <stop offset="1" stop-color="#F27D10" />
+    </linearGradient>
+  </defs>
+  <path id="front-ribbon" fill="url(#apricot-fill)" d="       M 450 378 H 558       A 36 36 0 0 1 583.456 388.544       L 680.456 485.544       A 36 36 0 0 1 691 511       V 656.782       L 547.109 512.891       A 64.5 64.5 0 0 0 437 558.5       V 761       A 56 56 0 0 1 325 761       V 502.912       A 36 36 0 0 1 335.544 477.456       L 424.544 388.544       A 36 36 0 0 1 450 378 Z" />
+</svg>
