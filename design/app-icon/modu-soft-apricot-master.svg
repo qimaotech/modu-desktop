@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     width="1254" height="1254" viewBox="0 0 1254 1254"
+     color-interpolation="sRGB" role="img" aria-labelledby="title description">
+  <title id="title">Modu · 柔和杏橙 · 可编辑矢量母稿</title>
+  <desc id="description">依据用户指定的柔和杏橙精修版重建。杏橙前层覆盖橙色中央立柱与珊瑚后层；轮廓、渐变、阴影和遮罩均为独立矢量对象。</desc>
+  <defs>
+    <radialGradient id="backdrop-fill" cx="50%" cy="44%" r="72%">
+      <stop offset="0" stop-color="#E5E9EE"/>
+      <stop offset="0.64" stop-color="#EEF1F5"/>
+      <stop offset="1" stop-color="#F1F4F7"/>
+    </radialGradient>
+    <linearGradient id="tile-fill" gradientUnits="userSpaceOnUse" x1="627" y1="176" x2="627" y2="1035">
+      <stop offset="0" stop-color="#FCFCFD"/>
+      <stop offset="0.36" stop-color="#F9F9FA"/>
+      <stop offset="0.72" stop-color="#F8F8F9"/>
+      <stop offset="1" stop-color="#F3F4F5"/>
+    </linearGradient>
+    <linearGradient id="apricot-fill" gradientUnits="userSpaceOnUse" x1="400" y1="378" x2="650" y2="817">
+      <stop offset="0" stop-color="#FFBF74"/>
+      <stop offset="0.35" stop-color="#FDA248"/>
+      <stop offset="1" stop-color="#F27D10"/>
+    </linearGradient>
+    <linearGradient id="coral-fill" gradientUnits="userSpaceOnUse" x1="793" y1="378" x2="793" y2="817">
+      <stop offset="0" stop-color="#FFA785"/>
+      <stop offset="0.3" stop-color="#F68E71"/>
+      <stop offset="0.66" stop-color="#F37D5D"/>
+      <stop offset="1" stop-color="#EC6D51"/>
+    </linearGradient>
+    <radialGradient id="coral-warmth" gradientUnits="userSpaceOnUse" cx="677" cy="422" r="175">
+      <stop offset="0" stop-color="#FF7647" stop-opacity="0.58"/>
+      <stop offset="0.48" stop-color="#FF7647" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FF7647" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="center-fill" gradientUnits="userSpaceOnUse" x1="596" y1="522" x2="650" y2="817">
+      <stop offset="0" stop-color="#FA9746"/>
+      <stop offset="0.46" stop-color="#EF8A3C"/>
+      <stop offset="1" stop-color="#E98137"/>
+    </linearGradient>
+    <!-- 渐变轴垂直于折叠边：阴影宽度 46，独立于清晰的前层轮廓。 -->
+    <linearGradient id="fold-shadow-falloff" gradientUnits="userSpaceOnUse" x1="619.055" y1="584.837" x2="586.529" y2="617.363">
+      <stop offset="0" stop-color="#81350F" stop-opacity="0.34"/>
+      <stop offset="0.10" stop-color="#81350F" stop-opacity="0.31"/>
+      <stop offset="0.25" stop-color="#81350F" stop-opacity="0.245"/>
+      <stop offset="0.45" stop-color="#81350F" stop-opacity="0.145"/>
+      <stop offset="0.65" stop-color="#81350F" stop-opacity="0.065"/>
+      <stop offset="0.84" stop-color="#81350F" stop-opacity="0.016"/>
+      <stop offset="1" stop-color="#81350F" stop-opacity="0"/>
+    </linearGradient>
+    <!-- 沿折叠边渐隐两端，避免阴影在内拱和中央立柱右侧形成暗点。 -->
+    <linearGradient id="fold-end-fade" gradientUnits="userSpaceOnUse" x1="547.109" y1="512.891" x2="691" y2="656.782">
+      <stop offset="0" stop-color="white" stop-opacity="0"/>
+      <stop offset="0.08" stop-color="white" stop-opacity="0.68"/>
+      <stop offset="0.2" stop-color="white" stop-opacity="1"/>
+      <stop offset="0.7" stop-color="white" stop-opacity="1"/>
+      <stop offset="0.9" stop-color="white" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="fold-end-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="500" y="470" width="220" height="260">
+      <rect x="500" y="470" width="220" height="260" fill="url(#fold-end-fade)"/>
+    </mask>
+    <clipPath id="rear-clip" clipPathUnits="userSpaceOnUse">
+      <use xlink:href="#rear-ribbon"/>
+    </clipPath>
+    <clipPath id="upper-overlap-clip" clipPathUnits="userSpaceOnUse">
+      <path d="M 614 408 H 751 V 565 H 678 Z"/>
+    </clipPath>
+    <filter id="upper-overlap-shadow" filterUnits="userSpaceOnUse" x="590" y="380" width="170" height="180" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="blur"/>
+      <feOffset in="blur" dx="18" dy="3" result="offset"/>
+      <feFlood flood-color="#78351C" flood-opacity="0.55" result="tint"/>
+      <feComposite in="tint" in2="offset" operator="in"/>
+    </filter>
+    <filter id="tile-ambient-shadow" filterUnits="userSpaceOnUse" x="70" y="80" width="1120" height="1150" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="25" result="blur"/>
+      <feOffset in="blur" dx="0" dy="26" result="offset"/>
+      <feFlood flood-color="#344252" flood-opacity="0.20" result="tint"/>
+      <feComposite in="tint" in2="offset" operator="in"/>
+    </filter>
+    <filter id="tile-contact-shadow" filterUnits="userSpaceOnUse" x="150" y="140" width="950" height="970" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="blur"/>
+      <feOffset in="blur" dx="0" dy="7" result="offset"/>
+      <feFlood flood-color="#35404B" flood-opacity="0.10" result="tint"/>
+      <feComposite in="tint" in2="offset" operator="in"/>
+    </filter>
+  </defs>
+
+  <g id="preview-backdrop" inkscape:groupmode="layer" inkscape:label="00 · 预览背景（可隐藏）">
+    <rect width="1254" height="1254" fill="url(#backdrop-fill)"/>
+  </g>
+  <g id="tile-shadows" inkscape:groupmode="layer" inkscape:label="01 · 底板投影">
+    <use id="tile-ambient" xlink:href="#tile-shape" filter="url(#tile-ambient-shadow)"/>
+    <use id="tile-contact" xlink:href="#tile-shape" filter="url(#tile-contact-shadow)"/>
+  </g>
+  <g id="tile" inkscape:groupmode="layer" inkscape:label="02 · 白色底板">
+    <path id="tile-shape" fill="url(#tile-fill)" d="
+      M 429 176 H 826
+      C 903 176 942 181 976 203
+      C 1029 237 1051 293 1051 382
+      V 811
+      C 1051 908 1038 956 1001 992
+      C 966 1025 916 1035 831 1035
+      H 435
+      C 342 1035 291 1025 255 990
+      C 217 953 205 902 205 811
+      V 397
+      C 205 301 220 251 260 216
+      C 296 184 344 176 429 176 Z"/>
+  </g>
+  <g id="rear-layer" inkscape:groupmode="layer" inkscape:label="03 · 珊瑚后层">
+    <!-- 上肩圆角 R36；右端 R57.5；中央端 R62.5；内拱 Rx63 / Ry64。 -->
+    <path id="rear-ribbon" fill="url(#coral-fill)" d="
+      M 696 378 H 804
+      A 36 36 0 0 1 829.456 388.544
+      L 921.456 480.544
+      A 36 36 0 0 1 932 506
+      V 759.5
+      A 57.5 57.5 0 0 1 817 759.5
+      V 558
+      A 63 64 0 0 0 691 558
+      V 754.5
+      A 62.5 62.5 0 0 1 566 754.5
+      V 558.5
+      A 64.5 64.5 0 0 0 547.109 512.891
+      L 670.544 388.544
+      A 36 36 0 0 1 696 378 Z"/>
+    <g clip-path="url(#rear-clip)">
+      <rect id="rear-warm-light" x="565" y="376" width="370" height="445" fill="url(#coral-warmth)"/>
+    </g>
+  </g>
+  <g id="center-layer" inkscape:groupmode="layer" inkscape:label="04 · 橙色中央立柱" clip-path="url(#rear-clip)">
+    <!-- 与前层共用内拱圆心和切点，遮罩后仍是连续圆弧，不能简化为矩形立柱。 -->
+    <path id="center-stem" fill="url(#center-fill)" d="
+      M 547.109 512.891 H 691 V 754.5
+      A 62.5 62.5 0 0 1 566 754.5
+      V 558.5 A 64.5 64.5 0 0 0 547.109 512.891 Z"/>
+  </g>
+  <g id="overlap-shadows" inkscape:groupmode="layer" inkscape:label="05 · 重叠阴影与端点遮罩" clip-path="url(#rear-clip)">
+    <g clip-path="url(#upper-overlap-clip)">
+      <use id="upper-overlap" xlink:href="#front-ribbon" filter="url(#upper-overlap-shadow)"/>
+    </g>
+    <path id="fold-shadow" fill="url(#fold-shadow-falloff)" mask="url(#fold-end-mask)"
+          d="M 547.109 512.891 L 691 656.782 L 648.574 699.208 L 504.683 555.317 Z"/>
+  </g>
+  <g id="front-layer" inkscape:groupmode="layer" inkscape:label="06 · 杏橙前层">
+    <!-- 内拱 R64.5 在 45° 切点接入折叠直线，两段共用切线；下端 R56。 -->
+    <path id="front-ribbon" fill="url(#apricot-fill)" d="
+      M 450 378 H 558
+      A 36 36 0 0 1 583.456 388.544
+      L 680.456 485.544
+      A 36 36 0 0 1 691 511
+      V 656.782
+      L 547.109 512.891
+      A 64.5 64.5 0 0 0 437 558.5
+      V 761
+      A 56 56 0 0 1 325 761
+      V 502.912
+      A 36 36 0 0 1 335.544 477.456
+      L 424.544 388.544
+      A 36 36 0 0 1 450 378 Z"/>
+  </g>
+</svg>

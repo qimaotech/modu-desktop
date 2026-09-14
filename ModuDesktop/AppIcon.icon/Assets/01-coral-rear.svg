@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="200 176 857 857">
+  <defs>
+    <linearGradient id="coral-fill" gradientUnits="userSpaceOnUse" x1="793" y1="378" x2="793" y2="817">
+      <stop offset="0" stop-color="#FFA785" />
+      <stop offset="0.3" stop-color="#F68E71" />
+      <stop offset="0.66" stop-color="#F37D5D" />
+      <stop offset="1" stop-color="#EC6D51" />
+    </linearGradient>
+  </defs>
+  <path id="rear-ribbon" fill="url(#coral-fill)" d="       M 696 378 H 804       A 36 36 0 0 1 829.456 388.544       L 921.456 480.544       A 36 36 0 0 1 932 506       V 759.5       A 57.5 57.5 0 0 1 817 759.5       V 558       A 63 64 0 0 0 691 558       V 754.5       A 62.5 62.5 0 0 1 566 754.5       V 558.5       A 64.5 64.5 0 0 0 547.109 512.891       L 670.544 388.544       A 36 36 0 0 1 696 378 Z" />
+</svg>

@@ -1,0 +1,94 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "03-apricot-front.svg",
+          "name": "03-apricot-front",
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "lighting": "combined",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.25
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.08
+      },
+      "name": "Apricot Fold",
+      "specular-specializations": [
+        {
+          "value": false
+        },
+        {
+          "appearance": "tinted",
+          "value": true
+        }
+      ]
+    },
+    {
+      "layers": [
+        {
+          "image-name": "02-orange-center.svg",
+          "name": "02-orange-center",
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-srgb:0.58000,0.58000,0.58000,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "01-coral-rear.svg",
+          "name": "01-coral-rear",
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-srgb:0.82000,0.82000,0.82000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "lighting": "combined",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.12
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "name": "Coral Foundation"
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "extended-srgb:0.97255,0.96863,0.96471,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "extended-srgb:0.10588,0.11765,0.14118,1.00000"
+      }
+    }
+  ]
+}
