@@ -1,28 +1,17 @@
 import XCTest
 
 final class ModuDesktopUITestsLaunchTests: XCTestCase {
-
-    override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        true
-    }
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
     @MainActor
-    func testLaunch() throws {
+    func testLaunchAtMinimumWindowSize() {
         let app = XCUIApplication()
+        let suite = "ModuLaunchTests.\(UUID().uuidString)"
+        let support = FileManager.default.temporaryDirectory.appending(path: suite)
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: support) }
+        app.launchEnvironment["MODU_TEST_DEFAULTS"] = suite
+        app.launchEnvironment["MODU_TEST_SUPPORT_DIRECTORY"] = support.path
         app.launch()
-
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
-
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Launch Screen"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(app.windows.firstMatch.frame.width, 720)
+        app.terminate()
     }
 }

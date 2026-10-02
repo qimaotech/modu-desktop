@@ -23,7 +23,7 @@
 
 Xcode 的 Debug / Release 均通过 `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` 选择该文档，`ModuDesktop` 文件夹的同步组自动纳入构建。原空白的 `AppIcon.appiconset` 已移除，无需修改 SwiftUI 或手写 `CFBundleIconFile`。
 
-[原生外观预览](modu-native-appearances.png) 由 Apple 随 Icon Composer 提供的 `ictool` 渲染后排版；依次展示 Default、Dark、ClearLight 与 TintedLight。其中单色底色和着色色相由系统预览样式决定。可用 [导出脚本](../../script/export_app_icon_previews.sh) 重新生成各外观 PNG；预览只供设计对照，应用直接编译 `.icon`。
+[原生外观预览](modu-native-appearances.png) 由 Apple 随 Icon Composer 提供的 `ictool` 渲染后排版；依次展示 Default、Dark、ClearLight 与 TintedLight。其中单色底色和着色色相由系统预览样式决定。可用 `task icon:previews` 调用 [导出脚本](../../script/export_app_icon_previews.sh) 重新生成各外观 PNG，在 `--` 后传入输出目录；预览只供设计对照，应用直接编译 `.icon`。
 
 官方说明：[Icon Composer](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer)。
 
@@ -66,4 +66,4 @@ SVG 使用与参考图一致的 `0 0 1254 1254` 坐标系。宽高可以等比�
 
 已对照指定参考图检查整体轮廓、配色与折叠关系，并检查放大的圆角、内拱、阴影末端及小尺寸渲染。SVG 的内部引用、XML 结构与资源独立性均经过检查。PNG 预览由最终 SVG 直接生成。
 
-Icon Composer 文档已在原生编辑器中打开，确认三层、两组及外观覆盖均可继续编辑；六种 Default / Dark / Clear / Tinted 渲染均已成功导出。`./script/build_and_run.sh --verify` 构建和启动通过，编译后的 `Assets.car` 包含 Aqua / DarkAqua 的 `IconGroup`，应用的 `CFBundleIconName` 与 `CFBundleIconFile` 均指向 `AppIcon`。
+Icon Composer 文档已在原生编辑器中打开，确认三层、两组及外观覆盖均可继续编辑；六种 Default / Dark / Clear / Tinted 渲染均已成功导出。`task verify` 构建和启动通过，编译后的 `Assets.car` 包含 Aqua / DarkAqua 的 `IconGroup`，应用的 `CFBundleIconName` 与 `CFBundleIconFile` 均指向 `AppIcon`。

@@ -5,7 +5,38 @@ name = "ModuDesktop"
 [setup]
 script = ""
 
+# 构建并启动开发版 App，使用正常工作区配置，启动后持续运行。
 [[actions]]
-name = "ModuDesktop"
+name = "Modu Run"
 icon = "run"
-command = "./script/build_and_run.sh"
+command = "task run"
+
+# 并行构建开发版 App 与生成临时 Git 数据，完成后打开该工作区，正常退出时清理；内容见 docs/MOCK.md。
+[[actions]]
+name = "Modu Mock"
+icon = "run"
+command = "task mock"
+
+# 构建开发版 App 并验证本次实例启动，输出 PID 后保持运行，agent 按验证流程退出并清理。
+[[actions]]
+name = "Modu Verify"
+icon = "run"
+command = "task verify"
+
+# 构建开发版 App 并进入 LLDB 调试器，输入 run 启动，可设置断点、单步执行和查看堆栈。
+[[actions]]
+name = "Modu Debug"
+icon = "run"
+command = "task debug"
+
+# 构建并启动开发版 App，按 Modu 进程名查看统一日志，Ctrl-C 仅停止日志流。
+[[actions]]
+name = "Modu Logs"
+icon = "run"
+command = "task logs"
+
+# 构建并启动开发版 App，查看 subsystem 日志，Ctrl-C 仅停止日志流。
+[[actions]]
+name = "Modu Telemetry"
+icon = "run"
+command = "task telemetry"

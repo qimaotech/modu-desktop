@@ -20,3 +20,6 @@ DerivedData/
 .build/
 .swiftpm/
 Packages/
+
+# Task
+.task/

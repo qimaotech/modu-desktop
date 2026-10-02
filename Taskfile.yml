@@ -1,0 +1,78 @@
+version: '3'
+
+vars:
+  SCRIPT_ARGS: '{{range .CLI_ARGS | splitArgs}} {{. | shellQuote}}{{end}}'
+
+tasks:
+  default:
+    desc: 列出可用任务
+    silent: true
+    cmds:
+      - task --list
+
+  run:
+    desc: 构建并启动开发版 App
+    cmds:
+      - ./script/build_and_run.sh{{.SCRIPT_ARGS}}
+
+  mock:
+    desc: 构建开发版 App 并加载隔离的临时 Git 场景
+    cmds:
+      - ./script/build_and_run.sh --mock linked-worktree-selected{{.SCRIPT_ARGS}}
+
+  verify:
+    desc: 构建开发版 App 并验证本次实例启动，输出 PID 后保持运行
+    cmds:
+      - ./script/build_and_run.sh --verify{{.SCRIPT_ARGS}}
+
+  debug:
+    desc: 构建开发版 App 并进入 LLDB 调试器，输入 run 启动
+    interactive: true
+    cmds:
+      - ./script/build_and_run.sh --debug{{.SCRIPT_ARGS}}
+
+  logs:
+    desc: 构建并启动开发版 App，持续查看 Modu 进程日志
+    cmds:
+      - ./script/build_and_run.sh --logs{{.SCRIPT_ARGS}}
+
+  telemetry:
+    desc: 构建并启动开发版 App，持续查看 Modu subsystem 日志
+    cmds:
+      - ./script/build_and_run.sh --telemetry{{.SCRIPT_ARGS}}
+
+  quit:
+    desc: 正常退出指定的 Modu 实例并等待结束（PID=<进程号>）
+    requires:
+      vars: [PID]
+    cmds:
+      - /usr/bin/swift -module-cache-path "${TMPDIR%/}/modu-verification-module-cache" script/quit_app.swift {{.PID | shellQuote}}
+
+  test:
+    desc: 隔离运行并清理单元测试，零用例失败（可用 TEST_FILTER 指定测试类或方法）
+    cmds:
+      - /usr/bin/python3 script/run_tests.py --filter {{.TEST_FILTER | default "ModuDesktopTests" | shellQuote}} --{{.SCRIPT_ARGS}}
+
+  test:ui:
+    desc: 单独运行 UI 测试
+    cmds:
+      - task: test
+        vars:
+          TEST_FILTER: ModuDesktopUITests
+
+  package:
+    desc: 构建、检查并打包 arm64 发布版 DMG
+    cmds:
+      - ./script/package_app.sh
+
+  icon:previews:
+    desc: 导出 App 图标的六种原生外观（-- <输出目录>）
+    cmds:
+      - ./script/export_app_icon_previews.sh{{.SCRIPT_ARGS}}
+
+  mock:cleanup:
+    desc: 清理已退出或未启动的本次 mock 数据（DIRECTORY=<临时目录>）
+    requires:
+      vars: [DIRECTORY]
+    cmds:
+      - /usr/bin/python3 script/prepare_mock_workspace.py cleanup --directory {{.DIRECTORY | shellQuote}}

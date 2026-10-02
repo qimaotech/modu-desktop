@@ -6,7 +6,57 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B30000000000000000000000 /* ModuVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000002 /* ModuVersion.swift */; };
+		B0000000000000000000000D /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
+		B0000000000000000000000E /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000C /* ArgumentParser */; };
+		B0000000000000000000000F /* libModuCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* libModuCore.a */; };
+		B00000000000000000000010 /* libModuCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* libModuCore.a */; };
+		B00000000000000000000011 /* libModuCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* libModuCore.a */; };
+		B00000000000000000000017 /* modu-cli in Embed CLI */ = {isa = PBXBuildFile; fileRef = C1A6FFDE303D6BB000965082 /* modu-cli */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		B10000000000000000000000 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
+		B10000000000000000000001 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
+		B10000000000000000000002 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
+		B20000000000000000000001 /* libModuCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* libModuCore.a */; };
+		B20000000000000000000002 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		C1904CA5307F1B680042A24A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = ModuCore;
+		};
+		C1904CA6307F1B680042A24A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C1A6FFDD303D6BB000965082;
+			remoteInfo = ModuCLI;
+		};
+		C1904CA7307F1B680042A24A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = ModuCore;
+		};
+		C1904CA8307F1B6C0042A24A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = ModuCore;
+		};
+		C1904CA9307F1B6C0042A24A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000001;
+			remoteInfo = ModuCore;
+		};
 		C1A044F3303D25F600CF777D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
@@ -24,6 +74,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		B00000000000000000000016 /* Embed CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				B00000000000000000000017 /* modu-cli in Embed CLI */,
+			);
+			name = "Embed CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C1A6FFDC303D6BB000965082 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -36,13 +97,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		C1A044E5303D25F500CF777D /* ModuDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ModuDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B30000000000000000000001 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		B30000000000000000000002 /* ModuVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuVersion.swift; sourceTree = DERIVED_FILE_DIR; };
+		B00000000000000000000003 /* libModuCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; path = libModuCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A044E5303D25F500CF777D /* Modu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Modu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		C1A6FFDE303D6BB000965082 /* ModuCLI */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ModuCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A6FFDE303D6BB000965082 /* modu-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "modu-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B00000000000000000000002 /* ModuCore */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ModuCore;
+			sourceTree = "<group>";
+		};
 		C1A044E7303D25F500CF777D /* ModuDesktop */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ModuDesktop;
@@ -66,10 +135,20 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B00000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0000000000000000000000D /* Yams in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C1A044E2303D25F500CF777D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000000 /* Yams in Frameworks */,
+				B0000000000000000000000F /* libModuCore.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +156,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000002 /* Yams in Frameworks */,
+				B00000000000000000000011 /* libModuCore.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +165,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20000000000000000000001 /* libModuCore.a in Frameworks */,
+				B20000000000000000000002 /* Yams in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -91,6 +174,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000001 /* Yams in Frameworks */,
+				B00000000000000000000010 /* libModuCore.a in Frameworks */,
+				B0000000000000000000000E /* ArgumentParser in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -104,6 +190,9 @@
 				C1A044F5303D25F600CF777D /* ModuDesktopTests */,
 				C1A044FF303D25F600CF777D /* ModuDesktopUITests */,
 				C1A6FFDF303D6BB000965082 /* ModuCLI */,
+				B00000000000000000000002 /* ModuCore */,
+				B30000000000000000000001 /* Version.xcconfig */,
+				B30000000000000000000002 /* ModuVersion.swift */,
 				C1A044E6303D25F500CF777D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -111,10 +200,11 @@
 		C1A044E6303D25F500CF777D /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C1A044E5303D25F500CF777D /* ModuDesktop.app */,
+				C1A044E5303D25F500CF777D /* Modu.app */,
 				C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */,
 				C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */,
-				C1A6FFDE303D6BB000965082 /* ModuCLI */,
+				C1A6FFDE303D6BB000965082 /* modu-cli */,
+				B00000000000000000000003 /* libModuCore.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -122,10 +212,34 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B00000000000000000000001 /* ModuCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000006 /* Build configuration list for PBXNativeTarget "ModuCore" */;
+			buildPhases = (
+				B30000000000000000000003 /* Generate Version */,
+				B00000000000000000000004 /* Sources */,
+				B00000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B00000000000000000000002 /* ModuCore */,
+			);
+			name = ModuCore;
+			packageProductDependencies = (
+				B0000000000000000000000B /* Yams */,
+			);
+			productName = ModuCore;
+			productReference = B00000000000000000000003 /* libModuCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
 		C1A044E4303D25F500CF777D /* ModuDesktop */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C1A04506303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktop" */;
 			buildPhases = (
+				B00000000000000000000016 /* Embed CLI */,
 				C1A044E1303D25F500CF777D /* Sources */,
 				C1A044E2303D25F500CF777D /* Frameworks */,
 				C1A044E3303D25F500CF777D /* Resources */,
@@ -133,15 +247,18 @@
 			buildRules = (
 			);
 			dependencies = (
+				B00000000000000000000012 /* PBXTargetDependency */,
+				B00000000000000000000015 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C1A044E7303D25F500CF777D /* ModuDesktop */,
 			);
 			name = ModuDesktop;
 			packageProductDependencies = (
+				B0000000000000000000000B /* Yams */,
 			);
-			productName = ModuDesktop;
-			productReference = C1A044E5303D25F500CF777D /* ModuDesktop.app */;
+			productName = Modu;
+			productReference = C1A044E5303D25F500CF777D /* Modu.app */;
 			productType = "com.apple.product-type.application";
 		};
 		C1A044F1303D25F600CF777D /* ModuDesktopTests */ = {
@@ -155,6 +272,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				B00000000000000000000014 /* PBXTargetDependency */,
 				C1A044F4303D25F600CF777D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -162,6 +280,7 @@
 			);
 			name = ModuDesktopTests;
 			packageProductDependencies = (
+				B0000000000000000000000B /* Yams */,
 			);
 			productName = ModuDesktopTests;
 			productReference = C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */;
@@ -178,6 +297,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				B20000000000000000000003 /* PBXTargetDependency */,
 				C1A044FE303D25F600CF777D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -185,6 +305,7 @@
 			);
 			name = ModuDesktopUITests;
 			packageProductDependencies = (
+				B0000000000000000000000B /* Yams */,
 			);
 			productName = ModuDesktopUITests;
 			productReference = C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */;
@@ -201,15 +322,18 @@
 			buildRules = (
 			);
 			dependencies = (
+				B00000000000000000000013 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C1A6FFDF303D6BB000965082 /* ModuCLI */,
 			);
 			name = ModuCLI;
 			packageProductDependencies = (
+				B0000000000000000000000B /* Yams */,
+				B0000000000000000000000C /* ArgumentParser */,
 			);
 			productName = ModuCLI;
-			productReference = C1A6FFDE303D6BB000965082 /* ModuCLI */;
+			productReference = C1A6FFDE303D6BB000965082 /* modu-cli */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -247,11 +371,16 @@
 			);
 			mainGroup = C1A044DC303D25F500CF777D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B00000000000000000000009 /* XCRemoteSwiftPackageReference "Yams" */,
+				B0000000000000000000000A /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C1A044E6303D25F500CF777D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				B00000000000000000000001 /* ModuCore */,
 				C1A044E4303D25F500CF777D /* ModuDesktop */,
 				C1A044F1303D25F600CF777D /* ModuDesktopTests */,
 				C1A044FB303D25F600CF777D /* ModuDesktopUITests */,
@@ -284,7 +413,35 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		B30000000000000000000003 /* Generate Version */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Version.xcconfig",
+				"$(SRCROOT)/script/generate_version.sh",
+			);
+			name = "Generate Version";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/ModuVersion.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "/bin/bash \"$SRCROOT/script/generate_version.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		B00000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B30000000000000000000000 /* ModuVersion.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C1A044E1303D25F500CF777D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -316,6 +473,31 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B00000000000000000000012 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* ModuCore */;
+			targetProxy = C1904CA5307F1B680042A24A /* PBXContainerItemProxy */;
+		};
+		B00000000000000000000013 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* ModuCore */;
+			targetProxy = C1904CA7307F1B680042A24A /* PBXContainerItemProxy */;
+		};
+		B00000000000000000000014 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* ModuCore */;
+			targetProxy = C1904CA8307F1B6C0042A24A /* PBXContainerItemProxy */;
+		};
+		B00000000000000000000015 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C1A6FFDD303D6BB000965082 /* ModuCLI */;
+			targetProxy = C1904CA6307F1B680042A24A /* PBXContainerItemProxy */;
+		};
+		B20000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000001 /* ModuCore */;
+			targetProxy = C1904CA9307F1B6C0042A24A /* PBXContainerItemProxy */;
+		};
 		C1A044F4303D25F600CF777D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C1A044E4303D25F500CF777D /* ModuDesktop */;
@@ -329,8 +511,31 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		B00000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = YES;
+				PRODUCT_NAME = ModuCore;
+				SKIP_INSTALL = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B00000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = YES;
+				PRODUCT_NAME = ModuCore;
+				SKIP_INSTALL = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		C1A04504303D25F600CF777D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B30000000000000000000001 /* Version.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -364,6 +569,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_CODE_COVERAGE = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -394,6 +600,7 @@
 		};
 		C1A04505303D25F600CF777D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B30000000000000000000001 /* Version.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -427,6 +634,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_CODE_COVERAGE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -452,22 +660,25 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = C5SRYZNQTC;
-				ENABLE_APP_SANDBOX = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Modu;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Modu opens Claude Code in your terminal at the selected workspace path.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktop;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = ModuDesktop;
+				PRODUCT_NAME = Modu;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -485,20 +696,22 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = C5SRYZNQTC;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Modu;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Modu opens Claude Code in your terminal at the selected workspace path.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktop;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = ModuDesktop;
+				PRODUCT_NAME = Modu;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -513,11 +726,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -525,7 +737,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ModuDesktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ModuDesktop";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Modu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Modu";
 			};
 			name = Debug;
 		};
@@ -534,10 +746,8 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -545,17 +755,16 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ModuDesktop.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ModuDesktop";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Modu.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Modu";
 			};
 			name = Release;
 		};
 		C1A0450D303D25F600CF777D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -571,9 +780,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -588,8 +795,9 @@
 		C1A6FFE2303D6BB000965082 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = C5SRYZNQTC;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				PRODUCT_NAME = "modu-cli";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -614,6 +822,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B00000000000000000000006 /* Build configuration list for PBXNativeTarget "ModuCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00000000000000000000007 /* Debug */,
+				B00000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		C1A044E0303D25F500CF777D /* Build configuration list for PBXProject "ModuDesktop" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -660,6 +877,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B00000000000000000000009 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams.git";
+			requirement = {
+				kind = exactVersion;
+				version = 6.2.2;
+			};
+		};
+		B0000000000000000000000A /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.6.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B0000000000000000000000B /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B00000000000000000000009 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
+		B0000000000000000000000C /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B0000000000000000000000A /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C1A044DD303D25F500CF777D /* Project object */;
 }

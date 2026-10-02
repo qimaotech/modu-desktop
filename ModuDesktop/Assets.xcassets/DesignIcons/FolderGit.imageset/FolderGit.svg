@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon/Folder Git">
+<path id="Vector" d="M2 4.4C2 3.52 2.72 2.8 3.6 2.8H6L7.2 4.24H12.4C13.28 4.24 14 4.96 14 5.84V11.6C14 12.48 13.28 13.2 12.4 13.2H3.6C2.72 13.2 2 12.48 2 11.6V4.4Z" fill="#FF8A00" fill-opacity="0.18" stroke="#FF7A00" stroke-width="1.4" stroke-linejoin="round"/>
+<circle id="Ellipse" cx="5.84" cy="8.24" r="1.04" stroke="#FF7A00"/>
+<path id="Vector_2" d="M7.2 7.8H6.6V9H7.2V8.4V7.8ZM11.2 9C11.5314 9 11.8 8.73137 11.8 8.4C11.8 8.06863 11.5314 7.8 11.2 7.8V8.4V9ZM11.2 8.4V7.8H10V8.4V9L11.2 9V8.4ZM7.2 8.4V9H8.6V8.4V7.8H7.2V8.4ZM8.6 8.4V9H10V8.4V7.8L8.6 7.8V8.4Z" fill="#FF7A00"/>
+</g>
+</svg>
