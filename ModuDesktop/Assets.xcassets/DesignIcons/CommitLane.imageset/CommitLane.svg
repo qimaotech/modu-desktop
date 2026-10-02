@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="84" viewBox="0 0 24 84" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="commit-lane">
+<rect id="lane-line" x="11" y="14" width="2" height="56" rx="1" fill="#F28C1A"/>
+<circle id="lane-dot-0" cx="12" cy="14" r="4" fill="#F28C1A" stroke="white" stroke-width="2"/>
+<circle id="lane-dot-1" cx="12" cy="42" r="4" fill="#F28C1A" stroke="white" stroke-width="2"/>
+<circle id="lane-dot-2" cx="12" cy="70" r="4" fill="#F28C1A" stroke="white" stroke-width="2"/>
+</g>
+</svg>

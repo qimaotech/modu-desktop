@@ -1,0 +1,99 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Run unit tests
+        run: |
+          xcodebuild \
+            -project ModuDesktop.xcodeproj \
+            -scheme ModuDesktop \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -only-testing:ModuDesktopTests \
+            -parallel-testing-enabled NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            ENABLE_CODE_COVERAGE=NO \
+            test
+
+      - name: Build and package arm64 app
+        env:
+          MODU_DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+          MODU_PACKAGE_DIR: ${{ runner.temp }}/package
+        run: ./script/package_app.sh
+
+      - name: Upload app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/package/Modu-arm64.dmg
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload failed test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macOS-test-results
+          path: ${{ runner.temp }}/TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download DMG
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: Modu-arm64.dmg
+          path: package
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" package/Modu-arm64.dmg \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "适用于 Apple Silicon（arm64），最低 macOS 26.5。此安装包采用 ad-hoc 签名，未做 Developer ID 签名或 Apple 公证。"

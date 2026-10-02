@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="ModuDesktop"
+APP_NAME="Modu"
 BUNDLE_ID="fun.armantang.ModuDesktop"
 SCHEME="ModuDesktop"
 CONFIGURATION="Debug"
@@ -65,11 +65,17 @@ build_app() {
     -configuration "$CONFIGURATION" \
     -destination "platform=macOS" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    ENABLE_CODE_COVERAGE=NO \
     build
 }
 
 open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
+  local arguments=(-n)
+  local variable
+  for variable in MODU_TEST_DEFAULTS MODU_TEST_SUPPORT_DIRECTORY MODU_TEST_HOME_DIRECTORY MODU_TEST_LOGIN_SHELL; do
+    if [[ -n "${!variable:-}" ]]; then arguments+=(--env "$variable=${!variable}"); fi
+  done
+  /usr/bin/open "${arguments[@]}" "$APP_BUNDLE"
 }
 
 verify_app() {
