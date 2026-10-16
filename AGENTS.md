@@ -1,26 +1,38 @@
-# Modu 项目指引
+# Agent Instructions
 
-Modu 是 SwiftUI/AppKit macOS 工具。产品与界面规则集中在文档中，本文件只保留开发入口和工程约定。
+## 入口与事实源
 
-## 按任务读取
+- 本文件保留核心业务背景与流程；具体规则和实现细节以代码为唯一事实源，修改前阅读相关实现与测试。
 
-- 修改功能、数据或安全行为前，阅读 [PRD](docs/PRD.md) 的相关章节。
-- 修改界面、交互或文案前，再阅读 [DESIGN](docs/DESIGN.md) 的对应流程和原型索引。[原型](design/prototypes/) 只作视觉参考，不定义业务规则。
-- 规则冲突先修正所属文档，再同步实现与设计资产；不要在本文件复制业务逻辑。
+## 核心业务与流程
+
+- Modu 是管理多仓库和跨仓库 Git worktree 的 macOS 原生工具，围绕同一开发任务组织多个仓库。
+- 工作区根目录本身是 Git 仓库，管理主仓库与 Worktree Group；同一时间激活一个工作区。
+- 每个 Group 由工作区仓库的根 worktree 和所选主仓库的 linked worktree 成员组成，可增删成员或删除整个分组。
+- 核心功能包括工作区初始化与切换、仓库添加与批量导入、手动更新与删除、分组管理，以及工作区结构的 YAML 导入导出。
+- Git Browser 提供工作树更改与提交查看；实际开发、提交和合并通过外部 Agent、编辑器、终端或 Git 工具完成。
+- 主流程：安装 CLI 并选择工作区 → 添加仓库 → 创建 Group → 在外部工具中开发 → 查看 Git 状态 → 清理不再需要的成员或分组；CLI 与内置工作流 skill 也提供仓库和分组管理入口。
+- 取消或部分失败会保留已完成的效果；反馈需区分已完成、未完成和保留的数据，不承诺整体回滚。
+
+## 按需读取
+
+| 任务 | 入口 |
+| --- | --- |
+| 了解产品与使用方式 | [README.md](README.md) |
+| 定位相关实现 | [开发指南：代码导航](docs/DEVELOPMENT.md#代码导航) |
+| 构建、调试或运行测试 | [本地开发](docs/DEVELOPMENT.md#本地开发)、[验证与收尾](docs/DEVELOPMENT.md#验证与收尾)；命令以 [Taskfile.yml](Taskfile.yml) 为准 |
+| 打包或发布 | [打包与发布](docs/DEVELOPMENT.md#打包与发布) |
 
 ## 工程约定
 
-- App 入口在 [ModuDesktop](ModuDesktop/)，CLI 在 [ModuCLI](ModuCLI/)，测试在 [ModuDesktopTests](ModuDesktopTests/) 和 [ModuDesktopUITests](ModuDesktopUITests/)。
-- 按 PRD 的架构约定建设共享 ModuCore；App/CLI 保持薄入口，View 只渲染状态、转发意图，副作用放在 Core。
-- AppModel 和界面状态运行在 `@MainActor`；耗时任务使用结构化并发、支持取消，异步界面结果检查当前上下文，避免过期结果覆盖。
-- 外部命令使用可执行文件与参数数组，不拼接未经转义的 shell 文本。
-- UI 优先使用原生控件、系统语义字体与材质，具体布局和无障碍要求见 DESIGN。
+- 业务与副作用放在 `ModuCore/`；`ModuDesktop/`、`ModuCLI/` 复用 Core，View 只渲染状态和转发意图。
+- AppModel 与界面状态运行在 `@MainActor`；异步任务支持取消，发布结果前检查当前上下文。
+- Git 与外部命令复用 [CommandRunner.swift](ModuCore/CommandRunner.swift) 中的封装。
+- 界面沿用现有 SwiftUI/AppKit 组件、系统语义字体和材质；资源直接维护在 App 的资源目录中。
 
 ## 验证与交付
 
-- 开发命令统一由 [Taskfile.yml](Taskfile.yml) 管理，运行 `task` 查看入口。从仓库根目录运行 `task verify` 验证代码改动；该任务只检查构建与本次实例启动，输出 PID 后保持 App 运行，行为变化另运行 `task test` 等相关测试。可用 `task debug`、`task logs`、`task telemetry` 辅助定位。
-- Agent 必须记录自己启动的临时进程和创建的数据，完成检查后主动退出对应实例、等待进程结束并确认本次临时数据已清理；失败或中断也要收尾，不关闭既有或来源不明的实例。用户明确要求保留时按要求保留。具体步骤见 [Agent 开发验证流程](docs/CI.md#agent-开发验证流程)。
-- GitHub CI 的触发、测试包与下载方式见 [CI](docs/CI.md)。
-- 测试使用临时目录、本地 bare remote 和可控替身，不访问真实网络或用户仓库；按 PRD 的验收范围选择测试。
-- 纯文档或设计资产变更检查交叉引用、原型索引、文案一致性和 `git diff --check`，不运行无关代码测试。
-- 不提交 DerivedData、临时工作区、真实仓库数据或凭据。
+- 按 [验证与收尾](docs/DEVELOPMENT.md#验证与收尾) 选择与改动匹配的检查；`task verify` 只检查构建与启动，行为变化另运行相关测试。
+- 测试使用临时目录、本地 bare remote 和可控替身，不访问真实网络或用户仓库。
+- 项目只维护单元与集成测试，不引入 UI 测试 target 或持久化用例；UI 自动化在实现界面改动时按需临时执行，完成后移除验证脚本并清理实例与数据。
+- 临时 App 验证以本次实例确认退出、临时数据清理完成为收尾条件；失败或中断也按开发指南收尾。

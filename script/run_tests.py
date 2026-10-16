@@ -38,7 +38,7 @@ def run_tests(test_filter, extra):
     print(f"Test environment: {directory}", flush=True)
     print(f"Test preferences: {suite}", flush=True)
     try:
-        environment = test_environment(directory, suite, test_filter)
+        environment = test_environment(directory, suite)
         results, explicit_results = result_path(extra, directory)
         command = ["xcodebuild", "-project", str(ROOT / "ModuDesktop.xcodeproj"), "-scheme", "ModuDesktop",
                    "-configuration", "Debug", "-destination", "platform=macOS,arch=arm64",
@@ -91,7 +91,7 @@ def run_tests(test_filter, extra):
     return status
 
 
-def test_environment(directory, suite, test_filter):
+def test_environment(directory, suite):
     environment = dict(os.environ)
     for key in list(environment):
         if key.startswith(("MODU_TEST_", "TEST_RUNNER_MODU_TEST_")) or key in ("MODU_UNIT_TEST_HOST", "TEST_RUNNER_MODU_UNIT_TEST_HOST"):
@@ -103,9 +103,8 @@ def test_environment(directory, suite, test_filter):
     shell.chmod(0o755)
     values = {"MODU_TEST_DEFAULTS": suite, "MODU_TEST_SUPPORT_DIRECTORY": str(directory / "support"),
               "MODU_TEST_HOME_DIRECTORY": str(directory / "home"), "MODU_TEST_LOGIN_SHELL": str(shell),
-              "MODU_TEST_SESSION_DIRECTORY": str(directory), "TMPDIR": str(directory / "tmp") + "/"}
-    if not test_filter.startswith("ModuDesktopUITests"):
-        values["MODU_UNIT_TEST_HOST"] = "1"
+              "MODU_TEST_SESSION_DIRECTORY": str(directory), "TMPDIR": str(directory / "tmp") + "/",
+              "MODU_UNIT_TEST_HOST": "1"}
     for key, value in values.items():
         environment[key] = value
         environment[f"TEST_RUNNER_{key}"] = value

@@ -27,15 +27,16 @@ struct TestTaskTests {
         }
     }
 
-    @Test func uiTestsKeepTheirNormalLaunchAndExplicitResultsAreRetained() async throws {
+    @Test func filteredTestsKeepTheirIsolationAndExplicitResults() async throws {
         let fixture = try TestTaskFixture(outcome: "passed")
         defer { fixture.remove() }
         let results = fixture.directory.appending(path: "saved results.xcresult")
-        let output = try await fixture.run(filter: "ModuDesktopUITests", arguments: ["-resultBundlePath", results.path, "-quiet"])
+        let output = try await fixture.run(filter: "ModuDesktopTests/WorkflowTests", arguments: ["-resultBundlePath", results.path, "-quiet"])
         #expect(output.status == 0)
         let invocation = try fixture.invocation()
-        #expect(invocation.environment["MODU_UNIT_TEST_HOST"] == nil)
-        #expect(invocation.environment["TEST_RUNNER_MODU_UNIT_TEST_HOST"] == nil)
+        #expect(invocation.environment["MODU_UNIT_TEST_HOST"] == "1")
+        #expect(invocation.environment["TEST_RUNNER_MODU_UNIT_TEST_HOST"] == "1")
+        #expect(invocation.arguments.contains("-only-testing:ModuDesktopTests/WorkflowTests"))
         #expect(invocation.arguments.filter { $0 == "-resultBundlePath" }.count == 1)
         #expect(invocation.arguments.last == "-quiet")
         #expect(PathSafety.exists(results) && !PathSafety.exists(invocation.directory))

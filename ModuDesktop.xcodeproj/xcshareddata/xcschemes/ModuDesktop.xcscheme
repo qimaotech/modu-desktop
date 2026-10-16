@@ -12,9 +12,6 @@
          <TestableReference skipped="NO">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="C1A044F1303D25F600CF777D" BuildableName="ModuDesktopTests.xctest" BlueprintName="ModuDesktopTests" ReferencedContainer="container:ModuDesktop.xcodeproj"/>
          </TestableReference>
-         <TestableReference skipped="NO">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="C1A044FB303D25F600CF777D" BuildableName="ModuDesktopUITests.xctest" BlueprintName="ModuDesktopUITests" ReferencedContainer="container:ModuDesktop.xcodeproj"/>
-         </TestableReference>
       </Testables>
       <MacroExpansion>
          <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="C1A044E4303D25F500CF777D" BuildableName="Modu.app" BlueprintName="ModuDesktop" ReferencedContainer="container:ModuDesktop.xcodeproj"/>

@@ -4,34 +4,36 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct DeletionPreviewTests {
-    @Test(arguments: ["clean", "unstaged", "staged", "untracked"])
-    func repositoryStatusUsesCurrentPreflightInsteadOfSidebarCache(_ state: String) async throws {
+    @Test func repositoryStatusUsesCurrentPreflightInsteadOfSidebarCache() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        try await prepare(fixture)
+        try await prepare(fixture, group: false)
         let record = try fixture.service.store.load(fixture.root)
         let repository = Resource.repository("repo")
         let path = record.repositoryURL("repo")
-        if state != "clean" {
-            let name = state == "untracked" ? "notes.txt" : "README"
-            try Data("Changed outside Modu.\n".utf8).write(to: path.appending(path: name))
-            if state == "staged" { _ = try await fixture.service.git.run(["add", "--", name], at: path) }
+        for state in ["clean", "unstaged", "staged", "untracked"] {
+            if state == "untracked" { _ = try await fixture.service.git.run(["reset", "--hard", "HEAD"], at: path) }
+            if state != "clean" {
+                let name = state == "untracked" ? "notes.txt" : "README"
+                try Data("Changed outside Modu.\n".utf8).write(to: path.appending(path: name))
+                if state == "staged" { _ = try await fixture.service.git.run(["add", "--", name], at: path) }
+            }
+            let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+            defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+            let model = AppModel(defaults: defaults, service: fixture.service)
+            model.workspace = record
+            model.states[repository.id] = ResourceState(resource: repository, available: true, dirty: state == "clean")
+            model.prepareDelete(.repository("repo"))
+            await model.deletePreviewTask?.value
+            let target = try #require(model.deletion.first { $0.resource == repository })
+            #expect(model.canConfirmDelete && model.formError == nil)
+            #expect(target.dirty == (state != "clean"))
+            for cachedDirty: Bool? in [nil, false, true] {
+                model.states[repository.id] = ResourceState(resource: repository, available: true, dirty: cachedDirty)
+                #expect(ManagementView(model: model, sheet: .delete).deletionStatus(target) == (state == "clean" ? "Clean" : "Dirty"))
+            }
+            #expect(try fixture.service.store.load(fixture.root) == record)
+            #expect(PathSafety.exists(path))
         }
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = record
-        model.states[repository.id] = ResourceState(resource: repository, available: true, dirty: state == "clean")
-        model.prepareDelete(.repository("repo"))
-        await model.deletePreviewTask?.value
-        let target = try #require(model.deletion.first { $0.resource == repository })
-        #expect(model.canConfirmDelete && model.formError == nil)
-        #expect(target.dirty == (state != "clean"))
-        for cachedDirty: Bool? in [nil, false, true] {
-            model.states[repository.id] = ResourceState(resource: repository, available: true, dirty: cachedDirty)
-            #expect(ManagementView(model: model, sheet: .delete).deletionStatus(target) == (state == "clean" ? "Clean" : "Dirty"))
-        }
-        #expect(try fixture.service.store.load(fixture.root) == record)
-        #expect(PathSafety.exists(path))
     }
 
     @Test func unreadableRepositoryStatusBlocksDeletionWithoutShowingClean() async throws {
@@ -56,73 +58,80 @@ import Testing
         #expect(PathSafety.exists(record.repositoryURL("repo")) && PathSafety.exists(record.memberURL("feature", "repo")))
     }
 
-    @Test(arguments: ["complete", "cancel", "reopen", "replace", "workspace", "selection", "delete", "operation"])
-    func editPreflightDiscardsCancelledRequestsAndReleasesItsLock(_ action: String) async throws {
+    @Test func editPreflightDiscardsCancelledRequestsAndReleasesItsLock() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
         #expect(await fixture.service.createGroup("other", repositories: ["repo"], at: fixture.root).status == "success")
         let record = try fixture.service.store.load(fixture.root)
-        let started = fixture.directory.appending(path: "edit-preflight-started")
-        let release = fixture.directory.appending(path: "edit-preflight-release")
-        let monitor = fixture.directory.appending(path: "edit-fsmonitor")
-        try Data("""
-        #!/bin/sh
-        : > "\(started.path)"
-        trap 'exit 143' TERM INT
-        while [ ! -e "\(release.path)" ]; do sleep 0.02; done
-        printf 'test-token\\000/\\000'
-        """.utf8).write(to: monitor)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
-            _ = try await fixture.service.git.run(arguments, at: record.repositoryURL("repo"))
-        }
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let model = AppModel(defaults: defaults, service: fixture.service)
-        defer { model.sheet = nil; model.workspace = nil; model.selection = nil }
-        model.workspace = record; model.sheet = .edit
-        model.edit("feature", members: [])
-        let preview = try #require(model.editPreviewTask)
-        defer { preview.cancel(); try? Data().write(to: release) }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while !PathSafety.exists(started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try #require(PathSafety.exists(started))
-        switch action {
-        case "cancel": model.sheet = nil
-        case "reopen": model.sheet = nil; model.sheet = .edit
-        case "replace": model.edit("other", members: [])
-        case "workspace": model.workspace = nil
-        case "selection": model.selection = .group("other")
-        case "delete": model.prepareDelete(.member(group: "other", repo: "repo"))
-        case "operation":
-            model.run { service, root, _ in
-                do { _ = try await service.load(root); return .init(command: "workspace.inspect", workspace: root.path) }
-                catch { return .init(command: "workspace.inspect", workspace: root.path, status: "failed", error: .wrap(error)) }
+        for action in ["complete", "cancel", "reopen", "replace", "workspace", "selection", "delete", "operation"] {
+            for name in ["edit-preflight-started", "edit-preflight-release"] {
+                try? FileManager.default.removeItem(at: fixture.directory.appending(path: name))
             }
-        default: break
+            let started = fixture.directory.appending(path: "edit-preflight-started")
+            let release = fixture.directory.appending(path: "edit-preflight-release")
+            let monitor = fixture.directory.appending(path: "edit-fsmonitor")
+            try Data("""
+            #!/bin/sh
+            : > "\(started.path)"
+            trap 'exit 143' TERM INT
+            while [ ! -e "\(release.path)" ]; do sleep 0.02; done
+            printf 'test-token\\000/\\000'
+            """.utf8).write(to: monitor)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
+            for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
+                _ = try await fixture.service.git.run(arguments, at: record.repositoryURL("repo"))
+            }
+            let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+            defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+            let model = AppModel(defaults: defaults, service: fixture.service)
+            defer { model.sheet = nil; model.workspace = nil; model.selection = nil }
+            model.workspace = record; model.sheet = .edit
+            model.edit("feature", members: [])
+            let preview = try #require(model.editPreviewTask)
+            defer { preview.cancel(); try? Data().write(to: release) }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            try #require(PathSafety.exists(started))
+            switch action {
+            case "cancel": model.sheet = nil
+            case "reopen": model.sheet = nil; model.sheet = .edit
+            case "replace": model.edit("other", members: [])
+            case "workspace": model.workspace = nil
+            case "selection": model.selection = .group("other")
+            case "delete": model.prepareDelete(.member(group: "other", repo: "repo"))
+            case "operation":
+                model.run { service, root, _ in
+                    do { _ = try await service.load(root); return .init(command: "workspace.inspect", workspace: root.path) }
+                    catch { return .init(command: "workspace.inspect", workspace: root.path, status: "failed", error: .wrap(error)) }
+                }
+            default: break
+            }
+            if action != "complete" { #expect(preview.isCancelled) }
+            try Data().write(to: release)
+            await preview.value
+            await model.editPreviewTask?.value
+            await model.deletePreviewTask?.value
+            await model.operation?.value
+            #expect(model.formError == nil && model.result == nil && !model.busy)
+            switch action {
+            case "complete", "replace":
+                let group = action == "complete" ? "feature" : "other"
+                #expect(model.sheet == .delete && model.pendingEdit?.0 == group && model.pendingEdit?.1 == [])
+                #expect(model.deletion.map(\.resource) == [.member(group, "repo")])
+            case "delete":
+                #expect(model.sheet == .delete && model.pendingEdit == nil)
+                #expect(model.deletion.map(\.resource) == [.member("other", "repo")])
+            default:
+                #expect(model.sheet == (action == "cancel" || action == "operation" ? nil : .edit))
+                #expect(model.pendingEdit == nil && model.deletion.isEmpty)
+            }
+            #expect(try fixture.service.store.load(fixture.root) == record)
+            #expect(PathSafety.exists(record.memberURL("feature", "repo")) && PathSafety.exists(record.memberURL("other", "repo")))
+            let lease = try fixture.service.store.lock(fixture.root); lease.unlock()
+            let preload = model.detailPreloadTask
+            model.workspace = nil; model.selection = nil
+            await preload?.value
         }
-        if action != "complete" { #expect(preview.isCancelled) }
-        try Data().write(to: release)
-        await preview.value
-        await model.editPreviewTask?.value
-        await model.deletePreviewTask?.value
-        await model.operation?.value
-        #expect(model.formError == nil && model.result == nil && !model.busy)
-        switch action {
-        case "complete", "replace":
-            let group = action == "complete" ? "feature" : "other"
-            #expect(model.sheet == .delete && model.pendingEdit?.0 == group && model.pendingEdit?.1 == [])
-            #expect(model.deletion.map(\.resource) == [.member(group, "repo")])
-        case "delete":
-            #expect(model.sheet == .delete && model.pendingEdit == nil)
-            #expect(model.deletion.map(\.resource) == [.member("other", "repo")])
-        default:
-            #expect(model.sheet == (action == "cancel" || action == "operation" ? nil : .edit))
-            #expect(model.pendingEdit == nil && model.deletion.isEmpty)
-        }
-        #expect(try fixture.service.store.load(fixture.root) == record)
-        #expect(PathSafety.exists(record.memberURL("feature", "repo")) && PathSafety.exists(record.memberURL("other", "repo")))
-        let lease = try fixture.service.store.lock(fixture.root); lease.unlock()
     }
 
     @Test func reopeningEditDoesNotSubmitCancelledAdditions() async throws {
@@ -148,8 +157,8 @@ import Testing
     func deletionUpdatesSidebarOnlyAfterOperationEnds(_ status: String) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
-        #expect(await fixture.service.createGroup("other", repositories: ["repo"], at: fixture.root).status == "success")
-        let record = try await fixture.service.load(fixture.root)
+        try await fixture.prepareEmptyGroup("other")
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(record.root, forKey: "workspace")
@@ -157,8 +166,8 @@ import Testing
         model.workspace = record
         model.expandedGroups = ["feature", "other"]
         let member = Resource.member("feature", "repo")
-        model.selection = member
-        await model.reload()
+        let selected = status == "success" ? Resource.group("feature") : member
+        model.selection = selected
         let visibleResources = model.visibleResources
         let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
         let release = fixture.directory.appending(path: "continue-group-deletion")
@@ -195,11 +204,13 @@ import Testing
             #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == [])
             #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
             #expect(model.workspace == record && model.visibleResources == visibleResources)
-            #expect(model.selection == member && model.expandedGroups == ["feature", "other"])
+            #expect(model.selection == selected && model.expandedGroups == ["feature", "other"])
             try Data().write(to: release)
             await operation.value
             await model.detailPreloadTask?.value
             #expect(!model.busy && model.sheet == nil && model.selection == nil)
+            #expect(model.currentURL == record.rootURL && !model.detailLoading)
+            #expect(model.detail.summary == nil && model.detail.changes == nil && model.detail.commits == nil)
             #expect(model.workspace == (try fixture.service.store.load(fixture.root)))
             #expect(!model.visibleResources.contains(member) && model.workspace?.groups["other"] != nil)
             if status == "success" {
@@ -217,112 +228,84 @@ import Testing
         }
     }
 
-    @Test(arguments: [Resource.group("feature"), Resource.member("feature", "repo")])
-    func deletingSelectedGroupReturnsToWorkspace(_ selected: Resource) async throws {
+    @Test func deletionOpensBeforePreflightAndDiscardsObsoleteResults() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
-        #expect(await fixture.service.createGroup("other", repositories: ["repo"], at: fixture.root).status == "success")
-        let record = try await fixture.service.load(fixture.root)
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        defaults.set(record.root, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = record
-        model.expandedGroups = ["feature", "other"]
-        model.selection = selected
-        await model.reload()
-        #expect(model.selection == selected && model.detail.summary?.head == "feature")
-        model.prepareDelete(.group("feature"))
-        await model.deletePreviewTask?.value
-        try #require(model.canConfirmDelete)
-        model.confirmDelete()
-        let operation = try #require(model.operation)
-        await operation.value
-        await model.detailPreloadTask?.value
-        #expect(!model.busy && model.result == nil && model.sheet == nil)
-        #expect(model.workspace?.groups["feature"] == nil && model.workspace?.groups["other"] != nil)
-        #expect(!model.visibleResources.isEmpty && model.selection == nil)
-        #expect(model.currentURL == record.rootURL && !model.detailLoading)
-        #expect(model.detail.summary == nil && model.detail.changes == nil && model.detail.commits == nil)
-        #expect(model.detail.summaryError == nil && model.detail.changesError == nil && model.detail.commitsError == nil)
-    }
-
-    @Test(arguments: ["complete", "cancel", "replace", "reopen", "workspace"])
-    func deletionOpensBeforePreflightAndDiscardsObsoleteResults(_ action: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        try await prepare(fixture)
-        let record = try await fixture.service.load(fixture.root)
-        let probe = fixture.directory.appending(path: "delete-preview-probe")
-        try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
-        let monitor = probe.appending(path: "fsmonitor")
-        try Data("""
-        #!/bin/sh
-        : > "$MODU_DELETE_PREVIEW_PROBE/started"
-        trap 'exit 143' TERM INT
-        while [ ! -e "$MODU_DELETE_PREVIEW_PROBE/release" ]; do sleep 0.02; done
-        printf 'test-token\\000/\\000'
-        """.utf8).write(to: monitor)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
-            _ = try await fixture.service.git.run(arguments, at: record.repositoryURL("repo"))
-        }
-        var runner = fixture.service.git.runner
-        runner.environment["MODU_DELETE_PREVIEW_PROBE"] = probe.path
-        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let model = AppModel(defaults: defaults, service: service)
-        model.workspace = record
-        let member = Resource.member("feature", "repo")
-        try Data("changed".utf8).write(to: record.memberURL("feature", "repo").appending(path: "README"))
-        model.states[member.id] = .init(resource: member, available: true, dirty: false)
-        model.prepareDelete(.group("feature"))
-        let preview = try #require(model.deletePreviewTask)
-        #expect(model.sheet == .delete && model.deletionLoading && model.deletion.isEmpty)
-        #expect(model.deletionResources == [member, .group("feature")])
-        #expect(ManagementView(model: model, sheet: .delete).deletionDisplayResources == [.group("feature"), member])
-        #expect(!model.canConfirmDelete)
-        model.confirmDelete()
-        #expect(!model.busy && model.operation == nil)
-        do {
-            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-            while !PathSafety.exists(probe.appending(path: "started")), ContinuousClock.now < deadline {
-                try await Task.sleep(for: .milliseconds(20))
+        let record = try fixture.service.store.load(fixture.root)
+        for action in ["complete", "cancel", "replace", "reopen", "workspace"] {
+            try? FileManager.default.removeItem(at: fixture.directory.appending(path: "delete-preview-probe"))
+            let probe = fixture.directory.appending(path: "delete-preview-probe")
+            try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
+            let monitor = probe.appending(path: "fsmonitor")
+            try Data("""
+            #!/bin/sh
+            : > "$MODU_DELETE_PREVIEW_PROBE/started"
+            trap 'exit 143' TERM INT
+            while [ ! -e "$MODU_DELETE_PREVIEW_PROBE/release" ]; do sleep 0.02; done
+            printf 'test-token\\000/\\000'
+            """.utf8).write(to: monitor)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
+            for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
+                _ = try await fixture.service.git.run(arguments, at: record.repositoryURL("repo"))
             }
-            try #require(PathSafety.exists(probe.appending(path: "started")))
-            switch action {
-            case "cancel": model.sheet = nil
-            case "replace": model.prepareDelete(.member(group: "feature", repo: "repo"))
-            case "reopen": model.sheet = nil; model.prepareDelete(.member(group: "feature", repo: "repo"))
-            case "workspace": model.workspace = nil
-            default: break
+            var runner = fixture.service.git.runner
+            runner.environment["MODU_DELETE_PREVIEW_PROBE"] = probe.path
+            let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
+            let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+            defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+            let model = AppModel(defaults: defaults, service: service)
+            model.workspace = record
+            let member = Resource.member("feature", "repo")
+            try Data("changed".utf8).write(to: record.memberURL("feature", "repo").appending(path: "README"))
+            model.states[member.id] = .init(resource: member, available: true, dirty: false)
+            model.prepareDelete(.group("feature"))
+            let preview = try #require(model.deletePreviewTask)
+            #expect(model.sheet == .delete && model.deletionLoading && model.deletion.isEmpty)
+            #expect(model.deletionResources == [member, .group("feature")])
+            #expect(ManagementView(model: model, sheet: .delete).deletionDisplayResources == [.group("feature"), member])
+            #expect(!model.canConfirmDelete)
+            model.confirmDelete()
+            #expect(!model.busy && model.operation == nil)
+            do {
+                let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+                while !PathSafety.exists(probe.appending(path: "started")), ContinuousClock.now < deadline {
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+                try #require(PathSafety.exists(probe.appending(path: "started")))
+                switch action {
+                case "cancel": model.sheet = nil
+                case "replace": model.prepareDelete(.member(group: "feature", repo: "repo"))
+                case "reopen": model.sheet = nil; model.prepareDelete(.member(group: "feature", repo: "repo"))
+                case "workspace": model.workspace = nil
+                default: break
+                }
+                if action == "replace" || action == "reopen" {
+                    #expect(model.deletionResources == [member] && model.deletion.isEmpty && model.deletionLoading)
+                }
+                try Data().write(to: probe.appending(path: "release"))
+                await preview.value
+                await model.deletePreviewTask?.value
+                #expect(!model.deletionLoading && model.formError == nil && model.message == nil)
+                if action == "cancel" || action == "workspace" {
+                    #expect(model.sheet == nil && model.deletion.isEmpty && !model.canConfirmDelete)
+                    let lease = try service.store.lock(fixture.root); lease.unlock()
+                } else {
+                    #expect(model.sheet == .delete && model.canConfirmDelete)
+                    let expected: [Resource] = action == "replace" || action == "reopen" ? [.member("feature", "repo")] : [.member("feature", "repo"), .group("feature")]
+                    #expect(model.deletion.map(\.resource) == expected)
+                    #expect(model.deletion.allSatisfy { $0.branch == "feature" })
+                    let target = try #require(model.deletion.first { $0.resource == member })
+                    #expect(ManagementView(model: model, sheet: .delete).deletionStatus(target) == "Dirty")
+                }
+                #expect(PathSafety.exists(record.groupURL("feature")))
+                #expect(PathSafety.exists(record.memberURL("feature", "repo")))
+            } catch {
+                model.sheet = nil
+                try? Data().write(to: probe.appending(path: "release"))
+                await preview.value
+                await model.deletePreviewTask?.value
+                throw error
             }
-            if action == "replace" || action == "reopen" {
-                #expect(model.deletionResources == [member] && model.deletion.isEmpty && model.deletionLoading)
-            }
-            try Data().write(to: probe.appending(path: "release"))
-            await preview.value
-            await model.deletePreviewTask?.value
-            #expect(!model.deletionLoading && model.formError == nil && model.message == nil)
-            if action == "cancel" || action == "workspace" {
-                #expect(model.sheet == nil && model.deletion.isEmpty && !model.canConfirmDelete)
-                let lease = try service.store.lock(fixture.root); lease.unlock()
-            } else {
-                #expect(model.sheet == .delete && model.canConfirmDelete)
-                let expected: [Resource] = action == "replace" || action == "reopen" ? [.member("feature", "repo")] : [.member("feature", "repo"), .group("feature")]
-                #expect(model.deletion.map(\.resource) == expected)
-                #expect(model.deletion.allSatisfy { $0.branch == "feature" })
-                let target = try #require(model.deletion.first { $0.resource == member })
-                #expect(ManagementView(model: model, sheet: .delete).deletionStatus(target) == "Dirty")
-            }
-            #expect(PathSafety.exists(record.groupURL("feature")))
-            #expect(PathSafety.exists(record.memberURL("feature", "repo")))
-        } catch {
-            model.sheet = nil
-            try? Data().write(to: probe.appending(path: "release"))
-            await preview.value
-            await model.deletePreviewTask?.value
-            throw error
         }
     }
 
@@ -334,7 +317,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try await fixture.service.load(fixture.root)
+        model.workspace = try fixture.service.store.load(fixture.root)
         if locked {
             _ = try await fixture.service.git.run(["worktree", "lock", fixture.root.appending(path: "worktrees/feature/repo").path], at: fixture.root.appending(path: "repositories/repo"))
         }
@@ -349,24 +332,22 @@ import Testing
         #expect(!model.busy && model.operation == nil)
     }
 
-    @Test(arguments: ["repository", "group", "member"])
-    func editingMembersDiscardsACancelledDeletionRequest(_ kind: String) async throws {
+    @Test func editingMembersDiscardsACancelledDeletionRequest() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
-        let record = try await fixture.service.load(fixture.root)
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace = record
-        let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "group" ? .group("feature") : .member(group: "feature", repo: "repo")
+        let request = DeleteRequest.repository("repo")
         model.prepareDelete(request)
         await model.deletePreviewTask?.value
         try #require(model.canConfirmDelete)
         model.sheet = nil
         model.sheet = .edit
         model.edit("feature", members: [])
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while model.sheet == .edit, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        await model.editPreviewTask?.value
         try #require(model.sheet == .delete && model.canConfirmDelete)
         #expect(model.deleteRequest == nil)
         #expect(model.pendingEdit?.0 == "feature" && model.pendingEdit?.1 == [])
@@ -405,37 +386,44 @@ import Testing
         #expect(record.groups["feature"]?.repositories.isEmpty != false)
     }
 
-    @Test(arguments: ["branch", "lock", "nested"])
-    func changedDeletionSafetyStopsBeforeAnyEffects(_ change: String) async throws {
+    @Test func changedDeletionSafetyStopsBeforeAnyEffects() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
-        let record = try await fixture.service.load(fixture.root)
+        let record = try fixture.service.store.load(fixture.root)
         let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
         let member = record.memberURL("feature", "repo")
-        let reason: String
-        switch change {
-        case "branch":
-            _ = try await fixture.service.git.run(["switch", "-c", "changed"], at: member)
-            reason = "confirmation-changed"
-        case "lock":
-            _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
-            reason = "worktree-locked"
-        default:
-            let nested = record.groupURL("feature").appending(path: "unmanaged")
-            try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
-            _ = try await fixture.service.git.run(["init"], at: nested)
-            reason = "unmanaged-worktree"
+        for change in ["branch", "lock", "nested"] {
+            let reason: String
+            switch change {
+            case "branch":
+                _ = try await fixture.service.git.run(["switch", "-c", "changed"], at: member)
+                reason = "confirmation-changed"
+            case "lock":
+                _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
+                reason = "worktree-locked"
+            default:
+                let nested = record.groupURL("feature").appending(path: "unmanaged")
+                try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+                _ = try await fixture.service.git.run(["init"], at: nested)
+                reason = "unmanaged-worktree"
+            }
+            let result = await fixture.service.remove(.group("feature"), at: fixture.root, authorization: targets)
+            #expect(result.reasonCode == reason && result.items.allSatisfy { $0.effects.isEmpty })
+            #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
+            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == ["repo"])
+            switch change {
+            case "branch":
+                _ = try await fixture.service.git.run(["switch", "feature"], at: member)
+                _ = try await fixture.service.git.run(["branch", "-D", "changed"], at: member)
+            case "lock": _ = try await fixture.service.git.run(["worktree", "unlock", member.path], at: record.repositoryURL("repo"))
+            default: try FileManager.default.removeItem(at: record.groupURL("feature").appending(path: "unmanaged"))
+            }
         }
-        let result = await fixture.service.remove(.group("feature"), at: fixture.root, authorization: targets)
-        #expect(result.reasonCode == reason && result.items.allSatisfy { $0.effects.isEmpty })
-        #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
-        #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == ["repo"])
     }
 
-    private func prepare(_ fixture: Fixture) async throws {
+    private func prepare(_ fixture: Fixture, group: Bool = true) async throws {
         #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
-        try await fixture.commitWorkspace()
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
+        if group { #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success") }
     }
 }

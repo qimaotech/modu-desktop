@@ -10,7 +10,7 @@ import Testing
         #expect(!TestHost.isEnabled(environment: ["MODU_TEST_DEFAULTS": "isolated-preferences"]))
         #expect(TestHost.isEnabled(environment: ["MODU_UNIT_TEST_HOST": "1"]))
         #expect(TestHost.isEnabled(environment: ["XCTestBundlePath": "/tmp/ModuDesktopTests.xctest"]))
-        #expect(!TestHost.isEnabled(environment: ["XCTestBundlePath": "/tmp/ModuDesktopUITests.xctest"]))
+        #expect(!TestHost.isEnabled(environment: ["XCTestBundlePath": "/tmp/OtherTests.xctest"]))
     }
 
     @Test func unitTestHostHasNoVisibleAppWindowsAndRegistersItsIdentity() async throws {

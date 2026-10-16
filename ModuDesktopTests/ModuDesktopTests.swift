@@ -245,7 +245,7 @@ struct Fixture {
     let root: URL
     let service: WorkspaceService
     let remoteURL = "https://modu-test.invalid/repo.git"
-    init() async throws {
+    init(createRemote: Bool = true) async throws {
         directory = TestEnvironment.temporaryDirectory.appending(path: "modu-tests-\(UUID().uuidString)")
         root = directory.appending(path: "workspace")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -266,11 +266,19 @@ struct Fixture {
             try FileManager.default.moveItem(at: source, to: target)
             return target
         })
+        guard createRemote else { return }
         _ = try await git.run(["init", "-b", "main"], at: source)
         try Data("hello\n".utf8).write(to: source.appending(path: "README"))
         _ = try await git.run(["add", "README"], at: source)
         _ = try await git.run(["commit", "-m", "fixture"], at: source)
         _ = try await git.run(["clone", "--bare", source.path, remote.path], at: directory)
+    }
+    func prepareEmptyGroup(_ name: String) async throws {
+        var record = try service.store.load(root)
+        // Empty groups are valid after member removal; prepare that state without creating and deleting a member.
+        _ = try await service.git.run(["worktree", "add", "-b", name, record.groupURL(name).path], at: root)
+        record.groups[name] = WorktreeGroup()
+        try service.store.save(record)
     }
     func commitWorkspace() async throws {
         _ = try await service.git.run(["add", ".gitignore"], at: root)

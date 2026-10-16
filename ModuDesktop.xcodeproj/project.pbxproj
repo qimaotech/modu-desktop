@@ -17,8 +17,6 @@
 		B10000000000000000000000 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
 		B10000000000000000000001 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
 		B10000000000000000000002 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
-		B20000000000000000000001 /* libModuCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* libModuCore.a */; };
-		B20000000000000000000002 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B0000000000000000000000B /* Yams */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -50,21 +48,7 @@
 			remoteGlobalIDString = B00000000000000000000001;
 			remoteInfo = ModuCore;
 		};
-		C1904CA9307F1B6C0042A24A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = B00000000000000000000001;
-			remoteInfo = ModuCore;
-		};
 		C1A044F3303D25F600CF777D /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C1A044E4303D25F500CF777D;
-			remoteInfo = ModuDesktop;
-		};
-		C1A044FD303D25F600CF777D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C1A044DD303D25F500CF777D /* Project object */;
 			proxyType = 1;
@@ -102,7 +86,6 @@
 		B00000000000000000000003 /* libModuCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; path = libModuCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1A044E5303D25F500CF777D /* Modu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Modu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ModuDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1A6FFDE303D6BB000965082 /* modu-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "modu-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -120,11 +103,6 @@
 		C1A044F5303D25F600CF777D /* ModuDesktopTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ModuDesktopTests;
-			sourceTree = "<group>";
-		};
-		C1A044FF303D25F600CF777D /* ModuDesktopUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ModuDesktopUITests;
 			sourceTree = "<group>";
 		};
 		C1A6FFDF303D6BB000965082 /* ModuCLI */ = {
@@ -161,15 +139,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C1A044F9303D25F600CF777D /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B20000000000000000000001 /* libModuCore.a in Frameworks */,
-				B20000000000000000000002 /* Yams in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C1A6FFDB303D6BB000965082 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -188,7 +157,6 @@
 			children = (
 				C1A044E7303D25F500CF777D /* ModuDesktop */,
 				C1A044F5303D25F600CF777D /* ModuDesktopTests */,
-				C1A044FF303D25F600CF777D /* ModuDesktopUITests */,
 				C1A6FFDF303D6BB000965082 /* ModuCLI */,
 				B00000000000000000000002 /* ModuCore */,
 				B30000000000000000000001 /* Version.xcconfig */,
@@ -202,7 +170,6 @@
 			children = (
 				C1A044E5303D25F500CF777D /* Modu.app */,
 				C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */,
-				C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */,
 				C1A6FFDE303D6BB000965082 /* modu-cli */,
 				B00000000000000000000003 /* libModuCore.a */,
 			);
@@ -286,31 +253,6 @@
 			productReference = C1A044F2303D25F600CF777D /* ModuDesktopTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		C1A044FB303D25F600CF777D /* ModuDesktopUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C1A0450C303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopUITests" */;
-			buildPhases = (
-				C1A044F8303D25F600CF777D /* Sources */,
-				C1A044F9303D25F600CF777D /* Frameworks */,
-				C1A044FA303D25F600CF777D /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				B20000000000000000000003 /* PBXTargetDependency */,
-				C1A044FE303D25F600CF777D /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				C1A044FF303D25F600CF777D /* ModuDesktopUITests */,
-			);
-			name = ModuDesktopUITests;
-			packageProductDependencies = (
-				B0000000000000000000000B /* Yams */,
-			);
-			productName = ModuDesktopUITests;
-			productReference = C1A044FC303D25F600CF777D /* ModuDesktopUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 		C1A6FFDD303D6BB000965082 /* ModuCLI */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C1A6FFE4303D6BB000965082 /* Build configuration list for PBXNativeTarget "ModuCLI" */;
@@ -353,10 +295,6 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = C1A044E4303D25F500CF777D;
 					};
-					C1A044FB303D25F600CF777D = {
-						CreatedOnToolsVersion = 26.6;
-						TestTargetID = C1A044E4303D25F500CF777D;
-					};
 					C1A6FFDD303D6BB000965082 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -383,7 +321,6 @@
 				B00000000000000000000001 /* ModuCore */,
 				C1A044E4303D25F500CF777D /* ModuDesktop */,
 				C1A044F1303D25F600CF777D /* ModuDesktopTests */,
-				C1A044FB303D25F600CF777D /* ModuDesktopUITests */,
 				C1A6FFDD303D6BB000965082 /* ModuCLI */,
 			);
 		};
@@ -398,13 +335,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C1A044F0303D25F600CF777D /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C1A044FA303D25F600CF777D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -456,13 +386,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C1A044F8303D25F600CF777D /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C1A6FFDA303D6BB000965082 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -493,20 +416,10 @@
 			target = C1A6FFDD303D6BB000965082 /* ModuCLI */;
 			targetProxy = C1904CA6307F1B680042A24A /* PBXContainerItemProxy */;
 		};
-		B20000000000000000000003 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = B00000000000000000000001 /* ModuCore */;
-			targetProxy = C1904CA9307F1B6C0042A24A /* PBXContainerItemProxy */;
-		};
 		C1A044F4303D25F600CF777D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C1A044E4303D25F500CF777D /* ModuDesktop */;
 			targetProxy = C1A044F3303D25F600CF777D /* PBXContainerItemProxy */;
-		};
-		C1A044FE303D25F600CF777D /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C1A044E4303D25F500CF777D /* ModuDesktop */;
-			targetProxy = C1A044FD303D25F600CF777D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -759,39 +672,6 @@
 			};
 			name = Release;
 		};
-		C1A0450D303D25F600CF777D /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Manual;
-				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = ModuDesktop;
-			};
-			name = Debug;
-		};
-		C1A0450E303D25F600CF777D /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = fun.armantang.ModuDesktopUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = ModuDesktop;
-			};
-			name = Release;
-		};
 		C1A6FFE2303D6BB000965082 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -854,15 +734,6 @@
 			buildConfigurations = (
 				C1A0450A303D25F600CF777D /* Debug */,
 				C1A0450B303D25F600CF777D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		C1A0450C303D25F600CF777D /* Build configuration list for PBXNativeTarget "ModuDesktopUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C1A0450D303D25F600CF777D /* Debug */,
-				C1A0450E303D25F600CF777D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

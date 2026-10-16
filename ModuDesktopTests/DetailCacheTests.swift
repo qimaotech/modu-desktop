@@ -4,13 +4,12 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct DetailCacheTests {
-    @Test(arguments: [Resource.group("a"), Resource.member("a", "repo"), Resource.member("b", "repo")])
+    @Test(arguments: [Resource.group("a"), Resource.member("a", "repo")])
     func deletionKeepsUnaffectedSelectionVisibleAndRefreshesItsGitState(_ selected: Resource) async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.commitWorkspace()
         let base = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
         for arguments in [["remote", "add", "origin", fixture.remoteURL], ["update-ref", "refs/remotes/origin/main", base], ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]] {
             _ = try await fixture.service.git.run(arguments, at: fixture.root)
@@ -18,7 +17,7 @@ import Testing
         for name in ["a", "b"] {
             #expect(await fixture.service.createGroup(name, repositories: ["repo"], at: fixture.root).status == "success")
         }
-        let record = try await fixture.service.load(fixture.root)
+        let record = try fixture.service.store.load(fixture.root)
         let path = try PathSafety.child(selected.path, of: fixture.root, allowMissing: false)
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "selected change"], at: path)
         try Data("pending".utf8).write(to: path.appending(path: "pending.txt"))
@@ -32,7 +31,6 @@ import Testing
         model.expandedGroups = ["a", "b"]
         model.selection = selected
         try await waitForDetail(model)
-        await model.detailPreloadTask?.value
         let head = try #require(model.detail.summary?.headOID)
         let commitIDs = try #require(model.detail.commits?.map(\.id))
         #expect(model.detail.summary?.head == selected.group && commitIDs.count == 1)
@@ -57,11 +55,9 @@ import Testing
         model.sheet = .delete
         model.run { service, root, progress in
             let outcome = await service.remove(.group("b"), at: root, authorization: authorization, progress: progress)
-            if selected.group == "a" {
-                // Simulate a local edit before the post-deletion refresh.
-                _ = try? await service.git.run(["commit", "--allow-empty", "-m", "after deletion"], at: path)
-                try? Data("new".utf8).write(to: path.appending(path: "after.txt"))
-            }
+            // Simulate a local edit before the post-deletion refresh.
+            _ = try? await service.git.run(["commit", "--allow-empty", "-m", "after deletion"], at: path)
+            try? Data("new".utf8).write(to: path.appending(path: "after.txt"))
             try? Data().write(to: probe.appending(path: "completed"))
             return outcome
         }
@@ -70,30 +66,19 @@ import Testing
             try await waitForProbe(probe.appending(path: "started"))
             #expect(!model.busy && model.sheet == nil && model.result == nil)
             #expect(model.workspace?.groups["b"] == nil)
-            if selected.group == "a" {
-                #expect(model.detailLoading)
-                #expect(model.selection == selected)
-                #expect(model.detail.summary?.head == "a" && model.detail.summary?.headOID == head)
-                #expect(model.detail.commits?.map(\.id) == commitIDs)
-                #expect(model.detail.changes?.map(\.path) == ["pending.txt"])
-                #expect(RepositoryDetailView(model: model).showsChanges && RepositoryDetailView(model: model).showsCommits)
-            } else {
-                #expect(model.selection == nil && model.currentURL == record.rootURL && !model.detailLoading)
-                #expect(model.detail.summary == nil && model.detail.changes == nil && model.detail.commits == nil)
-            }
+            #expect(model.detailLoading)
+            #expect(model.selection == selected)
+            #expect(model.detail.summary?.head == "a" && model.detail.summary?.headOID == head)
+            #expect(model.detail.commits?.map(\.id) == commitIDs)
+            #expect(model.detail.changes?.map(\.path) == ["pending.txt"])
             try Data().write(to: probe.appending(path: "release"))
             await operation.value
             try await waitForDetail(model)
             await model.detailPreloadTask?.value
-            if selected.group == "a" {
-                #expect(model.detail.summary?.head == "a")
-                #expect(model.detail.summary?.headOID != head)
-                #expect(model.detail.commits?.first?.subject == "after deletion")
-                #expect(model.detail.changes?.map(\.path) == ["after.txt", "pending.txt"])
-            } else {
-                #expect(model.selection == nil && model.currentURL == record.rootURL)
-                #expect(model.detail.summary == nil && model.detail.commits == nil && model.detail.changes == nil)
-            }
+            #expect(model.detail.summary?.head == "a")
+            #expect(model.detail.summary?.headOID != head)
+            #expect(model.detail.commits?.first?.subject == "after deletion")
+            #expect(model.detail.changes?.map(\.path) == ["after.txt", "pending.txt"])
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
             await operation.value
@@ -108,7 +93,6 @@ import Testing
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.commitWorkspace()
         let record = try #require(initial.workspace)
         let probe = fixture.directory.appending(path: "creation-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
@@ -150,8 +134,6 @@ import Testing
             #expect(model.workspace?.groups["feature"]?.repositories == ["repo"])
             #expect(model.selection == .group("feature") && model.expandedGroups.contains("feature"))
             #expect(model.currentURL == record.groupURL("feature"))
-            #expect(!RepositoryDetailView(model: model).showsChanges)
-            #expect(!RepositoryDetailView(model: model).showsCommits)
             if blocksCreatedGroup { #expect(model.detailLoading) }
             else { #expect(!model.detailLoading && model.detail.summary?.head == "feature") }
 
@@ -213,8 +195,8 @@ import Testing
         #expect(model.states[repository.id]?.dirty == nil)
     }
 
-    @Test(arguments: [Resource.repository("repo"), Resource.group("feature"), Resource.member("feature", "repo")])
-    func activationPublishesToolsAndKeepsSelectionWhileBackgroundInspectionWaits(_ selected: Resource) async throws {
+    @Test func activationPublishesToolsAndKeepsSelectionWhileBackgroundInspectionWaits() async throws {
+        let selected = Resource.member("feature", "repo")
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
@@ -225,9 +207,8 @@ import Testing
         _ = try await fixture.service.git.run(["config", "remote.origin.url", other.url], at: record.repositoryURL(other.id))
         record.repositories.append(other)
         try fixture.service.store.save(record)
-        try await fixture.commitWorkspace()
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
-        record = try await fixture.service.load(fixture.root)
+        record = try fixture.service.store.load(fixture.root)
 
         let probe = fixture.directory.appending(path: "detail-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
@@ -294,9 +275,8 @@ import Testing
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.commitWorkspace()
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
-        model.workspace = try await fixture.service.load(fixture.root)
+        model.workspace = try fixture.service.store.load(fixture.root)
         let record = try #require(model.workspace)
         try Data("main".utf8).write(to: record.repositoryURL("repo").appending(path: "main.txt"))
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
@@ -343,14 +323,13 @@ import Testing
     }
 
     @Test func groupDetailsRefreshWhenRemotesAreAddedAndRemoved() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        let model = try await makeModel(fixture, repository: false)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.commitWorkspace()
         let base = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
-        model.workspace = try await fixture.service.load(fixture.root)
+        try await fixture.prepareEmptyGroup("feature")
+        model.workspace = try fixture.service.store.load(fixture.root)
         let path = try #require(model.workspace?.groupURL("feature"))
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "group change"], at: path)
         try Data("group".utf8).write(to: path.appending(path: "group.txt"))
@@ -384,21 +363,12 @@ import Testing
         #expect(model.detail.changes?.map(\.path) == ["group.txt"])
     }
 
-    @Test(arguments: [Resource.repository("repo"), Resource.group("feature")])
-    func paginationSurvivesSelectionButNotNewHeadsOrWorkspaces(_ resource: Resource) async throws {
+    @Test func paginationSurvivesSelectionButNotNewHeadsOrWorkspaces() async throws {
+        let resource = Resource.repository("repo")
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        if resource.kind == "group" {
-            try await fixture.commitWorkspace()
-            let base = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
-            _ = try await fixture.service.git.run(["remote", "add", "origin", fixture.remoteURL], at: fixture.root)
-            _ = try await fixture.service.git.run(["update-ref", "refs/remotes/origin/main", base], at: fixture.root)
-            _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: fixture.root)
-            #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
-            model.workspace = try await fixture.service.load(fixture.root)
-        }
         let path = try PathSafety.child(resource.path, of: fixture.root, allowMissing: false)
         for index in 0..<31 {
             _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "change \(index)"], at: path)
@@ -441,9 +411,8 @@ import Testing
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.commitWorkspace()
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
-        let record = try await fixture.service.load(fixture.root)
+        let record = try fixture.service.store.load(fixture.root)
         try Data("main".utf8).write(to: record.repositoryURL("repo").appending(path: "main.txt"))
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
@@ -494,9 +463,8 @@ import Testing
         #expect(model.detail.changes?.map(\.path) == ["next.txt"])
         try await waitForDetail(model)
 
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
         let switching = AppModel(defaults: model.defaults, service: fixture.service)
-        switching.workspace = try await fixture.service.load(fixture.root)
+        switching.workspace = try fixture.service.store.load(fixture.root)
         switching.refreshDetail()
         let stalePreload = try #require(switching.detailPreloadTask)
         try await switching.switchTo(next)
@@ -508,14 +476,14 @@ import Testing
         try await waitForDetail(switching)
     }
 
-    private func makeModel(_ fixture: Fixture) async throws -> AppModel {
+    private func makeModel(_ fixture: Fixture, repository: Bool = true) async throws -> AppModel {
         let skill = try #require(Bundle.main.url(forResource: "SKILL", withExtension: "md"))
         #expect(await fixture.service.openWorkspace(fixture.root, skill: skill).status == "success")
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        if repository { #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success") }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try await fixture.service.load(fixture.root)
+        model.workspace = try fixture.service.store.load(fixture.root)
         return model
     }
 

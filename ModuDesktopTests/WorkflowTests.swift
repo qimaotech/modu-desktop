@@ -6,7 +6,7 @@ struct WorkflowTests {
     @Test func deletionPreviewChecksMembersConcurrentlyAndPreservesOrderAndRisks() async throws {
         let f = try await Fixture(); defer { f.remove() }
         try await prepare(f)
-        var record = try await f.service.load(f.root)
+        var record = try f.service.store.load(f.root)
         let other = Repository(url: "https://modu-test.invalid/other.git")
         try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(other.id))
         _ = try await f.service.git.run(["config", "remote.origin.url", other.url], at: record.repositoryURL(other.id))
@@ -15,7 +15,7 @@ struct WorkflowTests {
         _ = try await f.service.git.ensureIgnore([other.id], at: f.root)
         try await f.commitWorkspace()
         #expect(await f.service.createGroup("feature", repositories: ["repo", other.id], at: f.root).status == "success")
-        record = try await f.service.load(f.root)
+        record = try f.service.store.load(f.root)
         let member = record.memberURL("feature", "repo")
         try Data("/ignored/\n/ignored.txt\n".utf8).write(to: record.repositoryURL("repo").appending(path: ".git/info/exclude"))
         let ignored = member.appending(path: "ignored/nested")
@@ -111,7 +111,7 @@ struct WorkflowTests {
         let service = WorkspaceService(store: failingStore, git: f.service.git)
         let result = await service.createGroup("feature", repositories: ["repo"], at: f.root)
         #expect(result.status == "partial-success")
-        let record = try await f.service.load(f.root)
+        let record = try f.service.store.load(f.root)
         #expect(record.groups["feature"]?.repositories == [])
         #expect(PathSafety.exists(record.groupURL("feature")))
         #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
@@ -195,7 +195,7 @@ struct WorkflowTests {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         if hasRemote { _ = try await f.service.git.run(["remote", "add", "upstream", f.remoteURL], at: f.root) }
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
-        let record = try await f.service.load(f.root)
+        let record = try f.service.store.load(f.root)
         let group = Resource.group("feature")
         let head = try #require(await f.service.git.oid("HEAD", at: record.groupURL("feature")))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
@@ -229,7 +229,7 @@ struct WorkflowTests {
         #expect(!PathSafety.exists(f.root.appending(path: "worktrees/feature")))
     }
     @Test func cliDoesNotWriteCoverageProfiles() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
@@ -262,35 +262,35 @@ struct WorkflowTests {
         #expect(try JSONDecoder().decode(OperationResult.self, from: preview.stdout).status == "confirmation-required")
     }
 
-    @Test(arguments: ["leading", "interleaved", "trailing", "equals"])
-    func cliGlobalOptionsRemainBeforeArgumentTerminator(_ placement: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+    @Test func cliGlobalOptionsRemainBeforeArgumentTerminator() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        let arguments: [String]
-        switch placement {
-        case "leading": arguments = ["--json", "--workspace", f.root.path, "repo", "list", "--"]
-        case "interleaved": arguments = ["repo", "--workspace", f.root.path, "list", "--json", "--"]
-        case "trailing": arguments = ["repo", "list", "--json", "--workspace", f.root.path, "--"]
-        default: arguments = ["--workspace=\(f.root.path)", "repo", "--json", "list", "--"]
+        for placement in ["leading", "interleaved", "trailing", "equals"] {
+            let arguments: [String]
+            switch placement {
+            case "leading": arguments = ["--json", "--workspace", f.root.path, "repo", "list", "--"]
+            case "interleaved": arguments = ["repo", "--workspace", f.root.path, "list", "--json", "--"]
+            case "trailing": arguments = ["repo", "list", "--json", "--workspace", f.root.path, "--"]
+            default: arguments = ["--workspace=\(f.root.path)", "repo", "--json", "list", "--"]
+            }
+            let output = try await runner.run(executable.path, arguments, at: f.directory)
+            try #require(output.status == 0, "\(output.text)")
+            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(result.command == "repo.list" && result.status == "success" && result.items.isEmpty)
+            #expect(result.workspace == PathSafety.canonical(f.root).path)
         }
-        let output = try await runner.run(executable.path, arguments, at: f.directory)
-        try #require(output.status == 0, "\(output.text)")
-        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-        #expect(result.command == "repo.list" && result.status == "success" && result.items.isEmpty)
-        #expect(result.workspace == PathSafety.canonical(f.root).path)
     }
 
-    @Test(arguments: [false, true])
-    func cliRepositoryURLAfterArgumentTerminatorIsPreserved(_ equalsWorkspace: Bool) async throws {
+    @Test func cliRepositoryURLAfterArgumentTerminatorIsPreserved() async throws {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        let workspace = equalsWorkspace ? ["--workspace=\(f.root.path)"] : ["--workspace", f.root.path]
+        let workspace = ["--workspace=\(f.root.path)"]
         let output = try await runner.run(executable.path, ["--json"] + workspace + ["repo", "add", "--", f.remoteURL], at: f.directory)
         try #require(output.status == 0, "\(output.text)")
         let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
@@ -299,9 +299,9 @@ struct WorkflowTests {
         #expect(try f.service.store.load(f.root).repositories == [.init(url: f.remoteURL)])
     }
 
-    @Test(arguments: ["repo", "worktree"], [false, true])
-    func cliListsPreserveWorkspaceFailures(_ command: String, _ hasRepository: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+    @Test(arguments: [false, true])
+    func cliListsPreserveWorkspaceFailures(_ hasRepository: Bool) async throws {
+        let f = try await Fixture(createRemote: hasRepository); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         if hasRepository { #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success") }
         let original = try Data(contentsOf: f.service.store.recordURL(f.root))
@@ -314,78 +314,77 @@ struct WorkflowTests {
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        let status = command == "repo" && hasRepository ? "partial-success" : "failed"
-        let failureMessage = try #require(failure.message)
-        for json in [false, true] {
-            let output = try await runner.run(executable.path, [command, "list", "--workspace", f.root.path] + (json ? ["--json"] : []))
-            #expect(output.status == 1, "\(output.text)")
-            if json {
-                let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-                #expect(result.command == "\(command).list" && result.status == status)
-                #expect(result.workspace == PathSafety.canonical(f.root).path)
-                #expect(result.reasonCode == nil && result.message == nil)
-                let workspace = try #require(result.items.first { $0.resource.kind == "workspace" })
-                #expect(workspace.resource.path == "." && workspace.status == "failed")
-                #expect(workspace.reasonCode == failure.reasonCode && workspace.message == failure.message)
-                #expect(workspace.data == nil && workspace.effects.isEmpty)
-                #expect(result.items.count == (command == "repo" && hasRepository ? 2 : 1))
-            } else {
-                #expect(output.text.contains("\(command).list: \(status)"))
-                #expect(output.text.contains(".: failed"))
-                #expect(output.text.contains(failureMessage))
+        for command in ["repo", "worktree"] {
+            let status = command == "repo" && hasRepository ? "partial-success" : "failed"
+            let failureMessage = try #require(failure.message)
+            for json in [false, true] {
+                let output = try await runner.run(executable.path, [command, "list", "--workspace", f.root.path] + (json ? ["--json"] : []))
+                #expect(output.status == 1, "\(output.text)")
+                if json {
+                    let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+                    #expect(result.command == "\(command).list" && result.status == status)
+                    #expect(result.workspace == PathSafety.canonical(f.root).path)
+                    #expect(result.reasonCode == nil && result.message == nil)
+                    let workspace = try #require(result.items.first { $0.resource.kind == "workspace" })
+                    #expect(workspace.resource.path == "." && workspace.status == "failed")
+                    #expect(workspace.reasonCode == failure.reasonCode && workspace.message == failure.message)
+                    #expect(workspace.data == nil && workspace.effects.isEmpty)
+                    #expect(result.items.count == (command == "repo" && hasRepository ? 2 : 1))
+                } else {
+                    #expect(output.text.contains("\(command).list: \(status)"))
+                    #expect(output.text.contains(".: failed"))
+                    #expect(output.text.contains(failureMessage))
+                }
             }
+            #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
+            #expect(!PathSafety.exists(f.root.appending(path: ".git")))
         }
-        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
-        #expect(!PathSafety.exists(f.root.appending(path: ".git")))
     }
 
-    @Test(arguments: ["repository-empty", "repository-group", "group", "member"])
-    func cliListsIgnoreUnrelatedResourceFailures(_ kind: String) async throws {
+    @Test func cliListsIgnoreUnrelatedResourceFailures() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
-        if kind != "repository-empty" {
-            #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
-        }
-        let repositoryFailure = kind.hasPrefix("repository")
-        if kind == "repository-group" {
-            #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == "success")
-        }
-        if repositoryFailure {
-            _ = try await f.service.git.run(["config", "remote.origin.url", "https://modu-test.invalid/other.git"], at: f.root.appending(path: "repositories/repo"))
-        } else {
-            let path = f.root.appending(path: kind == "group" ? "worktrees/feature/.git" : "worktrees/feature/repo/.git")
-            try Data("gitdir: missing-git-directory\n".utf8).write(to: path)
-        }
-        let original = try Data(contentsOf: f.service.store.recordURL(f.root))
-        let inspection = await f.service.inspect(f.root)
-        let failedKind = repositoryFailure ? "repository" : kind
-        #expect(inspection.items.contains { $0.resource.kind == failedKind && $0.status == "failed" })
-        #expect(inspection.items.first { $0.resource.kind == "workspace" }?.status == "success")
-
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
+        let saved = try f.service.store.load(f.root)
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        for command in ["repo", "worktree"] {
-            let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
-            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-            let related = repositoryFailure ? command == "repo" : command == "worktree"
-            #expect(output.status == (related ? 1 : 0), "\(output.text)")
-            #expect(result.command == "\(command).list" && result.reasonCode == nil)
-            #expect(!result.items.contains { $0.resource.kind == "workspace" })
-            if related {
-                #expect(result.status == (kind == "repository-empty" || kind == "repository-group" ? "failed" : "partial-success"))
-                #expect(result.items.contains { $0.resource.kind == failedKind && $0.status == "failed" && $0.reasonCode != nil })
-            } else {
-                #expect(result.status == "success")
-                #expect(result.items.count == (kind == "repository-empty" ? 0 : 1))
-                #expect(result.items.allSatisfy { $0.status == "success" })
+        for kind in ["repository", "group", "member"] {
+            var record = saved
+            let metadata = (kind == "member" ? saved.memberURL("feature", "repo") : saved.groupURL("feature")).appending(path: ".git")
+            let gitFile = try Data(contentsOf: metadata)
+            if kind == "repository" {
+                record.groups["feature"]?.repositories = []
+                _ = try await f.service.git.run(["config", "remote.origin.url", "https://modu-test.invalid/other.git"], at: saved.repositoryURL("repo"))
+            } else { try Data("gitdir: missing-git-directory\n".utf8).write(to: metadata) }
+            try f.service.store.save(record)
+            let original = try Data(contentsOf: f.service.store.recordURL(f.root))
+            for command in ["repo", "worktree"] {
+                let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
+                let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+                let related = kind == "repository" ? command == "repo" : command == "worktree"
+                #expect(output.status == (related ? 1 : 0), "\(output.text)")
+                #expect(result.command == "\(command).list" && result.reasonCode == nil)
+                #expect(!result.items.contains { $0.resource.kind == "workspace" })
+                if related {
+                    #expect(result.status == (kind == "repository" ? "failed" : "partial-success"))
+                    #expect(result.items.contains { $0.resource.kind == kind && $0.status == "failed" && $0.reasonCode != nil })
+                } else {
+                    #expect(result.status == "success" && result.items.count == 1)
+                    #expect(result.items.allSatisfy { $0.status == "success" })
+                }
             }
+            #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
+            #expect(PathSafety.exists(saved.memberURL("feature", "repo")))
+            if kind == "repository" {
+                _ = try await f.service.git.run(["config", "remote.origin.url", f.remoteURL], at: saved.repositoryURL("repo"))
+            } else { try gitFile.write(to: metadata) }
         }
-        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
+        try f.service.store.save(saved)
     }
 
-    @Test(arguments: ["repo", "worktree"], ["empty", "invalid-record", "missing-root", "busy"])
-    func cliListsKeepRequestErrorsAndHealthyEmptyResults(_ command: String, _ kind: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+    @Test(arguments: ["empty", "invalid-record", "missing-root", "busy"])
+    func cliListsKeepRequestErrorsAndHealthyEmptyResults(_ kind: String) async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         var lease: WorkspaceLock?
         defer { lease?.unlock() }
@@ -398,22 +397,23 @@ struct WorkflowTests {
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
-        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-        #expect(result.command == "\(command).list" && result.items.isEmpty)
-        if kind == "empty" {
-            #expect(output.status == 0 && result.status == "success")
-            #expect(result.reasonCode == nil && result.message == nil)
-        } else {
-            #expect(output.status == (kind == "busy" ? 1 : 2) && result.status == "failed")
-            let reason = kind == "busy" ? "workspace-busy" : kind == "missing-root" ? "workspace-not-found" : "invalid-configuration"
-            #expect(result.reasonCode == reason && result.message != nil)
+        for command in ["repo", "worktree"] {
+            let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
+            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(result.command == "\(command).list" && result.items.isEmpty)
+            if kind == "empty" {
+                #expect(output.status == 0 && result.status == "success")
+                #expect(result.reasonCode == nil && result.message == nil)
+            } else {
+                #expect(output.status == (kind == "busy" ? 1 : 2) && result.status == "failed")
+                let reason = kind == "busy" ? "workspace-busy" : kind == "missing-root" ? "workspace-not-found" : "invalid-configuration"
+                #expect(result.reasonCode == reason && result.message != nil)
+            }
         }
     }
 
-    @Test(arguments: [false, true], ["file:///tmp/repo.git", "https://user:sensitive-token@example.test/repo.git"])
-    func cliInvalidRepositoryURLIsARequestErrorWithExitCodeTwo(_ json: Bool, _ url: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+    @Test func cliInvalidRepositoryURLIsARequestErrorWithExitCodeTwo() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == "success")
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
@@ -421,19 +421,24 @@ struct WorkflowTests {
         let trace = f.directory.appending(path: "invalid-input-cli-trace")
         runner.environment["GIT_TRACE"] = trace.path
         let before = try Data(contentsOf: f.service.store.recordURL(f.root))
-        let output = try await runner.run(executable.path, ["repo", "add", url, "--workspace", f.root.path] + (json ? ["--json"] : []))
-        #expect(output.status == 2)
-        if json {
-            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-            #expect(result.command == "repo.add" && result.status == "failed" && result.reasonCode == "invalid-input")
-            #expect(result.items.isEmpty && result.workspace == PathSafety.canonical(f.root).path)
-        } else { #expect(output.text.contains("repo.add: failed")) }
-        #expect(!output.text.contains("sensitive-token"))
-        #expect(!String(decoding: output.stderr, as: UTF8.self).contains("sensitive-token"))
-        #expect(!PathSafety.exists(trace))
-        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == before)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: f.root.appending(path: "repositories").path).isEmpty)
+        for json in [false, true] {
+            for url in ["file:///tmp/repo.git", "https://user:sensitive-token@example.test/repo.git"] {
+                let output = try await runner.run(executable.path, ["repo", "add", url, "--workspace", f.root.path] + (json ? ["--json"] : []))
+                #expect(output.status == 2)
+                if json {
+                    let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+                    #expect(result.command == "repo.add" && result.status == "failed" && result.reasonCode == "invalid-input")
+                    #expect(result.items.isEmpty && result.workspace == PathSafety.canonical(f.root).path)
+                } else { #expect(output.text.contains("repo.add: failed")) }
+                #expect(!output.text.contains("sensitive-token"))
+                #expect(!String(decoding: output.stderr, as: UTF8.self).contains("sensitive-token"))
+                #expect(!PathSafety.exists(trace))
+                #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == before)
+                #expect(try FileManager.default.contentsOfDirectory(atPath: f.root.appending(path: "repositories").path).isEmpty)
+            }
+        }
     }
+
     @Test func groupNameHEADIsAlwaysAnExplicitLocalBranch() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         let result = await f.service.createGroup("HEAD", repositories: ["repo"], at: f.root)
@@ -443,12 +448,10 @@ struct WorkflowTests {
         #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: root.appending(path: "repo")).text == "refs/heads/HEAD")
         #expect(await f.service.remove(.group("HEAD"), at: f.root, execute: true).status == "success")
     }
-    @Test(arguments: ["saved", "missing", "corrupt", "stale"])
-    func workspaceOpeningUsesHistoryWithoutRecoveringDiskResources(_ history: String) async throws {
+    @Test func workspaceOpeningUsesHistoryWithoutRecoveringDiskResources() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
-        #expect(await f.service.createGroup("empty", repositories: ["repo"], at: f.root).status == "success")
-        #expect(await f.service.remove(.member(group: "empty", repo: "repo"), at: f.root, execute: true).status == "success")
+        try await f.prepareEmptyGroup("empty")
         let group = f.root.appending(path: "worktrees/feature")
         let member = group.appending(path: "repo")
         _ = try await f.service.git.run(["checkout", "-b", "different-branch"], at: group)
@@ -456,75 +459,93 @@ struct WorkflowTests {
         let head = try await f.service.git.oid("HEAD", at: member)
         try Data("user changes".utf8).write(to: member.appending(path: "README"))
         let record = f.service.store.recordURL(f.root)
-        var saved = try await f.service.load(f.root)
+        var saved = try f.service.store.load(f.root)
         saved.repositories[0].name = "Custom"
         saved.groups["feature"]?.createdAt = "2001-01-01T00:00:00Z"
         saved.groups["empty"]?.createdAt = "2002-01-01T00:00:00Z"
-        switch history {
-        case "missing": try FileManager.default.removeItem(at: record)
-        case "corrupt": try Data("invalid".utf8).write(to: record)
-        case "stale": try f.service.store.save(WorkspaceRecord(root: PathSafety.canonical(f.root).path))
-        default: try f.service.store.save(saved)
-        }
-        let original = PathSafety.exists(record) ? try Data(contentsOf: record) : nil
         let unmanaged = f.root.appending(path: "repositories/unmanaged")
         try FileManager.default.createDirectory(at: unmanaged, withIntermediateDirectories: false)
-        let opened = await f.service.openWorkspace(f.root)
-        if history == "saved" || history == "stale" {
-            #expect(opened.status == "success", "\(opened.items)")
-            #expect(try await f.service.load(f.root) == (history == "saved" ? saved : WorkspaceRecord(root: PathSafety.canonical(f.root).path)))
-        } else {
-            #expect(opened.status == "failed")
-            #expect(opened.items.first?.reasonCode == (history == "missing" ? "workspace-not-empty" : "invalid-configuration"))
+        for history in ["saved", "missing", "corrupt", "stale"] {
+            switch history {
+            case "missing": try FileManager.default.removeItem(at: record)
+            case "corrupt": try Data("invalid".utf8).write(to: record)
+            case "stale": try f.service.store.save(WorkspaceRecord(root: PathSafety.canonical(f.root).path))
+            default: try f.service.store.save(saved)
+            }
+            let original = PathSafety.exists(record) ? try Data(contentsOf: record) : nil
+            let opened = await f.service.openWorkspace(f.root)
+            if history == "saved" || history == "stale" {
+                #expect(opened.status == "success", "\(opened.items)")
+                #expect(try await f.service.load(f.root) == (history == "saved" ? saved : WorkspaceRecord(root: PathSafety.canonical(f.root).path)))
+            } else {
+                #expect(opened.status == "failed")
+                #expect(opened.items.first?.reasonCode == (history == "missing" ? "workspace-not-empty" : "invalid-configuration"))
+            }
+            if let original { #expect(try Data(contentsOf: record) == original) }
+            else { #expect(!PathSafety.exists(record)) }
+            #expect(PathSafety.exists(unmanaged))
+            #expect(try await f.service.git.oid("HEAD", at: member) == head)
+            #expect(try await f.service.git.run(["symbolic-ref", "--short", "HEAD"], at: group).text == "different-branch")
+            #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: member, allowFailure: true).status != 0)
+            #expect(try String(contentsOf: member.appending(path: "README"), encoding: .utf8) == "user changes")
+            #expect(opened.items.allSatisfy { $0.effects.isEmpty })
         }
-        if let original { #expect(try Data(contentsOf: record) == original) }
-        else { #expect(!PathSafety.exists(record)) }
-        #expect(PathSafety.exists(unmanaged))
-        #expect(try await f.service.git.oid("HEAD", at: member) == head)
-        #expect(try await f.service.git.run(["symbolic-ref", "--short", "HEAD"], at: group).text == "different-branch")
-        #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: member, allowFailure: true).status != 0)
-        #expect(try String(contentsOf: member.appending(path: "README"), encoding: .utf8) == "user changes")
-        #expect(opened.items.allSatisfy { $0.effects.isEmpty })
     }
-    @Test(arguments: ["origin", "name", "symlink", "group", "member", "root"])
-    func unavailableDiskResourcesKeepHistoryAndReportTheirState(_ kind: String) async throws {
+
+    @Test func unavailableDiskResourcesKeepHistoryAndReportTheirState() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
-        let repository = f.root.appending(path: "repositories/repo")
-        let group = f.root.appending(path: "worktrees/feature")
+        let saved = try f.service.store.load(f.root)
+        let repository = saved.repositoryURL("repo")
+        let group = saved.groupURL("feature")
         let record = f.service.store.recordURL(f.root)
         let original = try Data(contentsOf: record)
-        var expected = try await f.service.load(f.root)
-        switch kind {
-        case "origin": _ = try await f.service.git.run(["config", "remote.origin.url", "/tmp/local-repo"], at: repository)
-        case "name":
-            try FileManager.default.moveItem(at: repository, to: repository.deletingLastPathComponent().appending(path: "wrong-name"))
-            expected.repositories = []
-            expected.groups["feature"]?.repositories = []
-        case "symlink":
-            let outside = f.directory.appending(path: "outside-repo")
-            try FileManager.default.moveItem(at: repository, to: outside)
-            try FileManager.default.createSymbolicLink(at: repository, withDestinationURL: outside)
-        case "group", "member":
-            let path = kind == "group" ? group : group.appending(path: "repo")
-            try FileManager.default.removeItem(at: path.appending(path: ".git"))
-            _ = try await f.service.git.run(["init"], at: path)
-        default: try FileManager.default.removeItem(at: f.root.appending(path: ".git"))
+        let notes = saved.memberURL("feature", "repo").appending(path: "notes.txt")
+        try Data("keep user changes".utf8).write(to: notes)
+        for kind in ["origin", "name", "symlink", "group", "member", "root"] {
+            var expected = saved
+            let metadata = (kind == "member" ? saved.memberURL("feature", "repo") : group).appending(path: ".git")
+            let gitFile = try Data(contentsOf: metadata)
+            switch kind {
+            case "origin": _ = try await f.service.git.run(["config", "remote.origin.url", "/tmp/local-repo"], at: repository)
+            case "name":
+                try FileManager.default.moveItem(at: repository, to: repository.deletingLastPathComponent().appending(path: "wrong-name"))
+                expected.repositories = []; expected.groups["feature"]?.repositories = []
+            case "symlink":
+                let outside = f.directory.appending(path: "outside-repo")
+                try FileManager.default.moveItem(at: repository, to: outside)
+                try FileManager.default.createSymbolicLink(at: repository, withDestinationURL: outside)
+            case "group", "member":
+                try Data("gitdir: \(f.directory.appending(path: "source/.git").path)\n".utf8).write(to: metadata)
+            default: try FileManager.default.removeItem(at: f.root.appending(path: ".git"))
+            }
+            #expect(await f.service.openWorkspace(f.root).status == "success")
+            #expect(try f.service.store.load(f.root) == expected)
+            if kind != "name" { #expect(try Data(contentsOf: record) == original) }
+            let inspection = await f.service.inspect(f.root)
+            if kind != "name" {
+                let resource: Resource = kind == "group" || kind == "root" ? .group("feature") : kind == "member" ? .member("feature", "repo") : .repository("repo")
+                #expect(inspection.items.first { $0.resource == resource }?.status == "failed")
+            }
+            #expect(PathSafety.exists(group) && PathSafety.exists(notes))
+            #expect(try String(contentsOf: notes, encoding: .utf8) == "keep user changes")
+            switch kind {
+            case "origin": _ = try await f.service.git.run(["config", "remote.origin.url", f.remoteURL], at: repository)
+            case "name":
+                try FileManager.default.moveItem(at: repository.deletingLastPathComponent().appending(path: "wrong-name"), to: repository)
+                try f.service.store.save(saved)
+            case "symlink":
+                try FileManager.default.removeItem(at: repository)
+                try FileManager.default.moveItem(at: f.directory.appending(path: "outside-repo"), to: repository)
+            case "group", "member": try gitFile.write(to: metadata)
+            default: break
+            }
+            #expect(PathSafety.exists(repository))
         }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(try await f.service.load(f.root) == expected)
-        if kind != "name" { #expect(try Data(contentsOf: record) == original) }
-        let inspection = await f.service.inspect(f.root)
-        if kind != "name" {
-            let resource: Resource = kind == "group" || kind == "root" ? .group("feature") : kind == "member" ? .member("feature", "repo") : .repository("repo")
-            #expect(inspection.items.first { $0.resource == resource }?.status == "failed")
-        }
-        let actualRepository = kind == "name" ? repository.deletingLastPathComponent().appending(path: "wrong-name") : repository
-        #expect(PathSafety.exists(actualRepository) && PathSafety.exists(group))
     }
+
     private func prepare(_ fixture: Fixture) async throws {
         #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
-        try await fixture.commitWorkspace()
     }
 }

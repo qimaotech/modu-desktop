@@ -11,7 +11,7 @@ name = "Modu Run"
 icon = "run"
 command = "task run"
 
-# 并行构建开发版 App 与生成临时 Git 数据，完成后打开该工作区，正常退出时清理；内容见 docs/MOCK.md。
+# 构建开发版 App 并加载隔离的临时 Git 场景，正常退出时清理。
 [[actions]]
 name = "Modu Mock"
 icon = "run"

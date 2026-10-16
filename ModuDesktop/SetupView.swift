@@ -63,7 +63,7 @@ struct SetupView: View {
             Divider()
             HStack {
                 Button(model.hasSavedWorkspace ? model.t("Cancel", "取消") : model.t("Quit", "退出")) {
-                    if model.hasSavedWorkspace { dismiss(); openWindow(id: "main") }
+                    if cliReady && model.hasSavedWorkspace { dismiss(); openWindow(id: "main") }
                     else { NSApp.terminate(nil) }
                 }.disabled(working).keyboardShortcut(.cancelAction)
                 Spacer()

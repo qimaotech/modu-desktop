@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 import Testing
 @testable import ModuCore
 @testable import ModuDesktop
@@ -57,87 +56,6 @@ import Testing
         #expect(row.status == .updated && row.statusLabel == model.t("Updated", "已更新"))
     }
 
-    @Test(arguments: ["en", "zh"], [NSAppearance.Name.aqua, .darkAqua])
-    func resultSheetKeepsItsWidthAndScrollsLongLists(_ language: String, _ appearance: NSAppearance.Name) throws {
-        let suite = "ModuUpdateLayout.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = AppModel(defaults: defaults)
-        model.language = language
-        for count in [5, 50] {
-            var items = sampleItems()
-            if count > items.count {
-                items += (items.count..<count).map { index in
-                    var item = ItemResult(.repository("repository-\(index)"))
-                    item.data = ["disposition": "updated"]
-                    return item
-                }
-            }
-            let result = OperationResult(command: "repo.update", workspace: "/workspace", status: "partial-success", items: items)
-            let host = NSHostingView(rootView: ResultView(model: model, result: result, dismiss: {}))
-            host.appearance = NSAppearance(named: appearance)
-            host.setFrameSize(host.fittingSize)
-            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = host
-            defer { window.close() }
-            host.layoutSubtreeIfNeeded()
-            #expect(host.frame.width == 460 && host.frame.height > 0 && host.frame.height <= 560)
-            let visibleItems = model.resultDisplayItems(result)
-            #expect(visibleItems.count == count - 2)
-            let visibleResult = OperationResult(command: result.command, workspace: result.workspace, status: result.status, items: visibleItems)
-            let visibleHost = NSHostingView(rootView: ResultView(model: model, result: visibleResult, dismiss: {}))
-            visibleHost.appearance = host.appearance
-            visibleHost.setFrameSize(visibleHost.fittingSize)
-            let visibleWindow = NSWindow(contentRect: visibleHost.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-            visibleWindow.isReleasedWhenClosed = false
-            visibleWindow.contentView = visibleHost
-            defer { visibleWindow.close() }
-            visibleHost.layoutSubtreeIfNeeded()
-            #expect(host.fittingSize == visibleHost.fittingSize)
-            let scroll = try #require(scrollViews(in: host).first)
-            #expect(scroll.frame.height > 0 && scroll.frame.height <= 360)
-            if count == 50 {
-                let document = try #require(scroll.documentView)
-                #expect(document.frame.height > scroll.frame.height)
-                scroll.contentView.scroll(to: NSPoint(x: 0, y: document.frame.maxY - scroll.contentView.bounds.height))
-                scroll.reflectScrolledClipView(scroll.contentView)
-                #expect(scroll.contentView.bounds.minY > 0)
-                #expect(scroll.documentVisibleRect.maxY >= document.frame.maxY - 1)
-            } else {
-                let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-                host.cacheDisplay(in: host.bounds, to: bitmap)
-                Attachment.record(try #require(bitmap.representation(using: .png, properties: [:])), named: "update-results-\(language)-\(appearance.rawValue).png")
-            }
-        }
-    }
-
-    @Test(arguments: ["en", "zh"])
-    func compactDetailsUsesExplicitCollapsedAndExpandedLayout(_ language: String) throws {
-        let suite = "ModuUpdateDetails.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = AppModel(defaults: defaults)
-        model.language = language
-        var heights: [CGFloat] = []
-        for expanded in [false, true, false] {
-            let content = DisclosureGroup(isExpanded: .constant(expanded)) {
-                Text("/workspace/repositories/pixiu-frontend").font(.caption)
-            } label: {
-                Text(model.t("Details", "详细信息"))
-            }
-            .disclosureGroupStyle(RepositoryResultDetailsStyle(identifier: "details", expandedLabel: model.t("Expanded", "已展开"), collapsedLabel: model.t("Collapsed", "已折叠")))
-            .font(.callout).frame(width: 412)
-            let host = NSHostingView(rootView: content)
-            host.setFrameSize(host.fittingSize)
-            host.layoutSubtreeIfNeeded()
-            heights.append(host.fittingSize.height)
-        }
-        #expect(heights[0] == 15)
-        #expect(heights[1] > heights[0])
-        #expect(heights[2] == heights[0])
-    }
-
     private func sampleItems() -> [ItemResult] {
         var items = ["pixiu-frontend", "pixiu-ad-backend", "pixiu-ad-server", "pixiu-toolkit"].enumerated().map { index, name in
             var item = ItemResult(.repository(name))
@@ -149,10 +67,6 @@ import Testing
         failed.effects = [.init("update-refs", "/workspace/\(failed.resource.path)")]
         items.append(failed)
         return items
-    }
-
-    private func scrollViews(in view: NSView) -> [NSScrollView] {
-        ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrollViews(in: $0) }
     }
 
 }

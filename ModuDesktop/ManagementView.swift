@@ -282,7 +282,8 @@ struct RepositorySearchField: NSViewRepresentable {
 
     func updateNSView(_ field: NSSearchField, context: Context) {
         context.coordinator.parent = self
-        if field.stringValue != text { field.stringValue = text }
+        let composing = (field.currentEditor() as? NSTextView)?.hasMarkedText() == true
+        if !composing, field.stringValue != text { field.stringValue = text }
         field.placeholderString = placeholder
         field.setAccessibilityLabel(placeholder)
         if focused, field.currentEditor() == nil {
@@ -300,11 +301,22 @@ struct RepositorySearchField: NSViewRepresentable {
         var parent: RepositorySearchField
         init(parent: RepositorySearchField) { self.parent = parent }
 
-        @objc func search(_ field: NSSearchField) { parent.text = field.stringValue }
+        @objc func search(_ field: NSSearchField) { updateText(field) }
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField else { return }
+            // Publish native edits before a focus update can restore the previous binding value.
+            updateText(field, editor: notification.userInfo?["NSFieldEditor"] as? NSTextView)
+        }
         func controlTextDidBeginEditing(_ notification: Notification) { if !parent.focused { parent.focused = true } }
         func controlTextDidEndEditing(_ notification: Notification) { if parent.focused { parent.focused = false } }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             commandSelector == #selector(NSResponder.insertNewline(_:))
+        }
+
+        private func updateText(_ field: NSSearchField, editor: NSTextView? = nil) {
+            let editor = editor ?? field.currentEditor() as? NSTextView
+            guard editor?.hasMarkedText() != true else { return }
+            parent.text = editor?.string ?? field.stringValue
         }
     }
 }
