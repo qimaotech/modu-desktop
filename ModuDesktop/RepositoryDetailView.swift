@@ -263,7 +263,6 @@ struct RepositoryDetailView: View {
                 }.frame(idealHeight: CGFloat(rows.count) * 24, maxHeight: CGFloat(rows.count) * 24)
             }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
-            .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func changeRow(_ node: ChangeNode, depth: Int) -> some View {
@@ -323,7 +322,6 @@ struct RepositoryDetailView: View {
                 }.frame(idealHeight: contentHeight, maxHeight: contentHeight)
             }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
-            .frame(maxHeight: .infinity, alignment: .topLeading)
     }
     private func unavailable(_ reason: String) -> some View { VStack(alignment: .leading) { Label(model.t("Unavailable", "不可用"), systemImage: "exclamationmark.circle"); Text(reason).foregroundStyle(.secondary).textSelection(.enabled) } }
     @ViewBuilder private func status(_ value: String, conflict: Bool, staged: Bool) -> some View {

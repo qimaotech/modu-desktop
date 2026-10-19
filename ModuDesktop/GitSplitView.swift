@@ -24,25 +24,48 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
         let split = ModuSplitView()
         split.isVertical = vertical; split.defaults = defaults
         split.dividerStyle = .thin
-        let first = NSHostingView(rootView: first), second = NSHostingView(rootView: second)
+        let first = context.coordinator.first, second = context.coordinator.second
         // NSSplitView owns the pane frames; hosting-view intrinsic constraints must not reset them.
         first.sizingOptions = []; second.sizingOptions = []
-        split.addArrangedSubview(first); split.addArrangedSubview(second)
+        split.addArrangedSubview(first.view); split.addArrangedSubview(second.view)
+        if !vertical {
+            split.contentHeights = { width in
+                let proposal = NSSize(width: width, height: .greatestFiniteMagnitude)
+                return (first.sizeThatFits(in: proposal).height, second.sizeThatFits(in: proposal).height)
+            }
+        }
         // NSSplitView forwards sidebar action queries to its delegate; it must not delegate to itself.
         split.delegate = context.coordinator
         return split
     }
 
     func updateNSView(_ split: ModuSplitView, context: Context) {
-        (split.arrangedSubviews[0] as? NSHostingView<First>)?.rootView = first
-        (split.arrangedSubviews[1] as? NSHostingView<Second>)?.rootView = second
+        context.coordinator.first.rootView = first
+        context.coordinator.second.rootView = second
+        split.resizeSubviews(withOldSize: split.bounds.size)
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(first: first, second: second) }
 
     final class Coordinator: NSObject, NSSplitViewDelegate {
-        func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat { splitView.isVertical ? 240 : 112 }
-        func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat { splitView.isVertical ? min(480, splitView.bounds.width - 660) : splitView.bounds.height - 124 }
+        let first: NSHostingController<First>
+        let second: NSHostingController<Second>
+
+        init(first: First, second: Second) {
+            self.first = NSHostingController(rootView: first)
+            self.second = NSHostingController(rootView: second)
+        }
+
+        func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+            splitView.isVertical ? 240 : (splitView as? ModuSplitView)?.dividerRange.lowerBound ?? proposedMinimumPosition
+        }
+        func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+            splitView.isVertical ? min(480, splitView.bounds.width - 660) : (splitView as? ModuSplitView)?.dividerRange.upperBound ?? proposedMaximumPosition
+        }
+        func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
+            if let split = splitView as? ModuSplitView, !split.isVertical, !split.canResize { return .zero }
+            return proposedEffectiveRect
+        }
         func splitViewDidResizeSubviews(_ notification: Notification) {
             (notification.object as? ModuSplitView)?.saveDividerPosition()
         }
@@ -51,6 +74,9 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
 
 final class ModuSplitView: NSSplitView {
     var defaults: UserDefaults?
+    var contentHeights: ((CGFloat) -> (upper: CGFloat, lower: CGFloat))?
+    private(set) var dividerRange: ClosedRange<CGFloat> = 0...0
+    var canResize: Bool { dividerRange.lowerBound < dividerRange.upperBound }
     private var positioned = false
     private var resizing = false
     override var dividerThickness: CGFloat { isVertical ? 1 : 12 }
@@ -64,26 +90,44 @@ final class ModuSplitView: NSSplitView {
         let total = isVertical ? bounds.width : bounds.height
         let previous = isVertical ? oldSize.width : oldSize.height
         let current = isVertical ? arrangedSubviews[0].frame.width : arrangedSubviews[0].frame.height
-        let preferred: CGFloat
-        if !positioned || previous <= 0 {
-            preferred = isVertical ? (total < 1100 ? 240 : 338) : defaults?.object(forKey: "gitSplitRatio").map { total * (($0 as? Double) ?? 0.6) } ?? total - 124
+        let size: CGFloat
+        let lowerHeight: CGFloat
+        if let contentHeights, !isVertical {
+            let heights = contentHeights(bounds.width)
+            let available = max(0, total - dividerThickness)
+            if heights.upper + heights.lower <= available {
+                size = heights.upper
+                lowerHeight = heights.lower
+                dividerRange = size...size
+            } else {
+                let upperMinimum = min(64, heights.upper), lowerMinimum = min(64, heights.lower)
+                let minimumScale = min(1, available / max(1, upperMinimum + lowerMinimum))
+                let minimum = max(upperMinimum * minimumScale, available - heights.lower)
+                let maximum = max(minimum, min(heights.upper, available - lowerMinimum * minimumScale))
+                dividerRange = minimum...maximum
+                let preferred = defaults?.object(forKey: "gitSplitRatio").map { total * (($0 as? Double) ?? 0.6) } ?? total - 124
+                size = min(maximum, max(minimum, preferred))
+                lowerHeight = available - size
+            }
+            window?.invalidateCursorRects(for: self)
         } else {
-            preferred = isVertical ? current + (total - previous) * 98 / 300 : current * total / previous
+            let preferred = !positioned || previous <= 0 ? (total < 1100 ? 240 : 338) : current + (total - previous) * 98 / 300
+            size = constrained(preferred)
+            lowerHeight = max(0, total - size - dividerThickness)
         }
-        let size = constrained(preferred)
         resizing = true
         if isVertical {
             arrangedSubviews[0].frame = NSRect(x: 0, y: 0, width: size, height: bounds.height)
             arrangedSubviews[1].frame = NSRect(x: size + dividerThickness, y: 0, width: max(0, total - size - dividerThickness), height: bounds.height)
         } else {
             arrangedSubviews[0].frame = NSRect(x: 0, y: 0, width: bounds.width, height: size)
-            arrangedSubviews[1].frame = NSRect(x: 0, y: size + dividerThickness, width: bounds.width, height: max(0, total - size - dividerThickness))
+            arrangedSubviews[1].frame = NSRect(x: 0, y: size + dividerThickness, width: bounds.width, height: lowerHeight)
         }
         positioned = true; resizing = false
     }
 
     fileprivate func saveDividerPosition() {
-        guard !isVertical, positioned, !resizing, bounds.height > 0, NSApp.currentEvent?.type == .leftMouseDragged else { return }
+        guard !isVertical, canResize, positioned, !resizing, bounds.height > 0, NSApp.currentEvent?.type == .leftMouseDragged else { return }
         defaults?.set(arrangedSubviews[0].frame.height / bounds.height, forKey: "gitSplitRatio")
     }
 
