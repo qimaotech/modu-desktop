@@ -119,6 +119,7 @@ extension WorkspaceService {
                 let resources = [Resource.group(name)] + group.repositories.map { Resource.member(name, $0) }
                 if stopped { result.items += resources.map(ItemResult.notProcessed); continue }
                 do {
+                    progress(.init(Resource.group(name).path, .checkingRepository))
                     let plans = try await creationPlans(name, members: group.repositories, record: record)
                     for plan in plans {
                         if stopped { result.items.append(.notProcessed(plan.resource)); continue }

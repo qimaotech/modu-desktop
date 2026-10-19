@@ -47,7 +47,7 @@ struct OperationProgressView: View {
                 }
                 Spacer(minLength: 0)
                 Button(operationPresentation.text.t("Cancel", "取消")) { operations.cancel() }.keyboardShortcut(.cancelAction)
-                    .disabled(!operations.busy || operations.cancelling || progress?.cancellable == false)
+                    .disabled(!operations.canCancel)
             }.controlSize(.regular)
         }.font(.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background).interactiveDismissDisabled(operations.busy)
     }

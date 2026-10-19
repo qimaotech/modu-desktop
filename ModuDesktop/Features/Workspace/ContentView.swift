@@ -23,7 +23,7 @@ struct ContentView: View {
                         Text(model.presentation.repositoryUpdateProgressText).monospacedDigit()
                         Button { model.cancel() } label: { DesignIcon(name: "Cancel", size: 20) }
                             .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
-                            .disabled(model.progress?.cancellable == false)
+                            .disabled(!model.operations.canCancel)
                             .help(model.openingWorkspace ? model.t("Cancel Reload", "取消重新加载") : model.t("Cancel Update", "取消更新"))
                             .accessibilityLabel(model.openingWorkspace ? model.t("Cancel Reload", "取消重新加载") : model.t("Cancel Update", "取消更新"))
                     }

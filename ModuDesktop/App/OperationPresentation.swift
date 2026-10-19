@@ -45,7 +45,10 @@ final class OperationPresentation {
     }
 
     func operationProgressPhaseText(for progress: OperationProgress?) -> String {
-        if cancelling, progress?.cancellable != false { return t("Cancelling…", "正在取消…") }
+        if cancelling {
+            if progress?.cancellable == false { return t("Finishing current item before cancellation…", "正在完成当前项，随后取消…") }
+            return t("Cancelling…", "正在取消…")
+        }
         return progress.map { text.statusText($0.phase.rawValue) } ?? t("Working…", "正在处理…")
     }
 

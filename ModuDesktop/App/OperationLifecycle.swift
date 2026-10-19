@@ -11,6 +11,7 @@ final class OperationLifecycle {
     private(set) var task: Task<Void, Never>?
     private var generation = 0
     var busy: Bool { kind != nil }
+    var canCancel: Bool { busy && !cancelling }
 
     func begin(_ kind: Kind) -> Int? {
         guard !busy else { return nil }
@@ -22,6 +23,7 @@ final class OperationLifecycle {
     func attach(_ task: Task<Void, Never>?, to generation: Int) {
         guard isCurrent(generation) else { return }
         self.task = task
+        if cancelling { task?.cancel() }
     }
 
     func report(_ progress: OperationProgress, for generation: Int) {
@@ -32,7 +34,7 @@ final class OperationLifecycle {
     func isCurrent(_ generation: Int) -> Bool { self.generation == generation && busy }
 
     func cancel() {
-        guard busy, progress?.cancellable != false else { return }
+        guard canCancel else { return }
         cancelling = true
         task?.cancel()
     }

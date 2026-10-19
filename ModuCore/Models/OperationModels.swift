@@ -97,6 +97,7 @@ public struct OperationProgress: Sendable {
     public let phase: OperationPhase
     public let completed: Int
     public let total: Int
+    // Whether this phase can be interrupted; cancellation requests are accepted even when false.
     public let cancellable: Bool
     public let snapshot: WorkspaceRecord?
     public let counts: (added: Int, skipped: Int, failed: Int)?

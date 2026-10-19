@@ -17,19 +17,32 @@ import Testing
         #expect(!lifecycle.busy && lifecycle.task == nil)
     }
 
-    @Test func cancellationHonorsTheCurrentCriticalSection() async throws {
+    @Test func cancellationIsAcceptedDuringCriticalSections() async throws {
         let lifecycle = OperationLifecycle()
         let token = try #require(lifecycle.begin(.setup))
         let task = Task<Void, Never> { try? await Task.sleep(for: .seconds(30)) }
         lifecycle.attach(task, to: token)
         lifecycle.report(.init("workspace", .saving, cancellable: false), for: token)
+        #expect(lifecycle.canCancel)
         lifecycle.cancel()
-        #expect(!lifecycle.cancelling && !task.isCancelled)
+        #expect(lifecycle.cancelling && task.isCancelled && !lifecycle.canCancel)
         lifecycle.report(.init("workspace", .openingWorkspace), for: token)
         lifecycle.cancel()
         await task.value
         #expect(lifecycle.cancelling && task.isCancelled)
         lifecycle.finish(token)
-        #expect(!lifecycle.busy && !lifecycle.cancelling && lifecycle.progress == nil)
+        #expect(!lifecycle.busy && !lifecycle.cancelling && lifecycle.progress == nil && !lifecycle.canCancel)
+    }
+
+    @Test func cancellationBeforeTaskAttachmentIsRetained() async throws {
+        let lifecycle = OperationLifecycle()
+        let token = try #require(lifecycle.begin(.management))
+        lifecycle.cancel()
+        let task = Task<Void, Never> { try? await Task.sleep(for: .seconds(30)) }
+        lifecycle.attach(task, to: token)
+        await task.value
+        #expect(lifecycle.cancelling && task.isCancelled && !lifecycle.canCancel)
+        lifecycle.finish(token)
+        #expect(lifecycle.begin(.management) != nil && lifecycle.canCancel)
     }
 }

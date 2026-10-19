@@ -19,7 +19,9 @@ extension WorkspaceService {
             try checkCancellation()
             let name = try RepositoryIdentity(repository.url).name
             item.resource = .repository(name)
+            progress(.init(name, .checkingRepository))
             do { try await git.checkRepository(record.rootURL, main: true) }
+            catch let error as ModuError where error.code == "cancelled" { throw error }
             catch { throw ModuError("workspace-unavailable", "Workspace repository is unavailable: \(ModuError.wrap(error).message)") }
             let target = try PathSafety.child("repositories/\(name)", of: record.rootURL)
             if let existing = record.repositories.first(where: { $0.id.lowercased() == name.lowercased() }) {
@@ -31,7 +33,6 @@ extension WorkspaceService {
                 return item
             }
             guard !PathSafety.exists(target) else { throw ModuError("path-conflict", "Repository target already exists: \(target.path)") }
-            progress(.init(name, .checkingRepository))
             let branch = try await remoteDefault(repository.url, at: record.rootURL)
             let temp = record.rootURL.appending(path: "repositories/.modu-clone-\(UUID().uuidString)")
             newDirectory = temp

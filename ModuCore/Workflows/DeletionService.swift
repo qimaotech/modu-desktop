@@ -154,20 +154,23 @@ extension WorkspaceService {
             try checkCancellation()
             let resource = target.resource
             let path = try PathSafety.child(resource.path, of: record.rootURL)
-            progress(.init(resource.path, .deleting, cancellable: false))
             if resource.kind == .repository {
                 try await checkUnmanagedWorktrees(resource.repo!, record: record)
                 guard !record.groups.values.contains(where: { $0.repositories.contains(resource.repo!) }) else { throw ModuError("resource-unavailable", "Repository members must be removed first.") }
+            } else if resource.kind == .group {
+                guard record.groups[resource.group!]?.repositories.isEmpty == true else { throw ModuError("resource-unavailable", "Group still has members.") }
+                if PathSafety.exists(path) { try await checkNestedRepositories(path, group: resource.group!, record: record) }
+            }
+            try checkCancellation()
+            // Accept cancellation requests while non-cancellable commands finish this resource.
+            progress(.init(resource.path, .deleting, cancellable: false))
+            if resource.kind == .repository {
                 if PathSafety.exists(path) { let trash = try trashDirectory(path); item.trashPath = trash.path; item.effects.append(.init("move-to-trash", path.path)) }
                 var candidate = record; candidate.repositories.removeAll { $0.id == resource.repo }
                 try persist(candidate, into: &record)
                 item.effects.append(.init("remove-declaration", resource.path))
             } else {
                 let repository = resource.repo.map { record.repositoryURL($0) } ?? record.rootURL
-                if resource.kind == .group {
-                    guard record.groups[resource.group!]?.repositories.isEmpty == true else { throw ModuError("resource-unavailable", "Group still has members.") }
-                    if PathSafety.exists(path) { try await checkNestedRepositories(path, group: resource.group!, record: record) }
-                }
                 if target.registered || target.exists {
                     item.effects.append(.init("remove-worktree", path.path, state: "unknown"))
                     _ = try await git.run(["worktree", "remove", "--force", "--", path.path], at: repository, cancellable: false)
