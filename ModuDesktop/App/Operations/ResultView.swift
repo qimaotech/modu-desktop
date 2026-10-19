@@ -12,7 +12,7 @@ struct ResultView: View {
             VStack(alignment: .leading, spacing: 16) {
                 resultHeader
                 if let workspace = result.workspace { Text(text.t("Workspace: ", "工作区：") + (workspace as NSString).abbreviatingWithTildeInPath).textSelection(.enabled) }
-                Text(text.t("The workspace must have no registered repositories or worktree groups, and no content in its repositories or worktrees folders.", "工作区不能包含已登记的仓库或工作树组，repositories 和 worktrees 目录也必须为空。"))
+                Text(text.t("The workspace must have no registered repositories or worktree groups, and no content in its repositories or worktrees folders.", "工作区不能包含已登记的仓库或工作树分组，repositories 和 worktrees 目录也必须为空。"))
                 Text(text.t("Choose another workspace in Settings, then try again. Your files and configuration have not been changed.", "请在设置中选择其他工作区后重试。你的文件和配置未被修改。"))
                 Divider()
                 Button(text.t("OK", "好"), action: dismiss).keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)

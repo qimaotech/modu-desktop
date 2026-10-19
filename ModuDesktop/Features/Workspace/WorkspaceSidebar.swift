@@ -103,8 +103,8 @@ struct WorkspaceSidebar: View {
             }
             Button { management.sheet = add } label: { DesignIcon(name: "Plus").frame(width: 24, height: 24) }
                 .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
-                .help(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树组"))
-                .accessibilityLabel(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树组"))
+                .help(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树分组"))
+                .accessibilityLabel(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树分组"))
                 .disabled(operations.busy || workspace.record == nil || (add == .create && workspace.sortedRepositories.isEmpty))
         }.frame(height: 32)
     }

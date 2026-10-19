@@ -183,12 +183,12 @@ struct ManagementView: View {
     private var title: String {
         switch sheet {
         case .add: presentation.text.t("Add Repository", "添加仓库")
-        case .create: presentation.text.t("Create Worktree Group", "创建工作树组")
-        case .edit: presentation.text.t("Edit Worktree Group", "编辑工作树组")
+        case .create: presentation.text.t("Create Worktree Group", "创建工作树分组")
+        case .edit: presentation.text.t("Edit Worktree Group", "编辑工作树分组")
         case .delete:
             switch management.deletionPresentation.request {
             case .repository: presentation.text.t("Delete Repository?", "删除仓库？")
-            case .group: presentation.text.t("Delete Worktree Group?", "删除工作树组？")
+            case .group: presentation.text.t("Delete Worktree Group?", "删除工作树分组？")
             default: presentation.text.t("Delete Linked Worktree?", "删除关联工作树？")
             }
         }
@@ -209,8 +209,8 @@ struct ManagementView: View {
         if management.progressPresentation?.importFileName != nil { return presentation.text.t("Importing repositories…", "正在导入仓库…") }
         switch sheet {
         case .add: return presentation.text.t("Adding repository…", "正在添加仓库…")
-        case .create: return presentation.text.t("Creating worktree group…", "正在创建工作树组…")
-        case .edit: return presentation.text.t("Updating worktree group…", "正在更新工作树组…")
+        case .create: return presentation.text.t("Creating worktree group…", "正在创建工作树分组…")
+        case .edit: return presentation.text.t("Updating worktree group…", "正在更新工作树分组…")
         case .delete: return presentation.text.t("Deleting…", "正在删除…")
         }
     }
