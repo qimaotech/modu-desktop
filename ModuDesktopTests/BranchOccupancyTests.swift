@@ -16,10 +16,10 @@ struct BranchOccupancyTests {
         let result = await f.service.createGroup("Main", repositories: ["repo"], at: f.root)
 
         if caseSensitive {
-            #expect(result.status == "success", "\(result.message ?? "") \(result.items)")
-            #expect(await f.service.remove(.group("Main"), at: f.root, execute: true).status == "success")
+            #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
+            #expect(await f.service.remove(.group("Main"), at: f.root, execute: true).status == .success)
         } else {
-            #expect(result.status == "failed" && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
+            #expect(result.status == .failed && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
             #expect(result.items.allSatisfy { $0.effects.isEmpty })
             #expect(!PathSafety.exists(record.groupURL("Main")))
         }
@@ -34,7 +34,7 @@ struct BranchOccupancyTests {
     func deletionProtectsBranchesCheckedOutUnderCaseAliases(_ kind: String, _ confirmed: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
         _ = try await prepare(f)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
         let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let worktree = kind == "root" ? record.groupURL("feature") : record.memberURL("feature", "repo")
@@ -61,10 +61,10 @@ struct BranchOccupancyTests {
         }
         let result = await f.service.remove(.group("feature"), at: f.root, authorization: authorization, execute: !confirmed)
         if caseSensitive {
-            #expect(result.status == "success", "\(result.message ?? "") \(result.items)")
+            #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
             #expect(try f.service.store.load(f.root).groups.isEmpty)
         } else {
-            #expect(result.status == "failed" && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
+            #expect(result.status == .failed && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
             #expect(result.items.allSatisfy { $0.effects.isEmpty })
             #expect(try f.service.store.load(f.root) == record)
             #expect(PathSafety.exists(record.groupURL("feature")))
@@ -77,8 +77,8 @@ struct BranchOccupancyTests {
     }
 
     private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         return try f.service.store.load(f.root)
     }
 }

@@ -6,7 +6,7 @@ struct GitSSHTests {
     @Test(arguments: ["global", "local", "command", "executable", "default"])
     func honorsSSHCommandPrecedenceWithoutChangingArguments(_ source: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let probe = try SSHProbe(f, defaultSSH: source == "default")
         var runner = probe.runner
         switch source {
@@ -33,13 +33,13 @@ struct GitSSHTests {
 
     @Test func configuredSSHSupportsRepositoryAdditionAndUpdate() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let probe = try SSHProbe(f)
         let git = Git(runner: probe.runner)
         _ = try await git.run(["config", "--global", "core.sshCommand", probe.command], at: f.root)
         let service = WorkspaceService(store: f.service.store, git: git, trash: f.service.trashDirectory)
         let added = await service.addRepository(.init(url: "ssh://git@modu-ssh.invalid/repo.git"), at: f.root)
-        try #require(added.status == "success", "\(added.items)")
+        try #require(added.status == .success, "\(added.items)")
         let repository = f.root.appending(path: "repositories/repo")
         _ = try await git.run(["config", "core.sshCommand", probe.command], at: repository)
         _ = try await git.run(["config", "--global", "core.sshCommand", "/usr/bin/false"], at: f.root)
@@ -48,7 +48,7 @@ struct GitSSHTests {
         _ = try await f.service.git.run(["commit", "-am", "update fixture"], at: source)
         _ = try await f.service.git.run(["push", f.directory.appending(path: "repo.git").path, "main"], at: source)
         let updated = await service.updateRepositories(at: f.root)
-        #expect(updated.status == "success", "\(updated.items)")
+        #expect(updated.status == .success, "\(updated.items)")
         #expect(updated.items.first?.data?["disposition"] == "updated")
         #expect(try String(contentsOf: repository.appending(path: "README"), encoding: .utf8) == "updated over configured SSH\n")
     }

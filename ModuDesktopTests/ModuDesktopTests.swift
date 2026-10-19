@@ -33,7 +33,7 @@ struct ModuCoreTests {
         switch kind {
         case "recorded": try fixture.service.store.save(WorkspaceRecord(root: PathSafety.canonical(root).path))
         case "missing-metadata":
-            #expect(await fixture.service.openWorkspace(root).status == "success")
+            #expect(await fixture.service.openWorkspace(root).status == .success)
             try await fixture.commitWorkspace()
             try FileManager.default.removeItem(at: root.appending(path: ".git"))
         default: break
@@ -41,7 +41,7 @@ struct ModuCoreTests {
         #expect(try await fixture.service.candidate(root) == PathSafety.canonical(root))
         #expect(!PathSafety.exists(root.appending(path: ".git")))
         let opened = await fixture.service.openWorkspace(root)
-        #expect(opened.status == "success", "\(opened.items)")
+        #expect(opened.status == .success, "\(opened.items)")
         #expect(opened.items.flatMap(\.effects).contains { $0.action == "git-init" })
         try await fixture.service.git.checkRepository(root, main: true)
         #expect(try await fixture.service.git.oid("HEAD", at: root) != nil)
@@ -49,7 +49,7 @@ struct ModuCoreTests {
         #expect(try String(contentsOf: notes, encoding: .utf8) == "keep me")
         #expect(try await fixture.service.load(root).repositories.isEmpty)
         let reopened = await fixture.service.openWorkspace(root)
-        #expect(reopened.status == "success")
+        #expect(reopened.status == .success)
         #expect(!reopened.items.flatMap(\.effects).contains { $0.action == "git-init" })
     }
     @Test(arguments: ["valid", "missing", "invalid", "missing-root"])
@@ -89,7 +89,7 @@ struct ModuCoreTests {
         do { _ = try await fixture.service.candidate(fixture.root); Issue.record("Expected the nonempty directory to be rejected.") }
         catch { #expect((error as? ModuError)?.code == "workspace-not-empty") }
         let opened = await fixture.service.openWorkspace(fixture.root)
-        #expect(opened.status == "failed" && opened.items.first?.reasonCode == "workspace-not-empty")
+        #expect(opened.status == .failed && opened.items.first?.reasonCode == "workspace-not-empty")
         #expect(opened.items.allSatisfy { $0.effects.isEmpty })
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
         #expect(!PathSafety.exists(fixture.service.store.recordURL(fixture.root)))
@@ -105,7 +105,7 @@ struct ModuCoreTests {
         default: _ = try await fixture.service.git.run(["worktree", "add", "-b", "feature", fixture.root.path], at: fixture.directory.appending(path: "source"))
         }
         let opened = await fixture.service.openWorkspace(fixture.root)
-        #expect(opened.status == "failed")
+        #expect(opened.status == .failed)
         #expect(opened.items.allSatisfy { $0.effects.isEmpty })
         #expect(!PathSafety.exists(fixture.service.store.recordURL(fixture.root)))
         #expect(!PathSafety.exists(fixture.root.appending(path: ".gitignore")))
@@ -114,17 +114,17 @@ struct ModuCoreTests {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let opened = await fixture.service.openWorkspace(fixture.root)
-        #expect(opened.status == "success", "\(opened.items)")
+        #expect(opened.status == .success, "\(opened.items)")
         let ignoreFile = fixture.root.appending(path: ".gitignore")
         var ignoreContents = try Data(contentsOf: ignoreFile)
         ignoreContents.append(Data("/repo/\n".utf8))
         let added = await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root)
-        #expect(added.status == "success", "\(added.items)")
+        #expect(added.status == .success, "\(added.items)")
         #expect(try Data(contentsOf: ignoreFile) == ignoreContents)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         #expect(try Data(contentsOf: ignoreFile) == ignoreContents)
         let created = await fixture.service.createGroup("feature-test", repositories: ["repo"], at: fixture.root)
-        #expect(created.status == "success", "\(created.items) \(created.message ?? "")")
+        #expect(created.status == .success, "\(created.items) \(created.message ?? "")")
         let record = try await fixture.service.load(fixture.root)
         #expect(record.groups["feature-test"]?.repositories == ["repo"])
         #expect(try await fixture.service.git.registrations(at: fixture.root).count == 2)
@@ -132,17 +132,17 @@ struct ModuCoreTests {
         let preview = try await fixture.service.previewDelete(.member(group: "feature-test", repo: "repo"), at: fixture.root)
         #expect(preview[0].branch == "feature-test")
         let removed = await fixture.service.remove(.member(group: "feature-test", repo: "repo"), at: fixture.root, authorization: preview)
-        #expect(removed.status == "success", "\(removed.items)")
+        #expect(removed.status == .success, "\(removed.items)")
         #expect(try await fixture.service.load(fixture.root).groups["feature-test"]?.repositories == [])
         let deleted = await fixture.service.remove(.group("feature-test"), at: fixture.root, execute: true)
-        #expect(deleted.status == "success", "\(deleted.items) \(deleted.message ?? "")")
+        #expect(deleted.status == .success, "\(deleted.items) \(deleted.message ?? "")")
         #expect(try await fixture.service.load(fixture.root).groups.isEmpty)
     }
     @Test(arguments: [false, true])
     func newWorkspaceIgnoreIncludesDefaultRulesBeforeModuSection(_ existingGit: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         if existingGit { _ = try await fixture.service.git.run(["init"], at: fixture.root) }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let file = fixture.root.appending(path: ".gitignore")
         let expected = Data("""
         # Logs
@@ -187,7 +187,7 @@ struct ModuCoreTests {
         let ignored = try await fixture.service.git.run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--"] + ignoredPaths + [".vscode/extensions.json", "README.md"], at: fixture.root)
         #expect(ignored.text.components(separatedBy: "\n") == ignoredPaths)
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         #expect(try Data(contentsOf: file) == expected)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
     }
@@ -223,7 +223,7 @@ struct ModuCoreTests {
         let lease = try f.service.store.lock(f.root)
         #expect(throws: ModuError.self) { try f.service.store.lock(f.root) }
         lease.unlock()
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let main = f.root.appending(path: "repositories/repo")
         _ = try await f.service.git.run(["worktree", "add", "-b", "outside", f.directory.appending(path: "outside").path], at: main)
         let result = await f.service.remove(.repository("repo"), at: f.root, execute: true)

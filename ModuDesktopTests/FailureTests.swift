@@ -2,12 +2,13 @@ import Foundation
 import Darwin
 import Testing
 @testable import ModuCore
+@testable import ModuDesktop
 
 struct FailureTests {
     @Test(arguments: ["remote", "clone", "checkout", "save", "save-unknown"])
     func failedRepositoryAdditionDoesNotUpdateIgnore(_ stage: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let ignoreFile = f.root.appending(path: ".gitignore")
         let before = try Data(contentsOf: ignoreFile)
         let remote = f.directory.appending(path: "repo.git")
@@ -34,9 +35,9 @@ struct FailureTests {
         }
         let service = WorkspaceService(store: store, git: git, trash: f.service.trashDirectory)
         let result = await service.addRepository(.init(url: f.remoteURL), at: f.root) { progress in
-            if stage == "clone", progress.phase == "Cloning…" { try? FileManager.default.removeItem(at: remote) }
+            if stage == "clone", progress.phase == .cloning { try? FileManager.default.removeItem(at: remote) }
         }
-        #expect(result.status == "failed")
+        #expect(result.status == .failed)
         let item = try #require(result.items.first)
         #expect(item.reasonCode == (stage == "save-unknown" ? "save-outcome-unknown" : stage == "save" ? "configuration-write-failed" : "git-failed"))
         #expect(!item.effects.contains { $0.action == "update-ignore" })
@@ -52,15 +53,15 @@ struct FailureTests {
 
     @Test func repositoryAdditionCancelledBeforeSavingDoesNotUpdateIgnore() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let ignoreFile = f.root.appending(path: ".gitignore")
         let before = try Data(contentsOf: ignoreFile)
         let result = await Task {
             await f.service.addRepository(.init(url: f.remoteURL), at: f.root) { progress in
-                if progress.phase == "Cloning…" { withUnsafeCurrentTask { $0?.cancel() } }
+                if progress.phase == .cloning { withUnsafeCurrentTask { $0?.cancel() } }
             }
         }.value
-        #expect(result.status == "cancelled")
+        #expect(result.status == .cancelled)
         #expect(result.items.allSatisfy { $0.effects.isEmpty })
         #expect(try f.service.store.load(f.root).repositories.isEmpty)
         #expect(try Data(contentsOf: ignoreFile) == before)
@@ -69,7 +70,7 @@ struct FailureTests {
     @Test(arguments: ["single", "batch"], [false, true])
     func cancelledRepositoryCleanupReportsItsActualOutcome(_ kind: String, _ cleanupFails: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let targetURL = kind == "single" ? f.remoteURL : "https://modu-test.invalid/next.git"
         let targetName = try RepositoryIdentity(targetURL).name
         let started = f.directory.appending(path: "checkout-started"), release = f.directory.appending(path: "checkout-release")
@@ -111,10 +112,10 @@ struct FailureTests {
         try #require(PathSafety.exists(started))
         task.cancel()
         let result = await task.value
-        #expect(result.status == (cleanupFails ? (kind == "single" ? "failed" : "partial-success") : "cancelled"))
+        #expect(result.status.rawValue == (cleanupFails ? (kind == "single" ? "failed" : "partial-success") : "cancelled"))
         #expect(result.exitCode == (cleanupFails ? 1 : 130))
         let item = try #require(result.items.first { $0.resource.repo == targetName })
-        #expect(item.status == (cleanupFails ? "failed" : "cancelled"))
+        #expect(item.status.rawValue == (cleanupFails ? "failed" : "cancelled"))
         #expect(item.reasonCode == (cleanupFails ? "cleanup-failed" : "cancelled"))
         #expect(item.causeCode == (cleanupFails ? "cancelled" : nil))
         let effect = try #require(item.effects.first { $0.action == "clone" })
@@ -125,7 +126,7 @@ struct FailureTests {
         #expect(!PathSafety.exists(record.repositoryURL(targetName)))
         #expect(try String(contentsOf: f.root.appending(path: ".gitignore"), encoding: .utf8).contains("/\(targetName)/") == false)
         if kind == "batch" {
-            #expect(result.items.first?.status == "success")
+            #expect(result.items.first?.status == .success)
             #expect(result.items.last?.reasonCode == "not-processed")
             #expect(!PathSafety.exists(record.repositoryURL("later")))
         }
@@ -139,14 +140,14 @@ struct FailureTests {
         runner.environment["GIT_TRACE"] = trace.path
         let service = WorkspaceService(store: f.service.store, git: Git(runner: runner))
         let result = await service.addRepository(.init(url: "file:///tmp/repo.git"), at: f.root)
-        #expect(result.status == "failed" && result.reasonCode == "invalid-input" && result.exitCode == 2)
+        #expect(result.status == .failed && result.reasonCode == "invalid-input" && result.exitCode == 2)
         #expect(result.items.isEmpty && !PathSafety.exists(trace))
         #expect(!PathSafety.exists(service.store.support) && !PathSafety.exists(f.root.appending(path: "repositories")))
     }
 
     @Test func repositoryIgnoreIsWrittenAfterSavingAndCompletesDespiteLateCancellation() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let ignoreFile = f.root.appending(path: ".gitignore")
         let before = try Data(contentsOf: ignoreFile)
         let store = WorkspaceStore(support: f.service.store.support) { data, url in
@@ -157,7 +158,7 @@ struct FailureTests {
         }
         let service = WorkspaceService(store: store, git: f.service.git, trash: f.service.trashDirectory)
         let result = await Task { await service.addRepository(.init(url: f.remoteURL), at: f.root) }.value
-        #expect(result.status == "success")
+        #expect(result.status == .success)
         #expect(result.items.first?.effects.map(\.action) == ["clone", "save-configuration", "update-ignore", "commit-workspace-files"])
         #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])
         #expect(try String(contentsOf: ignoreFile, encoding: .utf8).contains("/repo/\n"))
@@ -165,14 +166,14 @@ struct FailureTests {
 
     @Test func ignoreFailureKeepsSuccessfullyAddedRepositoryAndCanBeRetried() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let file = f.root.appending(path: ".gitignore")
         let original = f.directory.appending(path: "user-ignore")
         try FileManager.default.moveItem(at: file, to: original)
         try FileManager.default.createSymbolicLink(at: file, withDestinationURL: original)
         let before = try Data(contentsOf: original)
         let result = await f.service.addRepository(.init(url: f.remoteURL), at: f.root)
-        #expect(result.status == "failed")
+        #expect(result.status == .failed)
         let item = try #require(result.items.first)
         #expect(item.reasonCode == "ignore-unavailable" && item.data?["disposition"] == "added")
         #expect(item.effects.map(\.action) == ["clone", "save-configuration"])
@@ -182,7 +183,7 @@ struct FailureTests {
         try FileManager.default.removeItem(at: file)
         try FileManager.default.moveItem(at: original, to: file)
         let retried = await f.service.addRepository(.init(url: f.remoteURL), at: f.root)
-        #expect(retried.status == "success" && retried.items.first?.data?["disposition"] == "already-exists")
+        #expect(retried.status == .success && retried.items.first?.data?["disposition"] == "already-exists")
         #expect(retried.items.first?.effects.map(\.action) == ["update-ignore", "commit-workspace-files"])
     }
 
@@ -455,7 +456,7 @@ struct FailureTests {
         let failing = WorkspaceStore(support: f.service.store.support) { _, _ in throw ModuError("injected", "save failed") }
         let service = WorkspaceService(store: failing, git: f.service.git)
         let result = await service.remove(.group("feature"), at: f.root, execute: true)
-        #expect(result.status == "failed")
+        #expect(result.status == .failed)
         #expect(result.items[0].effects.first?.state == "applied")
         #expect(result.items.last?.resource == .group("feature"))
         #expect(result.items.last?.reasonCode == "not-processed")
@@ -463,7 +464,7 @@ struct FailureTests {
         #expect(try f.service.store.load(f.root).groups["feature"]?.repositories == ["repo"])
         #expect(try await f.service.git.oid("refs/heads/feature", at: f.root.appending(path: "repositories/repo")) != nil)
         #expect(!PathSafety.exists(f.root.appending(path: "worktrees/feature/repo")))
-        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == "success")
+        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
     }
     @Test func confirmationDoesNotBypassNewUnmanagedWorktree() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
@@ -548,12 +549,12 @@ struct FailureTests {
         let result = await f.service.addRepository(.init(url: "https://secret-token@example.invalid/repo.git"), at: f.root)
         let encoded = String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
         #expect(!encoded.contains("secret-token"))
-        #expect(result.status == "failed")
+        #expect(result.status == .failed)
     }
     private func prepare(_ f: Fixture) async throws {
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         try await f.commitWorkspace()
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
     }
 }

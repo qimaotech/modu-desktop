@@ -10,9 +10,19 @@
 ├── .github/workflows/            # GitHub CI 与发布流程
 ├── build/                        # 本地构建与打包产物（Git 忽略）
 ├── docs/                         # 按需读取的开发文档
-├── ModuCLI/                      # modu-cli 参数解析与输出
-├── ModuCore/                     # App 与 CLI 共享的业务、Git 和文件系统服务
-├── ModuDesktop/                  # macOS App 入口、界面与状态
+├── ModuCLI/                      # modu-cli 入口与参数解析
+│   ├── Commands/                # 工作区、仓库与分组命令
+│   └── Support/                 # 公共选项、输出与参数归一化
+├── ModuCore/                     # App 与 CLI 共享的业务
+│   ├── Models/                  # 领域记录、资源标识与操作结果
+│   ├── Workflows/               # 工作区、仓库、分组与 YAML 用例
+│   ├── Infrastructure/          # Git、进程、文件系统、持久化与安装
+│   └── Debug/                   # 隔离测试场景
+├── ModuDesktop/                  # macOS App
+│   ├── App/                     # 依赖组装、启动、命令与全局操作协调
+│   ├── Features/                # Workspace、RepositoryBrowser、Management、Setup、Settings
+│   ├── Platform/                # AppKit 桥接与外部工具
+│   ├── SharedUI/                # 通用组件、样式与文案格式化
 │   ├── AppIcon.icon/             # App 图标源文件
 │   ├── Assets.xcassets/          # 界面图标与颜色资源
 │   └── Resources/modu-workflow/  # 随 App 分发的工作流 skill
@@ -29,14 +39,25 @@
 
 | 需要了解 | 入口 |
 | --- | --- |
-| 工作区、仓库与 worktree 业务 | [ModuCore/](../ModuCore/)，从 [WorkspaceService.swift](../ModuCore/WorkspaceService.swift) 开始 |
-| 数据记录与路径安全 | [Models.swift](../ModuCore/Models.swift)、[WorkspaceStore.swift](../ModuCore/WorkspaceStore.swift)、[PathSafety.swift](../ModuCore/PathSafety.swift) |
-| App 启动、界面状态与文案 | [ModuDesktopApp.swift](../ModuDesktop/ModuDesktopApp.swift)、[AppModel.swift](../ModuDesktop/AppModel.swift)、[InterfaceText.swift](../ModuDesktop/InterfaceText.swift) |
-| CLI 与内置工作流提示词 | [main.swift](../ModuCLI/main.swift)、[modu-workflow/SKILL.md](../ModuDesktop/Resources/modu-workflow/SKILL.md)；用法查看 CLI 的 `--help` |
-| 界面样式与图标 | [DesignStyle.swift](../ModuDesktop/DesignStyle.swift)、[Assets.xcassets/](../ModuDesktop/Assets.xcassets/)、[AppIcon.icon/](../ModuDesktop/AppIcon.icon/) |
+| 工作区、仓库与 worktree 业务 | [Workflows/](../ModuCore/Workflows/)，从 [WorkspaceService.swift](../ModuCore/Workflows/WorkspaceService.swift) 开始 |
+| 领域记录与操作结果 | [Models/](../ModuCore/Models/)，包括工作区、Git、资源与操作结果类型 |
+| Git、进程、文件系统与持久化 | [Infrastructure/](../ModuCore/Infrastructure/)，命令统一使用 [CommandRunner.swift](../ModuCore/Infrastructure/Process/CommandRunner.swift) |
+| App 启动与应用级协调 | [ModuDesktopApp.swift](../ModuDesktop/App/ModuDesktopApp.swift)、[AppModel.swift](../ModuDesktop/App/AppModel.swift)、[AppCommands.swift](../ModuDesktop/App/AppCommands.swift) |
+| 全局操作与结果呈现 | [OperationLifecycle.swift](../ModuDesktop/App/OperationLifecycle.swift)、[OperationPresentation.swift](../ModuDesktop/App/OperationPresentation.swift)、[操作弹窗](../ModuDesktop/App/Operations/) |
+| 工作区加载、侧栏与选择 | [Workspace/](../ModuDesktop/Features/Workspace/)、[WorkspaceModel.swift](../ModuDesktop/Features/Workspace/WorkspaceModel.swift) |
+| Git 详情读取、缓存与分页 | [ResourceSnapshot.swift](../ModuCore/Models/ResourceSnapshot.swift)、[ResourceInspection.swift](../ModuCore/Workflows/ResourceInspection.swift)、[RepositoryBrowser/](../ModuDesktop/Features/RepositoryBrowser/) |
+| 管理表单、预览与增删操作 | [Management/](../ModuDesktop/Features/Management/)、[ManagementModel.swift](../ModuDesktop/Features/Management/ManagementModel.swift) |
+| 初始化与设置 | [Setup/](../ModuDesktop/Features/Setup/)、[Settings/](../ModuDesktop/Features/Settings/) |
+| macOS 桥接与外部工具 | [Platform/](../ModuDesktop/Platform/) |
+| CLI 与内置工作流提示词 | [main.swift](../ModuCLI/main.swift)、[Commands/](../ModuCLI/Commands/)、[modu-workflow/SKILL.md](../ModuDesktop/Resources/modu-workflow/SKILL.md)；用法查看 CLI 的 `--help` |
+| 通用界面、样式与文案 | [SharedUI/](../ModuDesktop/SharedUI/)、[Assets.xcassets/](../ModuDesktop/Assets.xcassets/)、[AppIcon.icon/](../ModuDesktop/AppIcon.icon/) |
 | 测试与夹具 | [ModuDesktopTests/](../ModuDesktopTests/) |
-| 临时 Git 场景 | [prepare_mock_workspace.py](../script/prepare_mock_workspace.py)、[MockWorkspaceFixture.swift](../ModuCore/MockWorkspaceFixture.swift)、[MockWorkspace.swift](../ModuDesktop/MockWorkspace.swift) |
+| 临时 Git 场景 | [prepare_mock_workspace.py](../script/prepare_mock_workspace.py)、[MockWorkspaceFixture.swift](../ModuCore/Debug/MockWorkspaceFixture.swift)、[MockWorkspace.swift](../ModuDesktop/App/Debug/MockWorkspace.swift) |
 | 构建配置与依赖 | [ModuDesktop.xcodeproj/](../ModuDesktop.xcodeproj/)、[Package.resolved](../ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved)、[Version.xcconfig](../Version.xcconfig) |
+
+三个产品 target 保持为 `ModuDesktop`、`ModuCore` 和 `ModuCLI`，另保留现有测试 target。Desktop 与 CLI 依赖 Core；Core 不依赖界面。功能目录用于组织源码，不增加 framework 或 package。
+
+`AppModel` 负责组装依赖、启动、工作区切换、外部工具与退出协调。`WorkspaceModel` 管理当前工作区、侧栏选择和详情读取；`ManagementModel` 管理表单、预览与管理操作；`RepositoryDetailModel` 管理详情缓存和分页。工作区与管理模型共享 `OperationLifecycle` 与 `OperationPresentation`，通过生命周期标识和功能上下文检查阻止过期异步结果覆盖当前状态；详情读取保留自身的取消、缓存与分页上下文检查。Core 保留业务规则和副作用，View 渲染状态并转发操作。
 
 ## 本地开发
 
@@ -88,4 +109,4 @@ Agent 临时验证按以下步骤收尾，失败或中断也适用；用户要�
 
 版本与构建号在 [Version.xcconfig](../Version.xcconfig) 维护；本地 `task package` 的输出目录与构建参数见 [package_app.sh](../script/package_app.sh)。
 
-[GitHub CI](../.github/workflows/ci.yml) 定义触发条件、工具链和发布流程；当前 CI 负责打包，测试在本地运行。发布时在目标提交上推送与产品版本一致的 `v<版本号>` tag。
+[GitHub CI](../.github/workflows/ci.yml) 定义触发条件、工具链和发布流程；仅在推送 `v*` tag 触发发布时运行测试，测试通过后打包并发布。分支 push、PR 和手动触发仅构建打包。发布时在目标提交上推送与产品版本一致的 `v<版本号>` tag。

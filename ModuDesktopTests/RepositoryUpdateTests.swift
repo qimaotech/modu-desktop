@@ -6,8 +6,8 @@ struct RepositoryUpdateTests {
     @Test(arguments: ["dirty", "staged", "untracked", "detached", "feature", "missing-base", "invalid-base", "origin-mismatch", "missing"])
     func preflightRejectsWithoutFetching(_ scenario: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let path = f.root.appending(path: "repositories/repo")
         let reason: String
         switch scenario {
@@ -44,10 +44,10 @@ struct RepositoryUpdateTests {
 
     @Test func pullsNamedBaseOnceAndLeavesLinkedWorktreeUntouched() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         try await f.commitWorkspace()
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         let member = f.root.appending(path: "worktrees/feature/repo")
         let original = try #require(await f.service.git.oid("HEAD", at: path))
@@ -75,15 +75,15 @@ struct RepositoryUpdateTests {
 
     @Test func divergentBaseDoesNotMergeOrRebaseLocalHistory() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "local"], at: path)
         let original = try #require(await f.service.git.oid("HEAD", at: path))
         _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "remote"], at: source)
         _ = try await f.service.git.run(["push", f.directory.appending(path: "repo.git").path, "main"], at: source)
         let result = await f.service.updateRepositories(at: f.root)
-        #expect(result.status == "failed")
+        #expect(result.status == .failed)
         #expect(result.items.first?.effects.first?.state == "applied")
         #expect(result.items.first?.data?["actual-head"] == original)
         #expect(result.items.first?.data?["working-tree"] == "clean")
@@ -105,9 +105,9 @@ struct RepositoryUpdateTests {
             try await batch.waitForStarts(8)
             for index in 0..<8 { try batch.release(index) }
             let result = await operation.value
-            #expect(result.status == "partial-success")
+            #expect(result.status == .partialSuccess)
             #expect(result.items.map(\.resource.repo) == (0..<8).map { "repo\($0)" })
-            #expect(result.items[3].status == "failed")
+            #expect(result.items[3].status == .failed)
             #expect(result.items.enumerated().allSatisfy { $0.offset == 3 || $0.element.data?["disposition"] == "up-to-date" })
             #expect(progress.values == Array(0...8))
         } catch {
@@ -124,9 +124,9 @@ struct RepositoryUpdateTests {
             #expect(throws: ModuError.self) { try batch.service.store.lock(batch.fixture.root) }
             operation.cancel()
             let result = await operation.value
-            #expect(result.status == "cancelled")
+            #expect(result.status == .cancelled)
             #expect(try batch.started().count == 6)
-            #expect(result.items.prefix(6).allSatisfy { $0.status == "cancelled" && $0.data?["working-tree"] == "clean" })
+            #expect(result.items.prefix(6).allSatisfy { $0.status == .cancelled && $0.data?["working-tree"] == "clean" })
             #expect(result.items.suffix(2).allSatisfy { $0.reasonCode == "not-processed" && $0.effects.isEmpty })
             let lease = try batch.service.store.lock(batch.fixture.root)
             lease.unlock()
@@ -152,8 +152,8 @@ private struct UpdateBatch {
     init() async throws {
         let f = try await Fixture()
         fixture = f
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         probe = f.directory.appending(path: "probe")
         for name in ["started", "release", "fail"] {
             try FileManager.default.createDirectory(at: probe.appending(path: name), withIntermediateDirectories: true)

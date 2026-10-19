@@ -14,10 +14,10 @@ struct WorktreeCreationTests {
         try await waitFor(probe.started)
         task.cancel()
         let result = await task.value
-        #expect(result.status == "cancelled", "\(result.items)")
+        #expect(result.status == .cancelled, "\(result.items)")
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
         let item = try #require(result.items.first { $0.resource == resource })
-        #expect(item.status == "cancelled" && item.reasonCode == "cancelled")
+        #expect(item.status == .cancelled && item.reasonCode == "cancelled")
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == nil)
         #expect(!PathSafety.exists(record.rootURL.appending(path: resource.path)))
         let saved = try f.service.store.load(f.root)
@@ -55,7 +55,7 @@ struct WorktreeCreationTests {
         try await waitFor(started)
         task.cancel()
         let result = await task.value
-        #expect(result.status == "cancelled", "\(result.items)")
+        #expect(result.status == .cancelled, "\(result.items)")
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == oid)
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
         #expect(!PathSafety.exists(record.rootURL.appending(path: resource.path)))
@@ -71,7 +71,7 @@ struct WorktreeCreationTests {
         try await waitFor(probe.started)
         task.cancel()
         let result = await task.value
-        #expect(result.status == "failed" && result.exitCode == 1)
+        #expect(result.status == .failed && result.exitCode == 1)
         let item = try #require(result.items.first)
         #expect(item.reasonCode == "cleanup-failed" && item.causeCode == "cancelled")
         #expect(item.effects.contains { $0.action == "create-branch" && $0.target == "feature" && $0.state == "unknown" })
@@ -90,7 +90,7 @@ struct WorktreeCreationTests {
         _ = try await f.service.git.run(["update-ref", kind == "root" ? "refs/heads/main" : "refs/remotes/origin/main", base], at: repository)
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", reused], at: repository)
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
-        #expect(result.status == "success" && result.exitCode == 0, "\(result.message ?? "") \(result.items)")
+        #expect(result.status == .success && result.exitCode == 0, "\(result.message ?? "") \(result.items)")
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
         let item = try #require(result.items.first { $0.resource == resource })
         let behind = ["behind", "diverged"].contains(history)
@@ -118,8 +118,8 @@ struct WorktreeCreationTests {
         let arguments = kind == "missing" ? ["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"] : ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"]
         _ = try await f.service.git.run(arguments, at: repository)
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
-        #expect(result.status == "success" && result.hasWarnings)
-        let member = try #require(result.items.first { $0.resource.kind == "member" })
+        #expect(result.status == .success && result.hasWarnings)
+        let member = try #require(result.items.first { $0.resource.kind == .member })
         #expect(member.data?["warning-code"] == "branch-comparison-unavailable")
         #expect(member.data?["behind-count"] == nil && member.data?["comparison-error"] != nil)
         #expect(try await f.service.git.oid("HEAD", at: record.memberURL("feature", "repo")) == oid)
@@ -128,15 +128,15 @@ struct WorktreeCreationTests {
     @Test func editingNewMembersUsesTheSameBranchComparison() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let record = try await prepare(f)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
-        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == "success")
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
         let repository = record.repositoryURL("repo")
         let original = try #require(try await f.service.git.oid("HEAD", at: repository))
         let base = try await commit(after: original, message: "Base change", at: repository, git: f.service.git)
         _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/main", base], at: repository)
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", original], at: repository)
         let result = await f.service.editGroup("feature", repositories: ["repo"], at: f.root)
-        #expect(result.status == "success" && result.hasWarnings)
+        #expect(result.status == .success && result.hasWarnings)
         #expect(result.items.count == 1 && result.items.first?.data?["behind-count"] == "1")
     }
 
@@ -156,7 +156,7 @@ struct WorktreeCreationTests {
         #expect(output.status == 0, "\(output.text)")
         if json {
             let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-            #expect(result.status == "success" && result.hasWarnings)
+            #expect(result.status == .success && result.hasWarnings)
             #expect(result.items.first?.data?["behind-count"] == "1")
         } else {
             #expect(output.text.contains("worktree.create: success") && output.text.contains("1 commit behind 'workspace HEAD'"))
@@ -166,7 +166,7 @@ struct WorktreeCreationTests {
 
     @Test func workspaceImportReportsWarningsForAReusedRootBranch() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
         let original = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let base = try await commit(after: original, message: "Base change", at: f.root, git: f.service.git)
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", original], at: f.root)
@@ -180,15 +180,15 @@ struct WorktreeCreationTests {
             repositories: []
         """
         let result = await f.service.importWorkspaceYAML(yaml, at: f.root)
-        #expect(result.status == "success" && result.hasWarnings, "\(result.message ?? "") \(result.items)")
+        #expect(result.status == .success && result.hasWarnings, "\(result.message ?? "") \(result.items)")
         #expect(result.items.first?.data?["behind-count"] == "1")
         #expect(try f.service.store.load(f.root).groups["feature"]?.repositories == [])
         #expect(try await f.service.git.oid("refs/heads/feature", at: f.root) == original)
     }
 
     private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == "success")
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == "success")
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         try await f.commitWorkspace()
         return try f.service.store.load(f.root)
     }

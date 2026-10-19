@@ -7,90 +7,90 @@ import Observation
 @MainActor struct PresentationTests {
     @Test func repositoryAdditionFailureKeepsFormAndClearsDetailsWithTheError() async throws {
         try await withModel { model in
-            let record = model.workspace
-            model.sheet = .add
+            let record = model.workspace.record
+            model.management.sheet = .add
             let raw = "Git ls-remote failed (128). ERROR: Repository not found."
-            model.run { _, root, _ in
-                .init(command: "repo.add", workspace: root.path, status: "failed", items: [ItemResult(.repository("missing"), status: "failed", error: ModuError("git-failed", raw))])
+            model.management.run { _, root, _ in
+                .init(command: "repo.add", workspace: root.path, status: .failed, items: [ItemResult(.repository("missing"), status: .failed, error: ModuError("git-failed", raw))])
             }
             await (try #require(model.operation)).value
-            #expect(model.sheet == .add && model.result == nil && !model.busy)
-            #expect(model.formError != nil && model.formErrorDetails == raw)
-            #expect(model.workspace == record)
-            model.formError = nil
-            #expect(model.formErrorDetails == nil)
+            #expect(model.management.sheet == .add && model.presentation.result == nil && !model.busy)
+            #expect(model.management.formError != nil && model.management.formErrorDetails == raw)
+            #expect(model.workspace.record == record)
+            model.management.formError = nil
+            #expect(model.management.formErrorDetails == nil)
         }
     }
 
     @Test func successfulCreationPreservesWarningsAndTheirEffects() async throws {
         try await withModel { model in
             for warning in ["branch-behind-base", "branch-comparison-unavailable", "none"] {
-                model.sheet = .create
+                model.management.sheet = .create
                 var item = ItemResult(.member("feature", "repo"))
                 item.effects = [.init("create-worktree", item.resource.path)]
                 if warning != "none" {
                     item.data = ["warning-code": warning, "reused-branch": "feature", "comparison-base": "origin/main"]
                     item.message = "Reused branch needs attention."
                 }
-                let outcome = OperationResult(command: "worktree.create", workspace: try #require(model.workspace).root, items: [item])
-                model.run { _, _, _ in outcome }
+                let outcome = OperationResult(command: "worktree.create", workspace: try #require(model.workspace.record).root, items: [item])
+                model.management.run { _, _, _ in outcome }
                 await (try #require(model.operation)).value
-                #expect(model.sheet == nil && !model.busy && model.completionMessage == nil)
-                #expect((model.result != nil) == (warning != "none"))
-                if let result = model.result {
-                    #expect(result.status == "success" && result.exitCode == 0)
+                #expect(model.management.sheet == nil && !model.busy && model.presentation.completionMessage == nil)
+                #expect((model.presentation.result != nil) == (warning != "none"))
+                if let result = model.presentation.result {
+                    #expect(result.status == .success && result.exitCode == 0)
                     #expect(result.items.first?.data == item.data && result.items.first?.message == item.message)
                     #expect(result.items.first?.effects == item.effects)
-                    #expect(model.resultDisplayItems(result).map(\.resource) == [item.resource])
+                    #expect(model.presentation.text.resultDisplayItems(result).map(\.resource) == [item.resource])
                 }
-                model.dismissResult()
+                model.presentation.dismissResult()
             }
         }
     }
 
     @Test func cancellingDeletionPreservesContentAndCleansUpAfterDismissal() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         try await fixture.commitWorkspace()
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
+        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = record
+        model.workspace.record = record
         for kind in ["repository", "group", "member", "edit"] {
             if kind == "edit" {
-                model.sheet = .edit
-                model.edit("feature", members: [])
-                await model.editPreviewTask?.value
+                model.management.sheet = .edit
+                model.management.edit("feature", members: [])
+                await model.management.editPreviewTask?.value
             } else {
                 let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "group" ? .group("feature") : .member(group: "feature", repo: "repo")
-                model.prepareDelete(request)
-                await model.deletePreviewTask?.value
+                model.management.prepareDelete(request)
+                await model.management.deletePreviewTask?.value
             }
-            try #require(model.canConfirmDelete)
-            let resources = model.deletion.map(\.resource)
+            try #require(model.management.canConfirmDelete)
+            let resources = model.management.deletion.map(\.resource)
             if kind == "edit" {
-                model.sheet = .edit
-                #expect(model.pendingEdit?.0 == "feature" && model.pendingEdit?.1 == [])
-                #expect(model.deletion.map(\.resource) == resources)
-                model.sheet = .delete
+                model.management.sheet = .edit
+                #expect(model.management.pendingEdit?.0 == "feature" && model.management.pendingEdit?.1 == [])
+                #expect(model.management.deletion.map(\.resource) == resources)
+                model.management.sheet = .delete
             }
-            model.sheet = nil
-            #expect(!model.canConfirmDelete)
-            #expect(!model.busy && model.operation == nil && model.managementProgress == nil)
-            #expect(model.deletion.map(\.resource) == resources && model.deletionResources == resources)
+            model.management.sheet = nil
+            #expect(!model.management.canConfirmDelete)
+            #expect(!model.busy && model.operation == nil && model.management.progressPresentation == nil)
+            #expect(model.management.deletion.map(\.resource) == resources && model.management.deletionResources == resources)
             if kind == "edit" {
-                #expect(model.pendingEdit?.0 == "feature" && model.pendingEdit?.1 == [])
-            } else { #expect(model.deleteRequest != nil && model.pendingEdit == nil) }
-            model.finishManagementDismissal()
-            #expect(model.deleteRequest == nil && model.pendingEdit == nil && model.deletion.isEmpty && model.deletionResources.isEmpty)
-            #expect(model.deletionPresentation.resources == resources && model.deletionPresentation.targets.map(\.resource) == resources)
-            #expect(model.deletionPresentation.editingGroup == (kind == "edit"))
-            model.confirmDelete()
-            #expect(model.operation == nil && model.workspace == record)
+                #expect(model.management.pendingEdit?.0 == "feature" && model.management.pendingEdit?.1 == [])
+            } else { #expect(model.management.deleteRequest != nil && model.management.pendingEdit == nil) }
+            model.management.finishDismissal()
+            #expect(model.management.deleteRequest == nil && model.management.pendingEdit == nil && model.management.deletion.isEmpty && model.management.deletionResources.isEmpty)
+            #expect(model.management.deletionPresentation.resources == resources && model.management.deletionPresentation.targets.map(\.resource) == resources)
+            #expect(model.management.deletionPresentation.editingGroup == (kind == "edit"))
+            model.management.confirmDelete()
+            #expect(model.operation == nil && model.workspace.record == record)
             #expect(try fixture.service.store.load(fixture.root) == record)
             #expect(PathSafety.exists(record.repositoryURL("repo")) && PathSafety.exists(record.groupURL("feature")) && PathSafety.exists(record.memberURL("feature", "repo")))
         }
@@ -98,171 +98,171 @@ import Observation
 
     @Test func repositoryDeletionKeepsProgressThroughDismissalAndReopensConfirmation() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         try await fixture.commitWorkspace()
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == "success")
+        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try await fixture.service.load(fixture.root)
-        model.prepareDelete(.repository("repo"))
-        await model.deletePreviewTask?.value
-        try #require(model.canConfirmDelete)
-        model.confirmDelete()
+        model.workspace.record = try await fixture.service.load(fixture.root)
+        model.management.prepareDelete(.repository("repo"))
+        await model.management.deletePreviewTask?.value
+        try #require(model.management.canConfirmDelete)
+        model.management.confirmDelete()
         await (try #require(model.operation)).value
-        await model.detailPreloadTask?.value
-        #expect(!model.busy && model.sheet == nil && model.result == nil)
-        #expect(model.workspace?.repositories.isEmpty == true && model.workspace?.groups["feature"]?.repositories == [])
-        let presentation = try #require(model.managementProgress)
-        #expect(presentation.progress?.target == "repositories/repo" && presentation.progress?.phase == "Deleted")
-        model.sheet = nil
-        model.finishManagementDismissal()
-        #expect(model.deleteRequest == nil && model.pendingEdit == nil && model.deletion.isEmpty)
-        #expect(model.managementProgress != nil)
-        model.prepareDelete(.group("feature"))
-        #expect(model.sheet == .delete && model.managementProgress == nil)
-        await model.deletePreviewTask?.value
-        #expect(model.canConfirmDelete && model.deletionResources == [.group("feature")])
-        model.sheet = nil
+        await model.workspace.detailPreloadTask?.value
+        #expect(!model.busy && model.management.sheet == nil && model.presentation.result == nil)
+        #expect(model.workspace.record?.repositories.isEmpty == true && model.workspace.record?.groups["feature"]?.repositories == [])
+        let presentation = try #require(model.management.progressPresentation)
+        #expect(presentation.progress?.target == "repositories/repo" && presentation.progress?.phase == .deleted)
+        model.management.sheet = nil
+        model.management.finishDismissal()
+        #expect(model.management.deleteRequest == nil && model.management.pendingEdit == nil && model.management.deletion.isEmpty)
+        #expect(model.management.progressPresentation != nil)
+        model.management.prepareDelete(.group("feature"))
+        #expect(model.management.sheet == .delete && model.management.progressPresentation == nil)
+        await model.management.deletePreviewTask?.value
+        #expect(model.management.canConfirmDelete && model.management.deletionResources == [.group("feature")])
+        model.management.sheet = nil
     }
 
     @Test func worktreeCreationKeepsProgressThroughDismissalAndReopensAsForm() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         try await fixture.commitWorkspace()
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try await fixture.service.load(fixture.root)
-        model.sheet = .create
-        model.create("feature", members: ["repo"])
-        #expect(model.busy && model.managementProgress != nil)
+        model.workspace.record = try await fixture.service.load(fixture.root)
+        model.management.sheet = .create
+        model.management.create("feature", members: ["repo"])
+        #expect(model.busy && model.management.progressPresentation != nil)
         withObservationTracking {
             _ = model.busy
         } onChange: {
             MainActor.assumeIsolated {
-                #expect(model.sheet == nil && model.result == nil && model.managementProgress != nil)
+                #expect(model.management.sheet == nil && model.presentation.result == nil && model.management.progressPresentation != nil)
             }
         }
         await (try #require(model.operation)).value
         #expect(!model.busy && model.progress == nil)
-        #expect(model.selection == .group("feature") && model.expandedGroups.contains("feature"))
-        let presentation = try #require(model.managementProgress)
+        #expect(model.workspace.selection == .group("feature") && model.workspace.expandedGroups.contains("feature"))
+        let presentation = try #require(model.management.progressPresentation)
         #expect(presentation.progress?.target == "worktrees/feature/repo")
-        #expect(model.managementProgress != nil)
-        model.sheet = .create
-        #expect(model.managementProgress == nil)
-        model.sheet = nil
-        await model.detailPreloadTask?.value
+        #expect(model.management.progressPresentation != nil)
+        model.management.sheet = .create
+        #expect(model.management.progressPresentation == nil)
+        model.management.sheet = nil
+        await model.workspace.detailPreloadTask?.value
     }
 
     @Test func worktreeCreationFailureRestoresFormForRetry() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         _ = try await fixture.service.git.run(["branch", "feature", "HEAD~1"], at: fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try await fixture.service.load(fixture.root)
-        model.sheet = .create
-        model.create("feature", members: ["repo"])
+        model.workspace.record = try await fixture.service.load(fixture.root)
+        model.management.sheet = .create
+        model.management.create("feature", members: ["repo"])
         await (try #require(model.operation)).value
-        #expect(!model.busy && model.managementProgress == nil && model.formError != nil)
-        #expect(model.sheet == .create && model.result == nil)
+        #expect(!model.busy && model.management.progressPresentation == nil && model.management.formError != nil)
+        #expect(model.management.sheet == .create && model.presentation.result == nil)
         _ = try await fixture.service.git.run(["branch", "-d", "feature"], at: fixture.root)
-        model.create("feature", members: ["repo"])
-        #expect(model.busy && model.managementProgress != nil && model.formError == nil)
-        #expect(model.managementProgress != nil)
+        model.management.create("feature", members: ["repo"])
+        #expect(model.busy && model.management.progressPresentation != nil && model.management.formError == nil)
+        #expect(model.management.progressPresentation != nil)
         await (try #require(model.operation)).value
-        #expect(!model.busy && model.sheet == nil && model.result == nil)
-        model.sheet = .create
-        #expect(model.managementProgress == nil)
-        #expect(model.sheet == .create)
-        model.sheet = nil
-        await model.detailPreloadTask?.value
+        #expect(!model.busy && model.management.sheet == nil && model.presentation.result == nil)
+        model.management.sheet = .create
+        #expect(model.management.progressPresentation == nil)
+        #expect(model.management.sheet == .create)
+        model.management.sheet = nil
+        await model.workspace.detailPreloadTask?.value
     }
 
     @Test func worktreeCreationCancellationWithoutEffectsKeepsProgressDuringDismissal() async throws {
         try await withModel { model in
-            let record = model.workspace
-            model.sheet = .create
-            model.run { _, root, _ in .init(command: "worktree.create", workspace: root.path, status: "cancelled") }
+            let record = model.workspace.record
+            model.management.sheet = .create
+            model.management.run { _, root, _ in .init(command: "worktree.create", workspace: root.path, status: .cancelled) }
             await (try #require(model.operation)).value
-            #expect(!model.busy && model.sheet == nil && model.result == nil && model.managementProgress != nil)
-            #expect(model.workspace == record)
-            model.sheet = .create
-            #expect(model.managementProgress == nil)
+            #expect(!model.busy && model.management.sheet == nil && model.presentation.result == nil && model.management.progressPresentation != nil)
+            #expect(model.workspace.record == record)
+            model.management.sheet = .create
+            #expect(model.management.progressPresentation == nil)
         }
     }
 
     @Test func repositoryImportTransitionsDirectlyToItsCompletionState() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == "success")
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace = try fixture.service.store.load(fixture.root)
+        model.workspace.record = try fixture.service.store.load(fixture.root)
         for outcome in ["success", "skipped", "invalid"] {
-            let before = try #require(model.workspace)
-            model.sheet = .add
-            model.importRepositories(outcome == "invalid" ? "{invalid YAML" : "url: \(fixture.remoteURL)", filename: "repositories.yaml")
+            let before = try #require(model.workspace.record)
+            model.management.sheet = .add
+            model.management.importRepositories(outcome == "invalid" ? "{invalid YAML" : "url: \(fixture.remoteURL)", filename: "repositories.yaml")
             #expect(model.busy)
             await (try #require(model.operation)).value
-            await model.detailPreloadTask?.value
-            #expect(!model.busy && model.importFileName == nil)
-            #expect(model.sheet == (outcome == "invalid" ? .add : nil))
-            #expect(model.result?.status == (outcome == "skipped" ? "skipped" : nil))
-            #expect((model.formError != nil) == (outcome == "invalid"))
-            #expect((model.managementProgress != nil) == (outcome != "invalid"))
+            await model.workspace.detailPreloadTask?.value
+            #expect(!model.busy && model.management.importFileName == nil)
+            #expect(model.management.sheet == (outcome == "invalid" ? .add : nil))
+            #expect(model.presentation.result?.status.rawValue == (outcome == "skipped" ? "skipped" : nil))
+            #expect((model.management.formError != nil) == (outcome == "invalid"))
+            #expect((model.management.progressPresentation != nil) == (outcome != "invalid"))
             if outcome == "success" {
-                #expect(model.selection == .repository("repo") && model.workspace?.repositories.count == 1)
+                #expect(model.workspace.selection == .repository("repo") && model.workspace.record?.repositories.count == 1)
                 #expect(PathSafety.exists(fixture.root.appending(path: "repositories/repo/.git")))
-            } else { #expect(model.workspace == before) }
-            #expect(try fixture.service.store.load(fixture.root) == model.workspace)
-            model.dismissResult()
-            model.sheet = nil
+            } else { #expect(model.workspace.record == before) }
+            #expect(try fixture.service.store.load(fixture.root) == model.workspace.record)
+            model.presentation.dismissResult()
+            model.management.sheet = nil
         }
     }
 
     @Test(arguments: ["partial-success", "cancelled"])
     func repositoryImportRetainsCompletedEffectsAndUnprocessedItems(_ status: String) async throws {
         try await withModel { model in
-            model.sheet = .add
-            model.run { _, root, _ in
+            model.management.sheet = .add
+            model.management.run { _, root, _ in
                 var added = ItemResult(.repository("added"))
                 added.effects = [.init("update-ignore", root.appending(path: ".gitignore").path)]
-                let remaining = status == "cancelled" ? ItemResult.notProcessed(.repository("remaining")) : ItemResult(.repository("remaining"), status: "failed")
-                return OperationResult(command: "repo.import-yaml", workspace: root.path, status: status, items: [added, remaining])
+                let remaining = status == "cancelled" ? ItemResult.notProcessed(.repository("remaining")) : ItemResult(.repository("remaining"), status: .failed)
+                return OperationResult(command: "repo.import-yaml", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [added, remaining])
             }
             await (try #require(model.operation)).value
-            let result = try #require(model.result)
-            #expect(!model.busy && model.sheet == nil && result.status == status)
+            let result = try #require(model.presentation.result)
+            #expect(!model.busy && model.management.sheet == nil && result.status.rawValue == status)
             #expect(result.items.map(\.resource) == [.repository("added"), .repository("remaining")])
             #expect(result.items.first?.effects.count == 1)
-            #expect(result.items.last?.status == (status == "cancelled" ? "skipped" : "failed"))
+            #expect(result.items.last?.status.rawValue == (status == "cancelled" ? "skipped" : "failed"))
             #expect(result.items.last?.reasonCode == (status == "cancelled" ? "not-processed" : nil))
-            #expect(model.managementProgress != nil)
+            #expect(model.management.progressPresentation != nil)
         }
     }
 
     @Test func editPreviewFailureDoesNotChangeTheWorkspace() async throws {
         try await withModel { model in
-            let before = try #require(model.workspace)
-            model.sheet = .edit
-            model.edit("missing-group", members: [])
-            await model.editPreviewTask?.value
-            #expect(model.formError != nil && model.sheet == .edit)
-            #expect(model.result == nil && model.pendingEdit == nil && !model.busy)
-            #expect(model.workspace == before)
+            let before = try #require(model.workspace.record)
+            model.management.sheet = .edit
+            model.management.edit("missing-group", members: [])
+            await model.management.editPreviewTask?.value
+            #expect(model.management.formError != nil && model.management.sheet == .edit)
+            #expect(model.presentation.result == nil && model.management.pendingEdit == nil && !model.busy)
+            #expect(model.workspace.record == before)
             #expect(try model.service.store.load(before.rootURL) == before)
         }
     }
@@ -282,17 +282,17 @@ import Observation
             Repository(url: "https://example.invalid/mobile.git", name: "移动前端"),
             Repository(url: "https://example.invalid/server.git")
         ]
-        model.workspace = workspace
+        model.workspace.record = workspace
         let selection: Set<String> = ["frontend", "server"]
-        let all = model.sortedRepositories.map(\.id)
+        let all = model.workspace.sortedRepositories.map(\.id)
         for (query, expected) in [("", all), (" \n ", all), (" FRONT ", ["frontend"]),
                                   ("service", ["api2", "api10"]), ("前端", ["mobile"]),
                                   ("api10", []), ("unmatched", [])] {
-            let view = ManagementView(model: model, sheet: sheet, selected: selection, repositorySearch: query)
+            let view = ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet, selected: selection, repositorySearch: query)
             #expect(view.matchingRepositories.map(\.id) == expected)
             #expect(view.selectedMembers == ["frontend", "server"])
             #expect(view.selected == selection)
-            #expect(model.workspace == workspace)
+            #expect(model.workspace.record == workspace)
         }
     }
 
@@ -315,8 +315,8 @@ import Observation
         let model = AppModel(defaults: defaults, toolService: toolService)
         var workspace = WorkspaceRecord(root: root.path)
         workspace.groups["feature"] = WorktreeGroup()
-        model.workspace = workspace
-        model.selection = .group("feature")
+        model.workspace.record = workspace
+        model.workspace.selection = .group("feature")
         model.tools = ExternalTool.builtIn
         let claude = try #require(model.tools.first { $0.id == "claude" })
         #expect(model.preferredToolIDs["Agent"] == "codex")
@@ -329,7 +329,7 @@ import Observation
         model.openTool(claude)
         #expect(model.preferredToolIDs["Agent"] == "codex")
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while model.preferredToolIDs["Agent"] == "codex", model.message == nil, ContinuousClock.now < deadline {
+        while model.preferredToolIDs["Agent"] == "codex", model.presentation.message == nil, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
         let expected = succeeds ? "claude" : "codex"
@@ -337,9 +337,9 @@ import Observation
         #expect(defaults.string(forKey: "tool.Agent") == expected)
         #expect(defaults.bool(forKey: "toolPreferenceChanged") == succeeds)
         #expect(model.preferredToolIDs["Editor"] == "vscode")
-        #expect(model.selection == .group("feature"))
+        #expect(model.workspace.selection == .group("feature"))
         #expect(launches.count == 1)
-        #expect((model.message == nil) == succeeds)
+        #expect((model.presentation.message == nil) == succeeds)
         let reopened = AppModel(defaults: defaults, toolService: toolService)
         #expect(reopened.preferredToolIDs["Agent"] == expected)
     }
@@ -350,10 +350,10 @@ import Observation
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = AppModel(defaults: defaults)
         for resource in [Resource.repository("repo"), .group("feature"), .member("feature", "repo")] {
-            model.states[resource.id] = ResourceState(resource: resource, available: true, dirty: false)
+            model.workspace.states[resource.id] = ResourceState(resource: resource, available: true, dirty: false)
             let target = DeletionTarget(resource: resource, path: "/workspace/\(resource.path)", branch: nil,
                                         detached: false, registered: true, exists: true, risks: ["Working tree is clean."])
-            #expect(ManagementView(model: model, sheet: .delete).deletionStatus(target) == "Other")
+            #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionStatus(target) == "Other")
         }
     }
 
@@ -365,21 +365,21 @@ import Observation
                 ("cancelled", false, false, false), ("cancelled", true, false, true),
                 ("success", true, true, true)
             ] {
-                model.quitPending = quitting; model.resultHost = .settings
-                model.run { _, root, _ in
-                    var item = ItemResult(.repository("repo"), status: status)
+                model.presentation.quitPending = quitting; model.presentation.resultHost = .settings
+                model.management.run { _, root, _ in
+                    var item = ItemResult(.repository("repo"), status: OperationStatus(rawValue: status)!)
                     if effects { item.effects = [.init("update-ignore", root.appending(path: ".gitignore").path)] }
-                    return OperationResult(command: "workspace.import", workspace: root.path, status: status, items: [item])
+                    return OperationResult(command: "workspace.import", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [item])
                 }
-                #expect(model.busy && model.resultHost == .settings)
+                #expect(model.busy && model.presentation.resultHost == .settings)
                 let operation = try #require(model.operation)
                 await operation.value
                 #expect(!model.busy)
-                #expect((model.result != nil) == presentsResult)
-                #expect(model.resultHost == (presentsResult ? .settings : .main))
-                #expect(model.completionMessage == nil)
-                model.quitPending = false
-                model.dismissResult()
+                #expect((model.presentation.result != nil) == presentsResult)
+                #expect(model.presentation.resultHost == (presentsResult ? .settings : .main))
+                #expect(model.presentation.completionMessage == nil)
+                model.presentation.quitPending = false
+                model.presentation.dismissResult()
             }
         }
     }
@@ -393,26 +393,26 @@ import Observation
                 ("cancelled", ["updated", "cancelled", "not-processed"]),
                 ("cancelled", ["cancelled", "not-processed"])
             ] {
-                model.run { _, root, _ in
+                model.management.run { _, root, _ in
                     let items = dispositions.enumerated().map { index, disposition in
                         let resource = Resource.repository("repo-\(index)")
                         if disposition == "not-processed" { return ItemResult.notProcessed(resource) }
-                        if ["failed", "cancelled"].contains(disposition) { return ItemResult(resource, status: disposition) }
+                        if ["failed", "cancelled"].contains(disposition) { return ItemResult(resource, status: OperationStatus(rawValue: disposition)!) }
                         var item = ItemResult(resource)
                         item.data = ["disposition": disposition]
                         return item
                     }
-                    return OperationResult(command: "repo.update", workspace: root.path, status: status, items: items)
+                    return OperationResult(command: "repo.update", workspace: root.path, status: OperationStatus(rawValue: status)!, items: items)
                 }
                 await (try #require(model.operation)).value
                 let visible = dispositions.indices.filter { ["updated", "failed"].contains(dispositions[$0]) }
-                #expect(!model.busy && model.progress == nil && model.completionMessage == nil)
-                #expect((model.result != nil) == !visible.isEmpty)
-                if let result = model.result {
+                #expect(!model.busy && model.progress == nil && model.presentation.completionMessage == nil)
+                #expect((model.presentation.result != nil) == !visible.isEmpty)
+                if let result = model.presentation.result {
                     #expect(result.items.count == dispositions.count)
-                    #expect(model.resultDisplayItems(result).map(\.resource) == visible.map { .repository("repo-\($0)") })
+                    #expect(model.presentation.text.resultDisplayItems(result).map(\.resource) == visible.map { .repository("repo-\($0)") })
                 }
-                model.dismissResult()
+                model.presentation.dismissResult()
             }
         }
     }
@@ -445,7 +445,7 @@ import Observation
         let record = WorkspaceRecord(root: PathSafety.canonical(directory).path)
         try service.store.save(record)
         let model = AppModel(defaults: defaults, service: service)
-        model.workspace = record
+        model.workspace.record = record
         // Result handling needs no saved launch preference or Git reload; real operations are tested separately.
         try await body(model)
     }

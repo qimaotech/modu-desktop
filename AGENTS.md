@@ -26,8 +26,8 @@
 ## 工程约定
 
 - 业务与副作用放在 `ModuCore/`；`ModuDesktop/`、`ModuCLI/` 复用 Core，View 只渲染状态和转发意图。
-- AppModel 与界面状态运行在 `@MainActor`；异步任务支持取消，发布结果前检查当前上下文。
-- Git 与外部命令复用 [CommandRunner.swift](ModuCore/CommandRunner.swift) 中的封装。
+- AppModel 负责应用级协调，功能状态放入 `Features/` 下的模型；界面状态运行在 `@MainActor`，异步任务支持取消，发布结果前检查当前上下文。
+- Git 与外部命令复用 [CommandRunner.swift](ModuCore/Infrastructure/Process/CommandRunner.swift) 中的封装。
 - 界面沿用现有 SwiftUI/AppKit 组件、系统语义字体和材质；资源直接维护在 App 的资源目录中。
 
 ## 验证与交付

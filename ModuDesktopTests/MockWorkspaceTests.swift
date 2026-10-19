@@ -12,17 +12,17 @@ import Testing
         let mock = try #require(model.mockWorkspace)
         defer { mock.remove() }
         var readySelection: Resource?
-        let needsSetup = await model.start { readySelection = model.selection }
-        await model.detailPreloadTask?.value
-        let record = try #require(model.workspace)
-        #expect(!needsSetup && model.started && model.hasSavedWorkspace && model.blocked == nil)
-        #expect(readySelection == mock.initialSelection && model.selection == mock.initialSelection)
+        let needsSetup = await model.start { readySelection = model.workspace.selection }
+        await model.workspace.detailPreloadTask?.value
+        let record = try #require(model.workspace.record)
+        #expect(!needsSetup && model.started && model.hasSavedWorkspace && model.workspace.blocked == nil)
+        #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
         #expect(record.rootURL.lastPathComponent == "example-workspace")
-        #expect(record.repositories.count == 7 && model.sortedGroups == ["feature-store-pickup", "fix-overselling"])
-        #expect(model.expandedGroups == Set(model.sortedGroups))
-        #expect(model.detail.summary?.base == "origin/main" && model.detail.summary?.head == "feature-store-pickup")
-        #expect(model.detail.changes == Self.orderChanges)
-        #expect(model.detail.commits?.map(\.subject) == Self.commitSubjects)
+        #expect(record.repositories.count == 7 && model.workspace.sortedGroups == ["feature-store-pickup", "fix-overselling"])
+        #expect(model.workspace.expandedGroups == Set(model.workspace.sortedGroups))
+        #expect(model.workspace.detail.summary?.base == "origin/main" && model.workspace.detail.summary?.head == "feature-store-pickup")
+        #expect(model.workspace.detail.changes == Self.orderChanges)
+        #expect(model.workspace.detail.commits?.map(\.subject) == Self.commitSubjects)
         #expect(try model.service.store.load(record.rootURL) == record)
         #expect(try await model.service.git.registrations(at: record.rootURL).count == 3)
         let resources = model.service.resources(record)
@@ -31,9 +31,9 @@ import Testing
             #expect(try await model.service.git.run(["config", "--local", "--get", "include.path"], at: path).text == mock.directory.appending(path: "gitconfig").path)
         }
         #expect(resources.count == 17)
-        #expect(resources.allSatisfy { model.states[$0.id]?.available == true })
-        #expect(model.states.values.filter { $0.dirty == true }.count == 2)
-        #expect(model.language == "en" && !model.detailLoading && model.operation == nil)
+        #expect(resources.allSatisfy { model.workspace.states[$0.id]?.available == true })
+        #expect(model.workspace.states.values.filter { $0.dirty == true }.count == 2)
+        #expect(model.language == "en" && !model.workspace.detailLoading && model.operation == nil)
         #expect(!(await model.installer.checkCLIInstallation()).available)
         #expect(try await model.service.git.run(["config", "--get", "protocol.allow"], at: record.rootURL).text == "never")
         let remote = try #require(record.repositories.first)
@@ -46,20 +46,20 @@ import Testing
         let service = mock.fixture.service
         let original = try service.store.load(mock.fixture.root)
         let removed = await service.remove(.repository("catalog-service"), at: original.rootURL, execute: true)
-        #expect(removed.status == "success")
+        #expect(removed.status == .success)
         #expect(!PathSafety.exists(original.repositoryURL("catalog-service")))
         let trashed = try FileManager.default.contentsOfDirectory(at: mock.directory.appending(path: "trash"), includingPropertiesForKeys: nil)
         #expect(trashed.count == 1 && PathSafety.exists(trashed[0].appending(path: ".git")))
 
         let added = await service.addRepository(.init(url: "https://example.invalid/catalog-service.git"), at: original.rootURL)
-        #expect(added.status == "success")
+        #expect(added.status == .success)
         let restored = try service.store.load(original.rootURL)
         #expect(restored.repositories.sorted { $0.id < $1.id } == original.repositories.sorted { $0.id < $1.id })
         #expect(restored.root == original.root && restored.groups == original.groups)
         #expect(try await service.git.run(["config", "--local", "--get", "include.path"], at: original.repositoryURL("catalog-service")).text == mock.directory.appending(path: "gitconfig").path)
         let bytes = try Data(contentsOf: service.store.recordURL(original.rootURL))
         let rejected = await service.addRepository(.init(url: "https://unmapped.invalid/extra.git"), at: original.rootURL)
-        #expect(rejected.status == "failed" && rejected.items.allSatisfy { $0.effects.isEmpty })
+        #expect(rejected.status == .failed && rejected.items.allSatisfy { $0.effects.isEmpty })
         #expect(!PathSafety.exists(original.repositoryURL("extra")))
         #expect(try Data(contentsOf: service.store.recordURL(original.rootURL)) == bytes)
         #expect(service.git.runner.environment["GIT_ALLOW_PROTOCOL"] == "file")
@@ -99,7 +99,7 @@ import Testing
         try FileManager.default.createDirectory(at: other.directory.appending(path: "home"), withIntermediateDirectories: false)
         let model = mock.makeModel()
         let record = try model.service.store.load(mock.fixture.root)
-        model.workspace = record
+        model.workspace.record = record
         let alias = mock.directory.appending(path: "outside")
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: other.root)
         for target in [other.root, alias] {
@@ -137,12 +137,12 @@ import Testing
         let remoteLink = mock.directory.appending(path: "remotes/outside.git")
         try FileManager.default.createSymbolicLink(at: remoteLink, withDestinationURL: remote)
         let added = await model.service.addRepository(.init(url: "https://example.invalid/outside.git"), at: record.rootURL)
-        #expect(added.status == "failed" && added.items.first?.reasonCode == "unsafe-path")
-        #expect(model.workspace == record)
+        #expect(added.status == .failed && added.items.first?.reasonCode == "unsafe-path")
+        #expect(model.workspace.record == record)
         #expect(!PathSafety.exists(record.repositoryURL("outside")))
         model.defaults.set(other.root.path, forKey: "workspace")
-        await model.reload()
-        #expect(model.workspace == nil && model.blocked != nil)
+        await model.workspace.reload()
+        #expect(model.workspace.record == nil && model.workspace.blocked != nil)
         #expect(try Data(contentsOf: originalFile) == originalBytes)
         #expect(try other.service.store.load(original.rootURL) == original)
         #expect(try Data(contentsOf: remote.appending(path: "HEAD")) == remoteHead)
@@ -155,8 +155,8 @@ import Testing
         let model = mock.makeModel()
         var ready = false
         #expect(!(await model.start { ready = true }))
-        #expect(ready && model.hasSavedWorkspace && model.blocked != nil)
-        #expect(model.workspace == nil && model.selection == nil)
+        #expect(ready && model.hasSavedWorkspace && model.workspace.blocked != nil)
+        #expect(model.workspace.record == nil && model.workspace.selection == nil)
         #expect(!PathSafety.exists(mock.directory))
     }
 
@@ -170,7 +170,7 @@ import Testing
         let model = try AppModel.makeForLaunch(arguments: ["Modu"])
         #expect(model.mockWorkspace == nil)
         #expect(model.service.store.directoryBoundary == nil)
-        #expect(model.workspace == nil && model.selection == nil && !model.started)
+        #expect(model.workspace.record == nil && model.workspace.selection == nil && !model.started)
     }
 
     private func makeMock() async throws -> MockWorkspace {
