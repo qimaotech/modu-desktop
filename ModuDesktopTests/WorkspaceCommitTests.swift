@@ -3,6 +3,16 @@ import Testing
 @testable import ModuCore
 
 struct WorkspaceCommitTests {
+    @Test(arguments: ["chore: update workspace", "chore: update workspace\n\nKeep the existing description."])
+    func automaticCommitsAppendAttributionToDescription(_ message: String) async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        _ = try await f.service.git.run(["init"], at: f.root)
+        try Data("managed content\n".utf8).write(to: f.root.appending(path: "managed.txt"))
+        let oid = try await f.service.git.commitWorkspaceFiles(["managed.txt"], message: message, at: f.root)
+        #expect(oid != nil)
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "\(message)\n\nAuto-committed-by: Modu")
+    }
+
     @Test func unchangedManagedFilesKeepStagedEditsAndSkipStagingAndCommit() async throws {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
@@ -45,6 +55,7 @@ struct WorkspaceCommitTests {
         let installer = InstallationService(support: f.service.store.support)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source, installer: installer)
         #expect(opened.result.status == .success && opened.skillError == nil, "\(opened.result.items)")
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: initialize Modu workspace\n\nAuto-committed-by: Modu")
         #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml", ".gitignore"])
         #expect(try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout == index)
         #expect(try Data(contentsOf: notes) == Data("unstaged\n".utf8))
@@ -54,6 +65,7 @@ struct WorkspaceCommitTests {
         #expect(try await f.service.git.oid("HEAD", at: f.root) == head)
 
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: ignore Modu repository repo\n\nAuto-committed-by: Modu")
         #expect(try await changedPaths(f) == [".gitignore"])
         #expect(try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout == index)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
@@ -114,6 +126,7 @@ struct WorkspaceCommitTests {
         try Data("new skill\n".utf8).write(to: source)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
         #expect(opened.result.status == .success && opened.skillError == nil, "\(opened.result.items)")
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: update Modu workflow skill\n\nAuto-committed-by: Modu")
         #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md"])
         #expect(try await f.service.git.run(["show", "HEAD:.agents/skills/modu-workflow/SKILL.md"], at: f.root).stdout == Data(contentsOf: source))
         #expect(try await f.service.git.run(["status", "--porcelain"], at: f.root).stdout.isEmpty)
@@ -286,6 +299,7 @@ struct WorkspaceCommitTests {
         let service = WorkspaceService(store: f.service.store, git: Git(runner: runner), trash: f.service.trashDirectory)
         let result = await service.importWorkspaceYAML(workspaceYAML(f, other: other), at: f.root)
         #expect(result.status == .success, "\(result.items)")
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: import Modu workspace repositories\n\nAuto-committed-by: Modu")
         #expect(try await f.service.git.run(["rev-list", "--count", "HEAD"], at: f.root).text == "2")
         #expect(try await changedPaths(f) == [".gitignore"])
         let commands = try String(contentsOf: trace, encoding: .utf8).components(separatedBy: "\n").filter { $0.contains("built-in: git ") }

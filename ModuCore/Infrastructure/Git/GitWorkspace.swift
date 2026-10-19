@@ -67,8 +67,9 @@ extension Git {
             let diff = try await run(["diff", "--cached", "--quiet", "--"] + paths, at: root, allowFailure: true, cancellable: false)
             if diff.status == 0 { return nil }
             guard diff.status == 1 else { throw ModuError("git-failed", "Could not check workspace file changes.") }
+            let commitMessage = "\(message)\n\nAuto-committed-by: Modu"
             // --only preserves unrelated staged files; hooks cannot expand this automatic commit's scope.
-            _ = try await run(["-c", "core.hooksPath=/dev/null", "commit", "--only", "-m", message, "--"] + paths, at: root, cancellable: false)
+            _ = try await run(["-c", "core.hooksPath=/dev/null", "commit", "--only", "-m", commitMessage, "--"] + paths, at: root, cancellable: false)
             return try await run(["rev-parse", "--verify", "HEAD"], at: root, cancellable: false).text
         } catch {
             throw ModuError("workspace-commit-failed", "Could not automatically commit workspace files. Saved resources and file changes were kept; the specified files may be staged. Check your Git identity, signing configuration and repository state, then retry. \(ModuError.wrap(error).message)")
