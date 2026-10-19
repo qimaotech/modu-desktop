@@ -7,52 +7,50 @@ struct ToolBarView: View {
     var category: String?
     var availableWidth: CGFloat?
     var fixedButtonWidth: CGFloat?
-    private var categories: [String] {
-        (category.map { [$0] } ?? ["Agent", "Git GUI", "Editor", "Terminal"]).filter { category in
-            model.tools.contains { $0.category == category }
+    private var selectedTools: [ExternalTool] {
+        (category.map { [$0] } ?? ["Agent", "Git GUI", "Editor", "Terminal"]).compactMap { category in
+            let available = model.tools.filter { $0.category == category }
+            return available.first { $0.id == model.preferredToolIDs[category] } ?? available.first
         }
     }
 
     var body: some View {
-        let categories = self.categories
-        let layout = ToolBarLayout(buttonCount: categories.count, availableWidth: availableWidth,
-                                   minimumButtonWidth: ToolBarLayout.minimumButtonWidth(for: model.tools))
+        let selectedTools = self.selectedTools
+        let layout = ToolBarLayout(buttonCount: selectedTools.count, availableWidth: availableWidth,
+                                   minimumButtonWidth: ToolBarLayout.minimumButtonWidth(for: selectedTools))
         VStack(alignment: .leading, spacing: 12) {
             ForEach(0..<layout.rows, id: \.self) { row in
                 HStack(spacing: layout.spacing) {
-                    ForEach(Array(categories.dropFirst(row * layout.columns).prefix(layout.columns)), id: \.self) { category in
-                        button(category: category, width: fixedButtonWidth ?? layout.buttonWidth)
+                    ForEach(Array(selectedTools.dropFirst(row * layout.columns).prefix(layout.columns))) { tool in
+                        button(tool: tool, width: fixedButtonWidth ?? layout.buttonWidth)
                     }
                 }
             }
         }.fixedSize(horizontal: category != nil, vertical: true)
     }
 
-    @ViewBuilder private func button(category: String, width: CGFloat) -> some View {
-        let available = model.tools.filter { $0.category == category }
-        if let first = available.first {
-            let preferred = available.first { $0.id == model.preferredToolIDs[category] } ?? first
-            HStack(spacing: 0) {
-                Button { model.openTool(preferred) } label: {
-                    HStack(spacing: 6) {
-                        Image("ToolIcons/\(preferred.icon)").resizable().scaledToFit().frame(width: 24, height: 24)
-                        Text(preferred.name).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                        Spacer(minLength: 0)
-                    }.padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 36).contentShape(Rectangle())
-                }.buttonStyle(HoverPlainButtonStyle(shape: Rectangle()))
-                Rectangle().fill(DesignStyle.border).frame(width: 1, height: 36)
-                ToolMenuButton(tools: available, width: width,
-                               label: model.t("Choose tool", "选择工具") + " " + category,
-                               open: { model.openTool($0) })
-                    .frame(width: 26, height: 36)
-                    .modifier(ButtonHoverBackground(shape: Rectangle()))
-            }
-            .frame(width: width, height: 36)
-            .background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 10))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DesignStyle.border, lineWidth: 1))
-            .disabled(model.currentURL.map { !FileManager.default.isReadableFile(atPath: $0.path) } ?? true || (category == "Git GUI" && model.selection.map { model.states[$0.id]?.available == false } == true))
+    private func button(tool: ExternalTool, width: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Button { model.openTool(tool) } label: {
+                HStack(spacing: ToolBarLayout.labelSpacing) {
+                    Image("ToolIcons/\(tool.icon)").resizable().scaledToFit()
+                        .frame(width: ToolBarLayout.iconWidth, height: ToolBarLayout.iconWidth)
+                    Text(tool.name).font(.system(size: ToolBarLayout.labelFontSize, weight: .medium)).lineLimit(1)
+                }.padding(.horizontal, ToolBarLayout.horizontalPadding)
+                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(HoverPlainButtonStyle(shape: Rectangle()))
+            Rectangle().fill(DesignStyle.border).frame(width: ToolBarLayout.dividerWidth, height: 36)
+            ToolMenuButton(tools: model.tools.filter { $0.category == tool.category }, width: width,
+                           label: model.t("Choose tool", "选择工具") + " " + tool.category,
+                           open: { model.openTool($0) })
+                .frame(width: ToolBarLayout.menuButtonWidth, height: 36)
+                .modifier(ButtonHoverBackground(shape: Rectangle()))
         }
+        .frame(width: width, height: 36)
+        .background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DesignStyle.border, lineWidth: 1))
+        .disabled(model.currentURL.map { !FileManager.default.isReadableFile(atPath: $0.path) } ?? true || (tool.category == "Git GUI" && model.selection.map { model.states[$0.id]?.available == false } == true))
     }
 }
 
@@ -167,11 +165,15 @@ private final class ToolMenuRow: NSView {
         NSImage(named: "ToolIcons/\(tool.icon)")?.draw(in: NSRect(x: 16, y: 7, width: 24, height: 24),
                                                       from: .zero, operation: .sourceOver, fraction: 1,
                                                       respectFlipped: true, hints: nil)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         let label = NSAttributedString(string: tool.name, attributes: [
             .font: NSFont.systemFont(ofSize: 13),
-            .foregroundColor: highlighted ? NSColor.alternateSelectedControlTextColor : NSColor.labelColor
+            .foregroundColor: highlighted ? NSColor.alternateSelectedControlTextColor : NSColor.labelColor,
+            .paragraphStyle: paragraph
         ])
-        label.draw(at: NSPoint(x: 48, y: (bounds.height - label.size().height) / 2))
+        label.draw(in: NSRect(x: 48, y: (bounds.height - label.size().height) / 2,
+                             width: max(0, bounds.width - 64), height: label.size().height))
     }
 
     override func mouseUp(with event: NSEvent) {

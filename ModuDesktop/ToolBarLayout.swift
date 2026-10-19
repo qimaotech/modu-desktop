@@ -2,6 +2,13 @@ import AppKit
 import ModuCore
 
 struct ToolBarLayout {
+    static let labelFontSize: CGFloat = 14
+    static let iconWidth: CGFloat = 24
+    static let labelSpacing: CGFloat = 6
+    static let horizontalPadding: CGFloat = 8
+    static let menuButtonWidth: CGFloat = 26
+    static let dividerWidth: CGFloat = 1
+
     let columns: Int
     let rows: Int
     let buttonWidth: CGFloat
@@ -9,11 +16,11 @@ struct ToolBarLayout {
 
     init(buttonCount: Int, availableWidth: CGFloat?, minimumButtonWidth: CGFloat) {
         guard buttonCount > 0 else {
-            columns = 0; rows = 0; buttonWidth = 180; spacing = 16
+            columns = 0; rows = 0; buttonWidth = max(180, minimumButtonWidth); spacing = 16
             return
         }
         guard let availableWidth else {
-            columns = buttonCount; rows = 1; buttonWidth = 180; spacing = 16
+            columns = buttonCount; rows = 1; buttonWidth = max(180, minimumButtonWidth); spacing = 16
             return
         }
         let width = max(0, availableWidth)
@@ -29,12 +36,13 @@ struct ToolBarLayout {
         } else {
             spacing = min(16, max(8, (width - count * 180) / gaps))
         }
-        buttonWidth = min(220, max(minimumButtonWidth, (width - gaps * spacing) / count))
+        buttonWidth = max(minimumButtonWidth, min(220, (width - gaps * spacing) / count))
     }
 
     static func minimumButtonWidth(for tools: [ExternalTool]) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        let font = NSFont.systemFont(ofSize: labelFontSize, weight: .medium)
         let nameWidth = tools.map { ($0.name as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-        return max(130, ceil(nameWidth) + 73)
+        let contentWidth = iconWidth + labelSpacing + ceil(nameWidth) + 2 * horizontalPadding
+        return max(130, contentWidth + dividerWidth + menuButtonWidth)
     }
 }
