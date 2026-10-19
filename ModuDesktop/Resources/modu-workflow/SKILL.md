@@ -11,6 +11,12 @@ description: Manage repositories and worktree groups in a Modu workspace through
 - Pass `--workspace <root> --json` on every management call. Use `modu-cli --help` and subcommand `--help` for current syntax.
 - `worktree update` takes the complete desired member set, not just additions, and requires at least one `--repo`. To retain an empty group, remove individual members with `worktree remove <group> --repo <name>`.
 
+## Creating groups
+
+- Preserve a group name explicitly supplied by the user. Otherwise propose `<type>-<task>` based on the request: `feature-` for new features, `fix-` for bug fixes, or another suitable prefix such as `refactor-`, `docs-`, or `chore-`. Keep the task description concise and in the user's language, for example `feature-投放流量优选`.
+- Select the repositories needed for the request from the inspected workspace. Present the group name and the full list of repositories to check out, identifying the workspace root repository and each selected member by its configured repository ID.
+- Before running `worktree create`, explicitly ask whether the proposed group name and repository list are acceptable and wait for the user's confirmation. Reuse an explicit confirmation for the same name and repository set; if either changes, present the revised plan and obtain confirmation before creating.
+
 ## Destructive changes
 
 - Before deletion or an update that removes members, run without `--execute` and review the returned plan, affected paths, branches, and risks.
