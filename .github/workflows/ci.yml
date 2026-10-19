@@ -31,6 +31,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate release tag and changelog
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: python3 script/release_notes.py "$GITHUB_REF_NAME" > /dev/null
+
       - name: Show toolchain
         run: |
           echo "MODU_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
@@ -68,6 +72,21 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare release notes
+        run: |
+          python3 script/release_notes.py "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+          cat >> "$RUNNER_TEMP/release-notes.md" <<'EOF'
+
+          ## 安装说明
+
+          适用于 Apple Silicon（arm64），最低 macOS 26.5。此安装包采用 ad-hoc 签名，未做 Developer ID 签名或 Apple 公证。
+          EOF
+
       - name: Download DMG
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -83,5 +102,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            --notes "适用于 Apple Silicon（arm64），最低 macOS 26.5。此安装包采用 ad-hoc 签名，未做 Developer ID 签名或 Apple 公证。"
+            --notes-file "$RUNNER_TEMP/release-notes.md"

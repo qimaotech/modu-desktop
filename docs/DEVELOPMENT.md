@@ -6,6 +6,7 @@
 
 ```text
 .
+├── .agents/skills/               # 仓库开发 skill（版本更新等）
 ├── .codex/environments/          # Codex 本地任务入口配置
 ├── .github/workflows/            # GitHub CI 与发布流程
 ├── build/                        # 本地构建与打包产物（Git 忽略）
@@ -107,6 +108,14 @@ Agent 临时验证按以下步骤收尾，失败或中断也适用；用户要�
 
 ## 打包与发布
 
-版本与构建号在 [Version.xcconfig](../Version.xcconfig) 维护；本地 `task package` 的输出目录与构建参数见 [package_app.sh](../script/package_app.sh)。
+产品版本与构建号统一在 [Version.xcconfig](../Version.xcconfig) 维护，Debug 和 Release 均继承该配置。[generate_version.sh](../script/generate_version.sh) 生成 Core 的 `ModuVersion`，App 的 Info.plist 和 CLI 的 `--version` 使用同一配置；CLI 安装目录和 DMG 文件名随产品版本生成，无需分别手动修改。工作区 YAML 的 `version`、CLI JSON 的 `schema-version` 和依赖版本独立于产品版本。
+
+手动调用仓库 skill [`$modu-desktop-release`](../.agents/skills/modu-desktop-release/SKILL.md) 可检查工作区、确认版本、更新版本配置和 `CHANGELOG.md`，然后仅提交这两份文件并创建本地 `v<版本号>` tag。可指定版本，例如「请使用 `$modu-desktop-release` 更新到 `1.1.0`」；未指定时会根据最新发布 tag 以来的实际改动建议版本，并等待选择。此 skill 不自动推送。
+
+发布流程采用 `X.Y.Z` 产品版本和每次加一的整数构建号；这是该流程的约定，底层版本生成脚本允许一到三段纯数字。版本提交前运行 `task test TEST_FILTER=ModuDesktopTests/VersionTests`，验证 App 的产品版本、构建号与生成值一致，且内置 CLI 返回相同产品版本。测试脚本负责隔离和清理测试环境。本地 `task package` 还会检查 App 与 CLI 的产品版本一致；输出目录与构建参数见 [package_app.sh](../script/package_app.sh)。
 
 [GitHub CI](../.github/workflows/ci.yml) 定义触发条件、工具链和发布流程；仅在推送 `v*` tag 触发发布时运行测试，测试通过后打包并发布。分支 push、PR 和手动触发仅构建打包。发布时在目标提交上推送与产品版本一致的 `v<版本号>` tag。
+
+`CHANGELOG.md` 是版本变更说明的来源，发布章节统一使用 `## [X.Y.Z] - YYYY-MM-DD`，正文可按新增、改进、修复等分类。CI 在 tag 构建开始前使用 [release_notes.py](../script/release_notes.py) 校验 tag 与 `MARKETING_VERSION` 一致，且对应章节唯一、内容非空；校验失败即停止发布。普通分支构建不要求 CHANGELOG 发布章节。
+
+发布 job 从同一 tag 的 CHANGELOG 提取对应章节，附加系统要求与签名说明，通过 `gh release create --notes-file` 作为 GitHub Release 正文。Unreleased 和其他版本的变更不会混入当前版本；Markdown 引用式链接的定义会保留。可以在提交版本前运行 `python3 script/release_notes.py v<版本号>` 预览实际变更说明。

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Modu Desktop Release"
+  short_description: "手动更新 Modu Desktop 版本与变更日志，创建本地版本提交和 Git tag"
+  default_prompt: "请使用 $modu-desktop-release 完成版本更新；如果我未指定 version，先分析最新 tag 以来的改动并提供版本建议供我选择。"
+
+policy:
+  allow_implicit_invocation: false
