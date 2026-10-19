@@ -1,4 +1,7 @@
 name: macOS CI
+run-name: >-
+  ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'Release' || 'Build' }}
+  · ${{ github.head_ref || github.ref_name }}
 
 on:
   push:
@@ -11,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -32,7 +35,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate release tag and changelog
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        if: &is_release github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         run: python3 script/release_notes.py "$GITHUB_REF_NAME" > /dev/null
 
       - name: Show toolchain
@@ -47,8 +50,18 @@ jobs:
           version: '3.48.0'
 
       - name: Test before release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        run: task test
+        id: tests
+        if: *is_release
+        run: task test -- -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult"
+
+      - name: Upload failed test results
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/TestResults.xcresult
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build and package arm64 app
         id: package
@@ -65,7 +78,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: *is_release
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -114,7 +114,7 @@ Agent 临时验证按以下步骤收尾，失败或中断也适用；用户要�
 
 发布流程采用 `X.Y.Z` 产品版本和每次加一的整数构建号；这是该流程的约定，底层版本生成脚本允许一到三段纯数字。版本提交前运行 `task test TEST_FILTER=ModuDesktopTests/VersionTests`，验证 App 的产品版本、构建号与生成值一致，且内置 CLI 返回相同产品版本。测试脚本负责隔离和清理测试环境。本地 `task package` 还会检查 App 与 CLI 的产品版本一致；输出目录与构建参数见 [package_app.sh](../script/package_app.sh)。
 
-[GitHub CI](../.github/workflows/ci.yml) 定义触发条件、工具链和发布流程；仅在推送 `v*` tag 触发发布时运行测试，测试通过后打包并发布。分支 push、PR 和手动触发仅构建打包。发布时在目标提交上推送与产品版本一致的 `v<版本号>` tag。
+[GitHub CI](../.github/workflows/ci.yml) 定义触发条件、工具链和发布流程；仅在推送 `v*` tag 触发发布时运行测试，测试通过后打包并发布。测试失败时将 `.xcresult` 结果包作为 `test-results` 产物上传，保留 14 天。分支 push、PR 和手动触发仅构建打包。发布时在目标提交上推送与产品版本一致的 `v<版本号>` tag。
 
 `CHANGELOG.md` 是版本变更说明的来源，发布章节统一使用 `## [X.Y.Z] - YYYY-MM-DD`，正文可按新增、改进、修复等分类。CI 在 tag 构建开始前使用 [release_notes.py](../script/release_notes.py) 校验 tag 与 `MARKETING_VERSION` 一致，且对应章节唯一、内容非空；校验失败即停止发布。普通分支构建不要求 CHANGELOG 发布章节。
 
