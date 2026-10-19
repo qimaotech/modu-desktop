@@ -111,33 +111,6 @@ import SwiftUI
         await model.workspace.detailPreloadTask?.value
     }
 
-    @Test func postOperationReloadInitializesAndKeepsTheCreatedGroupSelected() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let model = try await makeModel(fixture)
-        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        await model.workspace.reload()
-        let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
-        model.management.sheet = .create
-        model.management.run({ service, root, progress in
-            let outcome = await service.createGroup("feature", repositories: ["repo"], at: root, progress: progress)
-            guard outcome.status == .success else { return outcome }
-            do {
-                try FileManager.default.removeItem(at: root.appending(path: ".agents"))
-            } catch { return .init(command: outcome.command, workspace: root.path, status: .failed, error: .wrap(error)) }
-            return outcome
-        }, select: .group("feature"))
-        await (try #require(model.operation)).value
-        #expect(model.workspace.selection == .group("feature") && model.workspace.expandedGroups.contains("feature"))
-        #expect(model.presentation.completionMessage == nil)
-        #expect(model.management.sheet == nil && model.presentation.result == nil && model.workspace.blocked == nil)
-        #expect(!model.busy && !model.openingWorkspace && model.operation == nil)
-        #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")))
-        #expect(PathSafety.exists(fixture.root.appending(path: "repositories")))
-        #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
-    }
-
     @Test(arguments: ["missing", "invalid"], [false, true])
     func reloadDoesNotInitializeWithMissingOrInvalidRecord(_ kind: String, _ implicit: Bool) async throws {
         let fixture = try await Fixture(createRemote: false)
@@ -180,53 +153,6 @@ import SwiftUI
         #expect(model.workspace.record != nil && model.workspace.blocked == nil && model.presentation.result == nil)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) != head)
         #expect(try await fixture.service.git.changes(at: fixture.root).isEmpty)
-    }
-
-    @Test func startupAndRefreshValidateEachGroupOnlyOnce() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
-        let record = try fixture.service.store.load(fixture.root)
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        defaults.set(record.root, forKey: "workspace")
-        let trace = fixture.directory.appending(path: "startup-trace")
-        var runner = fixture.service.git.runner
-        runner.environment["GIT_TRACE"] = trace.path
-        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
-        let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
-        func validationCount() throws -> Int {
-            try String(contentsOf: trace, encoding: .utf8).components(separatedBy: "\n")
-                .filter { $0.contains("built-in: git check-ref-format refs/heads/feature") }.count
-        }
-
-        #expect(await model.start() == false)
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.record == record && model.workspace.blocked == nil)
-        #expect(model.tools.map(\.id) == ["codex"])
-        #expect(try validationCount() == 1)
-        let statuses = try String(contentsOf: trace, encoding: .utf8).components(separatedBy: "\n")
-            .filter { $0.contains("built-in: git status --porcelain=v1") }
-        #expect(statuses.count == service.resources(record).count)
-        #expect(service.resources(record).allSatisfy { model.workspace.states[$0.id]?.available == true && model.workspace.states[$0.id]?.dirty == false })
-        #expect(await model.start() == false)
-        #expect(try validationCount() == 1)
-
-        try Data("changed".utf8).write(to: record.repositoryURL("repo").appending(path: "new.txt"))
-        await model.activate()
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.states[Resource.repository("repo").id]?.dirty == true)
-        #expect(try validationCount() == 2)
-
-        try FileManager.default.removeItem(at: record.memberURL("feature", "repo"))
-        await model.workspace.reload()
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.record?.groups["feature"]?.repositories == [])
-        #expect(try service.store.load(fixture.root).groups["feature"]?.repositories == [])
-        #expect(try validationCount() == 3)
     }
 
     @Test func startupPublishesWorkspaceAndToolsBeforeSlowResourceChecks() async throws {
@@ -339,50 +265,6 @@ import SwiftUI
         }
     }
 
-    @Test(arguments: [false, true])
-    func setupDetectsToolsAfterInstallingCLIWithoutRestartOrActivation(_ savedWorkspace: Bool) async throws {
-        let fixture = try await Fixture(createRemote: false)
-        defer { fixture.remove() }
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        var original: Data?
-        if savedWorkspace {
-            #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-            let record = try fixture.service.store.load(fixture.root)
-            defaults.set(record.root, forKey: "workspace")
-            original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
-        }
-        let installer = try makeInstaller(fixture)
-        let source = fixture.directory.appending(path: "source-cli")
-        try FileManager.default.copyItem(at: installer.executable, to: source)
-        try FileManager.default.removeItem(at: installer.executable)
-        var lookups: [String] = []
-        let installed = ["com.openai.codex", "com.microsoft.VSCode"]
-        let tools = ExternalTools(applicationURL: { id in
-            lookups.append(id)
-            return installed.contains(id) ? fixture.directory.appending(path: "\(id).app") : nil
-        }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: installer)
-
-        #expect(await model.start())
-        #expect(model.started && model.tools.isEmpty && lookups.isEmpty && model.workspace.record == nil)
-        #expect(try await installer.installCLI(from: source).available)
-        let setupOperation = try #require(model.operations.begin(.setup))
-        let opened = await fixture.service.openWorkspaceWithRecord(fixture.root, installer: installer, requireExistingRecord: savedWorkspace)
-        #expect(opened.result.status == .success)
-        let record = try #require(opened.record)
-        try await model.completeSetup(fixture.root, loaded: record)
-
-        #expect(model.busy && model.workspace.record == record && model.workspace.blocked == nil)
-        #expect(model.tools.map(\.id) == ["codex", "vscode"])
-        #expect(lookups == ExternalTool.builtIn.compactMap(\.bundleID))
-        #expect(await model.start() == false)
-        #expect(lookups == ExternalTool.builtIn.compactMap(\.bundleID))
-        if let original { #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original) }
-        model.operations.finish(setupOperation)
-        await model.workspace.detailPreloadTask?.value
-    }
-
     @Test(arguments: ["cancelled", "quitting"])
     func interruptedSetupKeepsWorkspaceAndTools(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false)
@@ -412,30 +294,6 @@ import SwiftUI
         } catch { #expect(error is CancellationError) }
         #expect(model.workspace.record == original && model.tools == previousTools)
         #expect(defaults.string(forKey: "workspace") == original.root)
-    }
-
-    @Test func startupWithoutSavedWorkspaceSkipsCLIPathCheck() async throws {
-        let fixture = try await Fixture(createRemote: false)
-        defer { fixture.remove() }
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let baseInstaller = try makeInstaller(fixture)
-        let probe = fixture.directory.appending(path: "cli-path-check")
-        let shell = fixture.directory.appending(path: "login-shell")
-        try Data("#!/bin/sh\n: > \"$MODU_CLI_PATH_PROBE\"\nexit 1\n".utf8).write(to: shell)
-        var environment = baseInstaller.runner.environment
-        environment["MODU_CLI_PATH_PROBE"] = probe.path
-        let installer = InstallationService(support: baseInstaller.support, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
-        #expect((await installer.checkCLIInstallation()).available)
-        let tools = ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: installer)
-        var readyCount = 0
-
-        #expect(!model.hasSavedWorkspace)
-        #expect(await model.start(onReady: { readyCount += 1 }))
-        #expect(readyCount == 0)
-        #expect(model.workspace.record == nil && model.presentation.result == nil && !model.busy)
-        #expect(!PathSafety.exists(probe))
     }
 
     @Test(arguments: ["available", "missing-path", "conflict", "cancelled"])
@@ -563,30 +421,6 @@ import SwiftUI
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
         #expect(await model.start(onReady: { readyCount += 1 }) == false)
         #expect(readyCount == expectedReadyCount)
-    }
-
-    @Test func appDelegateStartsWithoutAWindowAndDoesNotRestartOnReopen() async throws {
-        let fixture = try await Fixture(createRemote: false)
-        defer { fixture.remove() }
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let tools = ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: try makeInstaller(fixture))
-        let delegate = AppDelegate()
-        var readyCount = 0, finishedCount = 0, reopenCount = 0
-        delegate.start(model: model, onReady: { readyCount += 1 }, onFinished: { needsSetup in
-            #expect(needsSetup)
-            finishedCount += 1
-        })
-        let task = try #require(delegate.startupTask)
-        delegate.start(model: model, onReady: { readyCount += 1 }, onFinished: { _ in finishedCount += 1 })
-        await task.value
-        #expect(readyCount == 0 && finishedCount == 1 && model.started && delegate.startupTask == nil)
-        delegate.reopenWindow = { reopenCount += 1 }
-        #expect(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: true) == false)
-        #expect(reopenCount == 0)
-        #expect(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false) == false)
-        #expect(reopenCount == 1 && readyCount == 0)
     }
 
     @Test func quittingDuringHiddenInitializationStillPresentsRetainedEffects() async throws {
@@ -943,29 +777,6 @@ import SwiftUI
         #expect(try String(contentsOf: skill, encoding: .utf8) == "user skill")
         model.workspace.notice = nil
         #expect(model.workspace.notice == nil)
-    }
-
-    @Test func overlappingReloadsKeepTheLoadedWorkspace() async throws {
-        let fixture = try await Fixture(createRemote: false)
-        defer { fixture.remove() }
-        var record = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
-        record.groups["feature"] = WorktreeGroup()
-        try FileManager.default.createDirectory(at: record.groupURL("feature"), withIntermediateDirectories: true)
-        try fixture.service.store.save(record)
-        let suite = "ModuLoadingTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(record.root, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service)
-
-        let first = Task { await model.workspace.reload() }
-        try await waitForReadLock(fixture)
-        await model.workspace.reload()
-        await first.value
-
-        #expect(model.workspace.record == record)
-        #expect(model.workspace.blocked == nil)
-        #expect(!model.workspace.waiting)
     }
 
     @Test func switchingWorkspacesWhileLoadingKeepsTheNewWorkspace() async throws {

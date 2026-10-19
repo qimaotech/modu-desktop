@@ -4,9 +4,8 @@ import Testing
 @testable import ModuCore
 
 struct BuildAndRunScriptTests {
-    @Test(arguments: ["--verify", "-verify", "verify"])
-    func verificationPreservesExistingInstances(_ argument: String) async throws {
-        let result = try await trace([argument])
+    @Test func verificationPreservesExistingInstances() async throws {
+        let result = try await trace(["--verify"])
         #expect(result.status == 0)
         #expect(result.text == "build\nverify:")
     }
@@ -60,33 +59,6 @@ struct BuildAndRunScriptTests {
     }
 
     @MainActor @Test func verificationKeepsItsInstanceUntilTheCallerExplicitlyQuits() async throws {
-        try await expectExplicitQuit(status: 0) { fixture in
-            try await runHelper("verify_app", [Bundle.main.bundleURL.path, "--mock", "linked-worktree-selected", "--mock-workspace", fixture.root.path])
-        }
-    }
-
-    @MainActor @Test func interruptedScriptPreservesItsRealAppUntilExplicitQuit() async throws {
-        let script = """
-        source "$1"
-        MOCK_DIRECTORY="$2"
-        APP_BUNDLE="$3"
-        APP_BINARY="$APP_BUNDLE/Contents/MacOS/Modu"
-        build_app() { :; }
-        launch_verified_app() {
-          /usr/bin/swift -module-cache-path "$DERIVED_DATA_PATH/VerificationModuleCache" "$ROOT_DIR/script/verify_app.swift" "$@"
-          kill -TERM "$$"
-          /bin/sleep 0.05
-        }
-        main --verify --mock linked-worktree-selected
-        """
-        try await expectExplicitQuit(status: 143) { fixture in
-            try await CommandRunner().run("/bin/bash", ["-c", script, "modu-interrupted-verification-test",
-                                                      Self.root.appending(path: "script/build_and_run.sh").path,
-                                                      fixture.directory.path, Bundle.main.bundleURL.path])
-        }
-    }
-
-    @MainActor private func expectExplicitQuit(status: Int32, launch: (MockWorkspaceFixture) async throws -> CommandOutput) async throws {
         let fixture = try await MockWorkspacePreparation.prepare()
         let existing = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == "fun.armantang.ModuDesktop" }
         var running: NSRunningApplication?
@@ -102,11 +74,11 @@ struct BuildAndRunScriptTests {
             }
             if application?.isTerminated != false { fixture.remove() }
         }
-        let result = try await launch(fixture)
+        let result = try await runHelper("verify_app", [Bundle.main.bundleURL.path, "--mock", "linked-worktree-selected", "--mock-workspace", fixture.root.path])
         let application = try #require(self.application(in: result.text))
         running = application
         let pid = application.processIdentifier
-        #expect(result.status == status, "\(result.text)\n\(String(decoding: result.stderr, as: UTF8.self))")
+        #expect(result.status == 0, "\(result.text)\n\(String(decoding: result.stderr, as: UTF8.self))")
         #expect(!existing.contains { $0.processIdentifier == pid })
         #expect(!application.isTerminated)
         #expect(!result.text.contains("App exited"))

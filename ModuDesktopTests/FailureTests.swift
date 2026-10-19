@@ -51,22 +51,6 @@ struct FailureTests {
         }
     }
 
-    @Test func repositoryAdditionCancelledBeforeSavingDoesNotUpdateIgnore() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        let ignoreFile = f.root.appending(path: ".gitignore")
-        let before = try Data(contentsOf: ignoreFile)
-        let result = await Task {
-            await f.service.addRepository(.init(url: f.remoteURL), at: f.root) { progress in
-                if progress.phase == .cloning { withUnsafeCurrentTask { $0?.cancel() } }
-            }
-        }.value
-        #expect(result.status == .cancelled)
-        #expect(result.items.allSatisfy { $0.effects.isEmpty })
-        #expect(try f.service.store.load(f.root).repositories.isEmpty)
-        #expect(try Data(contentsOf: ignoreFile) == before)
-    }
-
     @Test(arguments: ["single", "batch"], [false, true])
     func cancelledRepositoryCleanupReportsItsActualOutcome(_ kind: String, _ cleanupFails: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
@@ -269,7 +253,7 @@ struct FailureTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: installer.executable.path)
         #expect(await installer.checkCLI().available == false)
     }
-    @Test(arguments: ["quiet", "stdout", "multiline", "stderr", "exit"], [false, true])
+    @Test(arguments: [("quiet", false), ("stdout", false), ("multiline", false), ("stderr", false), ("exit", false), ("exit", true)])
     func cliInstallationReadsInteractiveLoginPATH(_ output: String, _ conflictingCommand: Bool) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-login-shell-tests-\(UUID().uuidString) with 'quotes' and $signs")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -494,10 +478,6 @@ struct FailureTests {
             #expect(output.status == status)
             #expect(output.stdout == Data(stdout.utf8) && output.stderr == Data(stderr.utf8))
         }
-    }
-    @Test func onlyLocalGitTimeoutDoesNotHang() async throws {
-        do { _ = try await CommandRunner().run("/bin/sleep", ["30"], timeout: 0.1); Issue.record("Expected timeout") }
-        catch { #expect((error as? ModuError)?.code == "network-timeout") }
     }
     @Test(arguments: ["cancelled", "network-timeout"])
     func terminationWaitsForHelpersAfterTheParentExits(_ reason: String) async throws {

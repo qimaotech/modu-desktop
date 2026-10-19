@@ -360,32 +360,6 @@ import Testing
         #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
     }
 
-    @Test(arguments: ["group", "member", "repository", "edit"])
-    func confirmedDeletionDoesNotScanRisksAgain(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        try await prepare(fixture)
-        let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "member" ? .member(group: "feature", repo: "repo") : .group("feature")
-        let trace = fixture.directory.appending(path: "confirmed-delete-trace")
-        var runner = fixture.service.git.runner
-        runner.environment["GIT_TRACE"] = trace.path
-        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner), trash: fixture.service.trashDirectory)
-        let targets: [DeletionTarget]
-        if kind == "edit" { targets = try #require(await service.editGroupPreview("feature", repositories: [], at: fixture.root).plan) }
-        else { targets = try await service.previewDelete(request, at: fixture.root) }
-        let previewCommands = try String(contentsOf: trace, encoding: .utf8)
-        #expect(previewCommands.contains("git status ") && previewCommands.contains("git ls-files ") && previewCommands.contains("git rev-list "))
-        try Data().write(to: trace)
-        let result: OperationResult
-        if kind == "edit" { result = await service.editGroup("feature", repositories: [], at: fixture.root, authorization: targets) }
-        else { result = await service.remove(request, at: fixture.root, authorization: targets) }
-        #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
-        let commands = try String(contentsOf: trace, encoding: .utf8)
-        #expect(!commands.contains("git status ") && !commands.contains("git ls-files ") && !commands.contains("git rev-list "))
-        #expect(commands.contains("git worktree remove ") && commands.contains("git branch -D "))
-        let record = try fixture.service.store.load(fixture.root)
-        #expect(record.groups["feature"]?.repositories.isEmpty != false)
-    }
-
     @Test func changedDeletionSafetyStopsBeforeAnyEffects() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)

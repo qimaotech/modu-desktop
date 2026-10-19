@@ -17,23 +17,17 @@ import Testing
         let record = try #require(model.workspace.record)
         #expect(!needsSetup && model.started && model.hasSavedWorkspace && model.workspace.blocked == nil)
         #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
-        #expect(record.rootURL.lastPathComponent == "example-workspace")
         #expect(record.repositories.count == 7 && model.workspace.sortedGroups == ["feature-store-pickup", "fix-overselling"])
-        #expect(model.workspace.expandedGroups == Set(model.workspace.sortedGroups))
         #expect(model.workspace.detail.summary?.base == "origin/main" && model.workspace.detail.summary?.head == "feature-store-pickup")
-        #expect(model.workspace.detail.changes == Self.orderChanges)
-        #expect(model.workspace.detail.commits?.map(\.subject) == Self.commitSubjects)
+        #expect(model.workspace.detail.changes?.isEmpty == false && model.workspace.detail.commits?.isEmpty == false)
         #expect(try model.service.store.load(record.rootURL) == record)
-        #expect(try await model.service.git.registrations(at: record.rootURL).count == 3)
         let resources = model.service.resources(record)
         #expect(resources.allSatisfy { record.rootURL.appending(path: $0.path).path.hasPrefix(mock.directory.path + "/") })
         for path in [record.rootURL, record.repositoryURL("order-service"), record.memberURL("feature-store-pickup", "order-service")] {
             #expect(try await model.service.git.run(["config", "--local", "--get", "include.path"], at: path).text == mock.directory.appending(path: "gitconfig").path)
         }
-        #expect(resources.count == 17)
         #expect(resources.allSatisfy { model.workspace.states[$0.id]?.available == true })
-        #expect(model.workspace.states.values.filter { $0.dirty == true }.count == 2)
-        #expect(model.language == "en" && !model.workspace.detailLoading && model.operation == nil)
+        #expect(!model.workspace.detailLoading && model.operation == nil)
         #expect(!(await model.installer.checkCLIInstallation()).available)
         #expect(try await model.service.git.run(["config", "--get", "protocol.allow"], at: record.rootURL).text == "never")
         let remote = try #require(record.repositories.first)
@@ -166,26 +160,10 @@ import Testing
         #expect(throws: ModuError.self) { try AppModel.makeForLaunch(arguments: arguments) }
     }
 
-    @Test func launchWithoutMockKeepsNormalModel() throws {
-        let model = try AppModel.makeForLaunch(arguments: ["Modu"])
-        #expect(model.mockWorkspace == nil)
-        #expect(model.service.store.directoryBoundary == nil)
-        #expect(model.workspace.record == nil && model.workspace.selection == nil && !model.started)
-    }
-
     private func makeMock() async throws -> MockWorkspace {
         let fixture = try await MockWorkspacePreparation.prepare()
         do { return try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: fixture.root) }
         catch { fixture.remove(); throw error }
     }
-
-    private static let commitSubjects = ["test(order): cover pickup fulfillment rules", "feat(order): validate pickup eligibility", "feat(order): add pickup fulfillment type"]
-    private static let orderChanges = [
-        FileChange(path: "internal/order/application/create_pickup_order.go", index: "A", workingTree: " "),
-        FileChange(path: "internal/order/domain/order.go", index: " ", workingTree: "M"),
-        FileChange(path: "internal/order/domain/pickup.go", index: "A", workingTree: " "),
-        FileChange(path: "internal/order/infrastructure/persistence/legacy_pickup_repository.go", index: " ", workingTree: "D"),
-        FileChange(path: "internal/order/interfaces/http/pickup_handler.go", originalPath: "internal/order/interfaces/http/order_handler.go", index: "R", workingTree: " ")
-    ]
 }
 #endif

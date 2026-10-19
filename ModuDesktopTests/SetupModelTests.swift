@@ -11,7 +11,10 @@ import Testing
         let suite = fixture.directory.lastPathComponent
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let model = AppModel(defaults: defaults, service: fixture.service)
+        let tools = ExternalTools(applicationURL: { id in
+            id == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil
+        }, openURL: { _, _ in })
+        let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools)
         let setup = SetupModel(model: model)
         let skill = fixture.root.appending(path: ".agents/skills/modu-workflow")
         if conflict {
@@ -32,6 +35,7 @@ import Testing
             await (try #require(model.operation)).value
         }
         #expect(ready && model.workspace.record?.root == fixture.root.path && model.hasSavedWorkspace)
+        #expect(model.tools.map(\.id) == ["codex"])
         #expect(model.presentation.resultHost == .main && model.presentation.result == nil && !model.busy)
         await model.workspace.detailPreloadTask?.value
     }

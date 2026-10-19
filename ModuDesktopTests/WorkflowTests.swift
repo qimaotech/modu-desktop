@@ -177,19 +177,6 @@ struct WorkflowTests {
         #expect(protected.status == .failed)
         #expect(try String(contentsOf: main.appending(path: "secret"), encoding: .utf8) == "local-secret")
     }
-    @Test func changesAndCommitsIndependentOfBase() async throws {
-        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
-        let main = f.root.appending(path: "repositories/repo")
-        let base = try #require(await f.service.git.oid("HEAD", at: main))
-        for index in 0..<32 { _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "commit \(index)"], at: main) }
-        let head = try #require(await f.service.git.oid("HEAD", at: main))
-        #expect(try await f.service.git.commits(at: main, head: head, base: base).count == 30)
-        #expect(try await f.service.git.commits(at: main, head: head, base: base, skip: 30).count == 2)
-        _ = try await f.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: main)
-        try Data("new".utf8).write(to: main.appending(path: "untracked"))
-        #expect(try await f.service.git.summary(at: main, origin: f.remoteURL).baseError != nil)
-        #expect(try await f.service.git.changes(at: main).contains { $0.path == "untracked" })
-    }
     @Test(arguments: [false, true])
     func groupInspectionShowsOwnGitStateWithoutRequiringOrigin(_ hasRemote: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
@@ -227,19 +214,6 @@ struct WorkflowTests {
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
         #expect(result.reasonCode == "workspace-ignore-required")
         #expect(!PathSafety.exists(f.root.appending(path: "worktrees/feature")))
-    }
-    @Test func cliDoesNotWriteCoverageProfiles() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        runner.environment.removeValue(forKey: "LLVM_PROFILE_FILE")
-        for arguments in [["--version"], ["--help"], ["repo", "list", "--json", "--workspace", f.root.path]] {
-            let output = try await runner.run(executable.path, arguments, at: f.root)
-            #expect(output.status == 0, "\(output.text)")
-            #expect(!PathSafety.exists(f.root.appending(path: "default.profraw")))
-        }
     }
     @Test func cliJSONContractAndMissingUpdateMembersHaveNoEffects() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)

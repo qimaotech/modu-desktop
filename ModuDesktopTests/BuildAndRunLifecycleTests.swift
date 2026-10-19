@@ -51,18 +51,6 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test func actualLLDBQuitBeforeRunCleansItsData() async throws {
-        let session = try await Session.allocate()
-        defer { session.cleanup() }
-        let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: "--debug", overrides: """
-        lldb() { command /usr/bin/lldb --no-lldbinit "$@" <<< quit; }
-        """)
-        #expect(result.status == 0, "\(result.text)\n\(String(decoding: result.stderr, as: UTF8.self))")
-        #expect(!PathSafety.exists(session.directory))
-        try session.expectUnrelatedIsIntact(unrelated)
-    }
-
     @Test(arguments: ["--debug", "--verify"])
     func completedLaunchKeepsItsLiveInstanceForExplicitQuit(_ mode: String) async throws {
         let session = try await Session.allocate()

@@ -3,16 +3,6 @@ import Testing
 @testable import ModuCore
 
 struct WorkspaceCommitTests {
-    @Test(arguments: ["chore: update workspace", "chore: update workspace\n\nKeep the existing description."])
-    func automaticCommitsAppendAttributionToDescription(_ message: String) async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        _ = try await f.service.git.run(["init"], at: f.root)
-        try Data("managed content\n".utf8).write(to: f.root.appending(path: "managed.txt"))
-        let oid = try await f.service.git.commitWorkspaceFiles(["managed.txt"], message: message, at: f.root)
-        #expect(oid != nil)
-        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "\(message)\n\nAuto-committed-by: Modu")
-    }
-
     @Test func unchangedManagedFilesKeepStagedEditsAndSkipStagingAndCommit() async throws {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)

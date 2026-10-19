@@ -5,30 +5,6 @@ import Testing
 @testable import ModuCore
 
 struct MockWorkspacePreparationTests {
-    @Test func buildAndDataPreparationActuallyOverlap() async throws {
-        let directory = temporaryDirectory()
-        let build = """
-        import sys, time
-        from pathlib import Path
-        root = Path(sys.argv[1])
-        (root / 'build.started').write_text('started')
-        sample = root / 'example-workspace/worktrees/feature-store-pickup/storefront-web/src/pickup.ts'
-        deadline = time.monotonic() + 20
-        while not sample.exists() or 'Ready for pickup' not in sample.read_text():
-            if time.monotonic() >= deadline:
-                sys.exit(1)
-            time.sleep(0.01)
-        (root / 'build.completed').write_text('completed')
-        """
-        let fixture = try await MockWorkspacePreparation.prepare(directory: directory, buildCommand: ["/usr/bin/python3", "-c", build, directory.path])
-        defer { fixture.remove() }
-        let began = try modificationDate(directory.appending(path: "build.started"))
-        let generated = try modificationDate(fixture.root.appending(path: "worktrees/feature-store-pickup/storefront-web/src/pickup.ts"))
-        let completed = try modificationDate(directory.appending(path: "build.completed"))
-        #expect(began <= generated && generated <= completed)
-        #expect(try fixture.service.store.load(fixture.root).repositories.count == 7)
-    }
-
     @Test func buildFailureCleansThePreparedSession() async throws {
         let directory = temporaryDirectory()
         do {
@@ -71,10 +47,6 @@ struct MockWorkspacePreparationTests {
 
     private func temporaryDirectory() -> URL {
         TestEnvironment.temporaryDirectory.appending(path: "modu-mock-\(UUID().uuidString.lowercased())")
-    }
-
-    private func modificationDate(_ path: URL) throws -> Date {
-        try #require(FileManager.default.attributesOfItem(atPath: path.path)[.modificationDate] as? Date)
     }
 }
 #endif

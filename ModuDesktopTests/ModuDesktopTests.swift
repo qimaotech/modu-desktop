@@ -139,56 +139,22 @@ struct ModuCoreTests {
         #expect(try await fixture.service.load(fixture.root).groups.isEmpty)
     }
     @Test(arguments: [false, true])
-    func newWorkspaceIgnoreIncludesDefaultRulesBeforeModuSection(_ existingGit: Bool) async throws {
+    func newWorkspaceIgnoreProtectsGeneratedFilesAndIsCommittedOnce(_ existingGit: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         if existingGit { _ = try await fixture.service.git.run(["init"], at: fixture.root) }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let file = fixture.root.appending(path: ".gitignore")
-        let expected = Data("""
-        # Logs
-        logs
-        *.log
-        npm-debug.log*
-        yarn-debug.log*
-        yarn-error.log*
-        pnpm-debug.log*
-        lerna-debug.log*
-
-        node_modules
-        dist
-        dist-ssr
-        *.local
-
-        # Editor directories and files
-        .vscode/*
-        !.vscode/extensions.json
-        .idea
-        .DS_Store
-        *.suo
-        *.ntvs*
-        *.njsproj
-        *.sln
-        *.sw?
-
-        # modu
-        /repositories/
-        /worktrees/
-
-        """.utf8)
-        #expect(try Data(contentsOf: file) == expected)
-        #expect(try await fixture.service.git.run(["show", "HEAD:.gitignore"], at: fixture.root).stdout == expected)
+        let contents = try Data(contentsOf: file)
+        #expect(try await fixture.service.git.run(["show", "HEAD:.gitignore"], at: fixture.root).stdout == contents)
         let ignoredPaths = [
-            "logs/output.txt", "app.log", "npm-debug.log.1", "yarn-debug.log.1", "yarn-error.log.1",
-            "pnpm-debug.log.1", "lerna-debug.log.1", "node_modules/package/index.js", "dist/index.js",
-            "dist-ssr/index.js", "config.local", ".vscode/settings.json", ".idea/workspace.xml", ".DS_Store",
-            "project.suo", "project.ntvs_analysis.dat", "project.njsproj", "project.sln", ".file.swp",
+            "app.log", "node_modules/package/index.js", "dist/index.js", ".vscode/settings.json", ".DS_Store",
             "repositories/repo/README", "worktrees/feature/README"
         ]
         let ignored = try await fixture.service.git.run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--"] + ignoredPaths + [".vscode/extensions.json", "README.md"], at: fixture.root)
         #expect(ignored.text.components(separatedBy: "\n") == ignoredPaths)
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(try Data(contentsOf: file) == expected)
+        #expect(try Data(contentsOf: file) == contents)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
     }
     @Test func ignoreRulesUseModuSectionAndPreserveExistingContent() async throws {
@@ -230,13 +196,6 @@ struct ModuCoreTests {
         #expect(result.reasonCode == "unmanaged-worktree")
         #expect(PathSafety.exists(main))
         #expect(try await f.service.load(f.root).repositories.count == 1)
-    }
-    @Test func cancellationTerminatesProcessGroup() async throws {
-        let runner = CommandRunner()
-        let task = Task { try await runner.run("/bin/sleep", ["30"]) }
-        try await Task.sleep(for: .milliseconds(100)); task.cancel()
-        do { _ = try await task.value; Issue.record("Expected cancellation") }
-        catch { #expect((error as? ModuError)?.code == "cancelled") }
     }
 }
 

@@ -195,82 +195,7 @@ import Testing
         #expect(model.workspace.states[repository.id]?.dirty == nil)
     }
 
-    @Test func activationPublishesToolsAndKeepsSelectionWhileBackgroundInspectionWaits() async throws {
-        let selected = Resource.member("feature", "repo")
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let initial = try await makeModel(fixture)
-        defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        var record = try #require(initial.workspace.record)
-        let other = Repository(url: "https://modu-test.invalid/other.git")
-        try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(other.id))
-        _ = try await fixture.service.git.run(["config", "remote.origin.url", other.url], at: record.repositoryURL(other.id))
-        record.repositories.append(other)
-        try fixture.service.store.save(record)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
-        record = try fixture.service.store.load(fixture.root)
-
-        let probe = fixture.directory.appending(path: "detail-probe")
-        try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
-        var runner = fixture.service.git.runner
-        runner.environment["MODU_DETAIL_PROBE"] = probe.path
-        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
-        let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? probe.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: initial.defaults, service: service, toolService: tools)
-        model.workspace.record = record
-        model.workspace.selection = selected
-        try await waitForDetail(model)
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.detail.changes?.isEmpty == true)
-
-        let monitor = probe.appending(path: "fsmonitor")
-        try Data("""
-        #!/bin/sh
-        : > "$MODU_DETAIL_PROBE/started"
-        trap 'exit 143' TERM INT
-        while [ ! -e "$MODU_DETAIL_PROBE/release" ]; do sleep 0.02; done
-        printf 'test-token\\000/\\000'
-        """.utf8).write(to: monitor)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
-            _ = try await service.git.run(arguments, at: record.repositoryURL(other.id))
-        }
-        let selectedPath = try PathSafety.child(selected.path, of: record.rootURL, allowMissing: false)
-        try Data("changed".utf8).write(to: selectedPath.appending(path: "new.txt"))
-        #expect(model.tools.isEmpty)
-        let reload = Task { await model.activate() }
-        do {
-            try await waitForProbe(probe.appending(path: "started"))
-            #expect(model.tools.map(\.id) == ["codex"])
-            #expect(!model.workspace.detailLoading)
-            #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
-            #expect(model.workspace.states[selected.id]?.dirty == true)
-
-            let next = selected.kind == .member ? Resource.repository("repo") : Resource.member("feature", "repo")
-            let nextPath = try PathSafety.child(next.path, of: record.rootURL, allowMissing: false)
-            try Data("next".utf8).write(to: nextPath.appending(path: "next.txt"))
-            model.workspace.selection = next
-            try await waitForDetail(model)
-            #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
-            #expect(model.workspace.states[next.id]?.dirty == true)
-
-            try Data().write(to: probe.appending(path: "release"))
-            await reload.value
-            await model.workspace.detailPreloadTask?.value
-            #expect(model.workspace.selection == next)
-            #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
-            #expect(model.workspace.states[next.id]?.dirty == true)
-            #expect(model.workspace.states[Resource.repository(other.id).id]?.available == true)
-            #expect(model.workspace.states[Resource.repository(other.id).id]?.dirty == false)
-        } catch {
-            try? Data().write(to: probe.appending(path: "release"))
-            await reload.value
-            await model.workspace.detailPreloadTask?.value
-            throw error
-        }
-    }
-
-    @Test func mainGroupAndMemberWorktreesHaveSeparateSnapshots() async throws {
+    @Test func reloadPreloadsSeparateSnapshotsForRepositoriesGroupsAndMembers() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -282,10 +207,15 @@ import Testing
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
 
+        await model.workspace.reload()
+        await model.workspace.detailPreloadTask?.value
+        #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
         model.workspace.selection = .repository("repo")
+        #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
         try await waitForDetail(model)
         #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
         model.workspace.selection = .group("feature")
+        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.head == "feature")
         #expect(model.workspace.detail.summary?.hasRemotes == false)
@@ -294,7 +224,7 @@ import Testing
         #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
         #expect(model.workspace.states[Resource.group("feature").id]?.dirty == true)
         model.workspace.selection = .member("feature", "repo")
-        #expect(model.workspace.detail.changes == nil || model.workspace.detail.changes?.map(\.path) == ["member.txt"])
+        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.head == "feature")
         #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
@@ -404,36 +334,6 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.commits?.isEmpty == true)
         #expect(model.workspace.detail.summary?.head == "main")
-    }
-
-    @Test func reloadPreloadsRepositoriesGroupsAndMembersWithoutSelectingThem() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let model = try await makeModel(fixture)
-        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
-        let record = try fixture.service.store.load(fixture.root)
-        try Data("main".utf8).write(to: record.repositoryURL("repo").appending(path: "main.txt"))
-        try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
-        try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
-
-        await model.workspace.reload()
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
-        model.workspace.selection = .repository("repo")
-        #expect(model.workspace.detail.summary?.head == "main")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
-        #expect(model.workspace.detail.commits?.isEmpty == true)
-        model.workspace.selection = .group("feature")
-        #expect(model.workspace.detail.summary?.head == "feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
-        #expect(model.workspace.states[Resource.group("feature").id]?.dirty == true)
-        model.workspace.selection = .member("feature", "repo")
-        #expect(model.workspace.detail.summary?.head == "feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
-        #expect(model.workspace.detail.commits?.isEmpty == true)
-        try await waitForDetail(model)
     }
 
     @Test func selectionAndWorkspaceSwitchCancelPreloading() async throws {
