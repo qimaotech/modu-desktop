@@ -80,16 +80,18 @@ struct ContentView: View {
             ContentUnavailableView { Label(model.t("No workspace selected", "尚未选择工作区"), systemImage: "folder") } actions: { Button(model.t("Set Up Workspace", "设置工作区")) { openWindow(id: "setup") } }
         } else if model.selection == nil {
             VStack(spacing: 24) {
-                Text(model.t("Let’s start", "开始使用")).font(.system(size: 26)).frame(height: 32)
-                ForEach(["Agent", "Editor"], id: \.self) { category in
-                    if model.tools.contains(where: { $0.category == category }) {
-                        ToolBarView(model: model, category: category)
+                Text(model.t("Let’s start", "开始使用")).font(.system(size: 24)).frame(height: 32)
+                HStack(spacing: 12) {
+                    Button(model.t("Add Repository", "添加仓库")) { model.sheet = .add }
+                    Button(model.t("Create Group", "创建分组")) { model.sheet = .create }.disabled(model.sortedRepositories.isEmpty)
+                }.buttonStyle(StartButtonStyle(width: model.language == "zh" ? 112 : 136)).disabled(model.busy)
+                HStack(spacing: 12) {
+                    ForEach(["Agent", "Editor"], id: \.self) { category in
+                        if model.tools.contains(where: { $0.category == category }) {
+                            ToolBarView(model: model, category: category, fixedButtonWidth: 160)
+                        }
                     }
                 }
-                HStack(spacing: 8) {
-                    Button(model.t("Add Repository", "添加仓库")) { model.sheet = .add }
-                    Button(model.t("Create Worktree Group", "创建工作树组")) { model.sheet = .create }.disabled(model.sortedRepositories.isEmpty)
-                }.buttonStyle(StartButtonStyle()).disabled(model.busy)
             }.frame(maxWidth: .infinity, maxHeight: .infinity).offset(x: -12, y: -chromeHeight / 2)
         } else { RepositoryDetailView(model: model) }
     }

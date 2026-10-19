@@ -6,6 +6,7 @@ struct ToolBarView: View {
     var model: AppModel
     var category: String?
     var availableWidth: CGFloat?
+    var fixedButtonWidth: CGFloat?
     private var categories: [String] {
         (category.map { [$0] } ?? ["Agent", "Git GUI", "Editor", "Terminal"]).filter { category in
             model.tools.contains { $0.category == category }
@@ -20,7 +21,7 @@ struct ToolBarView: View {
             ForEach(0..<layout.rows, id: \.self) { row in
                 HStack(spacing: layout.spacing) {
                     ForEach(Array(categories.dropFirst(row * layout.columns).prefix(layout.columns)), id: \.self) { category in
-                        button(category: category, width: layout.buttonWidth)
+                        button(category: category, width: fixedButtonWidth ?? layout.buttonWidth)
                     }
                 }
             }
