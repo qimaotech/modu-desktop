@@ -88,6 +88,7 @@ final class ToolMenuControl: NSButton, NSMenuDelegate {
         image?.size = NSSize(width: 18, height: 18)
         imagePosition = .imageOnly
         isBordered = false
+        focusRingType = .none
         target = self
         action = #selector(showTools)
         setAccessibilityRole(.menuButton)
