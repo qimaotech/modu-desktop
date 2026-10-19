@@ -79,7 +79,7 @@ extension WorkspaceService {
         return branch
     }
 
-    private func checkRemoteBoundary(_ url: String, at root: URL) async throws {
+    func checkRemoteBoundary(_ url: String, at root: URL) async throws {
         guard let boundary = store.directoryBoundary else { return }
         let resolved = try await git.run(["ls-remote", "--get-url", "--", url], at: root).text
         guard let remote = URL(string: resolved), remote.isFileURL else {

@@ -5,7 +5,13 @@ extension WorkspaceService {
         let path = try await checked(resource, in: record)
         let origin = record.repositories.first(where: { $0.id == resource.repo })?.url
         async let changes = snapshotRead { try await git.changes(at: path) }
-        async let summary = snapshotRead { try await git.summary(at: path, origin: origin) }
+        async let summary = snapshotRead {
+            try await git.summary(at: path, origin: origin) {
+                let remote = try await git.run(["config", "--get", "remote.origin.url"], at: path).text
+                try await checkRemoteBoundary(remote, at: path)
+                _ = try await git.run(["fetch", "--no-recurse-submodules", "origin"], at: path)
+            }
+        }
         var snapshot = ResourceSnapshot(resource: resource)
         switch await changes {
         case .success(let value): snapshot.changes = value

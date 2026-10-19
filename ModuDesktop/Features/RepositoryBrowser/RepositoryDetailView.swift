@@ -37,7 +37,7 @@ struct RepositoryDetailView: View {
     }
 
     var showsChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
-    var showsCommits: Bool { workspace.detail.commits?.isEmpty == false || workspace.detail.commitsError != nil }
+    var showsCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.commitsError == nil && workspace.detail.commits?.isEmpty == false }
 
     private func summary(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -114,8 +114,7 @@ struct RepositoryDetailView: View {
     private var commitsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(preferences.t("Commits", "提交")).font(.system(size: 14, weight: .medium)).frame(height: 20)
-            if let error = workspace.detail.commitsError { unavailable(error) }
-            else if let commits = workspace.detail.commits {
+            if let commits = workspace.detail.commits {
                 let contentHeight = CGFloat(commits.count) * 24 + (workspace.detail.canLoadMore ? 32 : 0)
                 GeometryReader { geometry in
                     let compact = geometry.size.width < 720

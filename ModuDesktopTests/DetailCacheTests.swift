@@ -182,8 +182,8 @@ import Testing
         model.workspace.refreshDetail()
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
         try await waitForDetail(model)
-        #expect(model.workspace.detail.summary != nil && model.workspace.detail.summary?.baseOID == nil)
-        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
+        #expect(model.workspace.detail.summary?.base == "origin/main" && model.workspace.detail.summary?.baseError == nil)
+        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
 
         try FileManager.default.removeItem(at: path)
@@ -257,7 +257,6 @@ import Testing
         defer { fixture.remove() }
         let model = try await makeModel(fixture, repository: false)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let base = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
         try await fixture.prepareEmptyGroup("feature")
         model.workspace.record = try fixture.service.store.load(fixture.root)
         let path = try #require(model.workspace.record?.groupURL("feature"))
@@ -270,14 +269,10 @@ import Testing
         #expect(model.workspace.detail.summary?.baseError == nil)
         #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
 
+        _ = try await fixture.service.git.run(["init", "--bare", "--initial-branch=main", fixture.directory.appending(path: "repo.git").path], at: fixture.directory)
         _ = try await fixture.service.git.run(["remote", "add", "origin", fixture.remoteURL], at: fixture.root)
-        model.workspace.refreshDetail()
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.summary?.hasRemotes == true && model.workspace.detail.summary?.baseError != nil)
-        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
-
-        _ = try await fixture.service.git.run(["update-ref", "refs/remotes/origin/main", base], at: fixture.root)
-        _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: fixture.root)
+        _ = try await fixture.service.git.run(["push", "-u", "origin", "HEAD"], at: fixture.root)
+        #expect(try await fixture.service.git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true).status == 1)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")

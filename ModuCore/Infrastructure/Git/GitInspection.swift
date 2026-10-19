@@ -72,7 +72,7 @@ extension Git {
         }
         return result.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
-    public func summary(at path: URL, origin: String? = nil) async throws -> GitSummary {
+    public func summary(at path: URL, origin: String? = nil, fetchMissingBase: (@Sendable () async throws -> Void)? = nil) async throws -> GitSummary {
         guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", "HEAD does not identify a commit.") }
         let branch = try await run(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path, allowFailure: true)
         var summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
@@ -80,9 +80,13 @@ extension Git {
             try await checkRepository(path, origin: origin)
             summary.hasRemotes = !(try await run(["remote"], at: path).text.isEmpty)
             guard summary.hasRemotes else { return summary }
-            let ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path).text
-            guard ref.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref, at: path) else { throw ModuError("base-unavailable", "origin/HEAD does not identify a commit.") }
-            summary.base = String(ref.dropFirst(13)); summary.baseOID = oid
+            var ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
+            if ref.status == 1, let fetchMissingBase {
+                try await fetchMissingBase()
+                ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
+            }
+            guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref.text, at: path) else { throw ModuError("base-unavailable", "origin/HEAD does not identify a commit.") }
+            summary.base = String(ref.text.dropFirst(13)); summary.baseOID = oid
         } catch { summary.baseError = ModuError.wrap(error).message }
         return summary
     }
