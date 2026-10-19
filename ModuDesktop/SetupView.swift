@@ -182,7 +182,7 @@ struct SetupView: View {
         guard let candidate else { return }
         working = true; settingUp = true; model.busy = true; model.resultHost = .setup; error = nil
         model.operation = Task {
-            let skill = skillConflict ? nil : Bundle.main.url(forResource: "SKILL", withExtension: "md")
+            let skill = skillConflict ? nil : Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow")
             let opened = await model.service.openWorkspaceWithRecord(candidate, skill: skill, installer: model.installer, requireExistingRecord: candidateRequiresExistingRecord)
             var outcome = opened.result
             defer { settingUp = false; finish(outcome) }

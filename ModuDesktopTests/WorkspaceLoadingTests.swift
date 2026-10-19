@@ -33,10 +33,10 @@ import SwiftUI
         #expect(model.completionMessage == nil)
         #expect(!model.busy && !model.openingWorkspace && model.operation == nil)
         #expect(try fixture.service.store.load(fixture.root) == record)
-        for path in [".git", "repositories", "worktrees", ".agents/skills/modu-workflow/SKILL.md"] {
+        for path in [".git", "repositories", "worktrees", ".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml"] {
             #expect(PathSafety.exists(fixture.root.appending(path: path)))
         }
-        #expect(try await fixture.service.git.run(["ls-tree", "-r", "--name-only", "HEAD"], at: fixture.root).text.components(separatedBy: "\n") == [".agents/skills/modu-workflow/SKILL.md", ".gitignore"])
+        #expect(try await fixture.service.git.run(["ls-tree", "-r", "--name-only", "HEAD"], at: fixture.root).text.components(separatedBy: "\n") == [".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml", ".gitignore"])
         #expect(try Data(contentsOf: notes) == Data("keep me".utf8))
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
         await model.reload()

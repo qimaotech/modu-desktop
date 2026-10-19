@@ -83,20 +83,33 @@ public struct InstallationService: Sendable {
         return await checkCLI()
     }
     @discardableResult public func installSkill(from source: URL, workspace: URL) throws -> Bool {
-        let content = try Data(contentsOf: source)
+        let content = try skillContent(from: source)
         let state = try skillState(content: content, workspace: workspace)
         if state == .current { return false }
         let directory = workspace.appending(path: ".agents/skills/modu-workflow")
         if state == .managedLink { try FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try content.write(to: directory.appending(path: "SKILL.md"), options: .atomic)
+        for path in content.keys.sorted() {
+            let file = directory.appending(path: path)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try content[path]!.write(to: file, options: .atomic)
+        }
         return true
     }
     func skillNeedsUpdate(from source: URL, workspace: URL) throws -> Bool {
-        try skillState(content: Data(contentsOf: source), workspace: workspace) == .outdated
+        try skillState(content: skillContent(from: source), workspace: workspace) == .outdated
+    }
+    func skillPaths(from source: URL) -> [String] {
+        let policy = "agents/openai.yaml"
+        return ["SKILL.md"] + (PathSafety.exists(source.deletingLastPathComponent().appending(path: policy)) ? [policy] : [])
+    }
+    private func skillContent(from source: URL) throws -> [String: Data] {
+        try Dictionary(uniqueKeysWithValues: skillPaths(from: source).map { path in
+            (path, try Data(contentsOf: path == "SKILL.md" ? source : source.deletingLastPathComponent().appending(path: path)))
+        })
     }
     private enum SkillState { case missing, current, outdated, managedLink }
-    private func skillState(content: Data, workspace: URL) throws -> SkillState {
+    private func skillState(content: [String: Data], workspace: URL) throws -> SkillState {
         if let directoryBoundary { try PathSafety.confined(workspace, to: directoryBoundary) }
         let agents = workspace.appending(path: ".agents")
         let skills = agents.appending(path: "skills")
@@ -107,7 +120,17 @@ public struct InstallationService: Sendable {
         let attrs = try FileManager.default.attributesOfItem(atPath: directory.path)
         if attrs[.type] as? FileAttributeType == .typeDirectory,
            (try? FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType) == .typeRegular {
-            return try SHA256.hash(data: Data(contentsOf: file)) == SHA256.hash(data: content) ? .current : .outdated
+            var current = true
+            for path in content.keys.sorted() {
+                let target = directory.appending(path: path)
+                if path.contains("/") { _ = try PathSafety.child((path as NSString).deletingLastPathComponent, of: directory) }
+                guard PathSafety.exists(target) else { current = false; continue }
+                guard try FileManager.default.attributesOfItem(atPath: target.path)[.type] as? FileAttributeType == .typeRegular else {
+                    throw ModuError("skill-conflict", "The existing non-regular workflow skill file was kept: \(target.path)")
+                }
+                if try SHA256.hash(data: Data(contentsOf: target)) != SHA256.hash(data: content[path]!) { current = false }
+            }
+            return current ? .current : .outdated
         }
         guard try canLink(directory) else { throw ModuError("skill-conflict", "The existing non-directory modu-workflow, non-regular SKILL.md, or third-party link was kept.") }
         return .managedLink

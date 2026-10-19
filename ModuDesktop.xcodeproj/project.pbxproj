@@ -97,6 +97,12 @@
 		};
 		C1A044E7303D25F500CF777D /* ModuDesktop */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+				"Resources/modu-workflow" = folder;
+			};
+			explicitFolders = (
+				"Resources/modu-workflow",
+			);
 			path = ModuDesktop;
 			sourceTree = "<group>";
 		};

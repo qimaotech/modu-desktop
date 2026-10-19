@@ -21,7 +21,8 @@ xcodebuild \
 
 test -x "$APP_BUNDLE/Contents/MacOS/Modu"
 test -x "$APP_BUNDLE/Contents/Resources/modu-cli"
-test -s "$APP_BUNDLE/Contents/Resources/SKILL.md"
+test -s "$APP_BUNDLE/Contents/Resources/modu-workflow/SKILL.md"
+test -s "$APP_BUNDLE/Contents/Resources/modu-workflow/agents/openai.yaml"
 test "$(lipo -archs "$APP_BUNDLE/Contents/MacOS/Modu")" = arm64
 test "$(lipo -archs "$APP_BUNDLE/Contents/Resources/modu-cli")" = arm64
 codesign --verify --deep --strict "$APP_BUNDLE"

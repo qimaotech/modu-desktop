@@ -368,6 +368,9 @@ struct FailureTests {
         let source = directory.appending(path: "SKILL.md")
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("managed".utf8).write(to: source)
+        let policy = source.deletingLastPathComponent().appending(path: "agents/openai.yaml")
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("policy:\n  allow_implicit_invocation: false\n".utf8).write(to: policy)
         if kind != "copy" {
             let legacySkill = support.appending(path: "versions/0.1.0/modu-workflow")
             if kind == "link" {
@@ -380,6 +383,7 @@ struct FailureTests {
         try installer.installSkill(from: source, workspace: root)
         #expect(try FileManager.default.attributesOfItem(atPath: skill.path)[.type] as? FileAttributeType == .typeDirectory)
         #expect(try FileManager.default.attributesOfItem(atPath: skill.appending(path: "SKILL.md").path)[.type] as? FileAttributeType == .typeRegular)
+        #expect(try Data(contentsOf: skill.appending(path: "agents/openai.yaml")) == Data(contentsOf: policy))
         let extra = skill.appending(path: "notes.txt")
         try Data("keep me".utf8).write(to: extra)
         #expect(try !installer.installSkill(from: source, workspace: root))
@@ -387,12 +391,17 @@ struct FailureTests {
         #expect(try installer.skillNeedsUpdate(from: source, workspace: root))
         #expect(try installer.installSkill(from: source, workspace: root))
         #expect(try !installer.skillNeedsUpdate(from: source, workspace: root))
+        try Data("policy:\n  allow_implicit_invocation: true\n".utf8).write(to: policy)
+        #expect(try installer.skillNeedsUpdate(from: source, workspace: root))
+        #expect(try installer.installSkill(from: source, workspace: root))
+        #expect(try Data(contentsOf: skill.appending(path: "agents/openai.yaml")) == Data(contentsOf: policy))
+        #expect(try !installer.installSkill(from: source, workspace: root))
         if PathSafety.exists(support) { try FileManager.default.removeItem(at: support) }
         try FileManager.default.removeItem(at: source)
         #expect(try String(contentsOf: skill.appending(path: "SKILL.md"), encoding: .utf8) == "updated")
         #expect(try String(contentsOf: extra, encoding: .utf8) == "keep me")
     }
-    @Test(arguments: ["file", "missing-skill", "link", "file-link"])
+    @Test(arguments: ["file", "missing-skill", "link", "file-link", "policy-link", "agents-link"])
     func skillConflictDoesNotOverwriteWorkspaceFile(_ kind: String) throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-skill-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -400,9 +409,24 @@ struct FailureTests {
         try FileManager.default.createDirectory(at: skills, withIntermediateDirectories: true)
         let source = directory.appending(path: "SKILL.md")
         try Data("managed".utf8).write(to: source)
+        let policy = directory.appending(path: "agents/openai.yaml")
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("managed policy".utf8).write(to: policy)
         let existing = skills.appending(path: "modu-workflow")
         let userFile: URL
         switch kind {
+        case "policy-link", "agents-link":
+            let target = directory.appending(path: "user-agents")
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+            userFile = target.appending(path: "openai.yaml")
+            try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: false)
+            try Data("old skill".utf8).write(to: existing.appending(path: "SKILL.md"))
+            let agents = existing.appending(path: "agents")
+            if kind == "agents-link" { try FileManager.default.createSymbolicLink(at: agents, withDestinationURL: target) }
+            else {
+                try FileManager.default.createDirectory(at: agents, withIntermediateDirectories: false)
+                try FileManager.default.createSymbolicLink(at: agents.appending(path: "openai.yaml"), withDestinationURL: userFile)
+            }
         case "missing-skill":
             try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: false)
             userFile = existing.appending(path: "notes.txt")
@@ -421,6 +445,9 @@ struct FailureTests {
         let installer = InstallationService(support: directory.appending(path: "support"))
         #expect(throws: ModuError.self) { try installer.installSkill(from: source, workspace: root) }
         #expect(try String(contentsOf: userFile, encoding: .utf8) == "user content")
+        if kind == "policy-link" || kind == "agents-link" {
+            #expect(try String(contentsOf: existing.appending(path: "SKILL.md"), encoding: .utf8) == "old skill")
+        }
     }
     @Test func deletingAfterSaveFailureKeepsBranchAndDeclaration() async throws {
         let f = try await Fixture(); defer { f.remove() }

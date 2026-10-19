@@ -1,0 +1,7 @@
+interface:
+  display_name: "Modu Workflow"
+  short_description: "Manage Modu repositories and worktree groups"
+  default_prompt: "Use $modu-workflow to inspect this workspace and list its repositories and worktree groups."
+
+policy:
+  allow_implicit_invocation: false

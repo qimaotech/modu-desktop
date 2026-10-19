@@ -274,7 +274,7 @@ final class AppModel {
             guard self.refreshGeneration == generation, self.operationGeneration == token, self.busy else { return }
             self.progress = value
         } }
-        let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md")
+        let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow")
         let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: true, progress: report)
         guard generation == refreshGeneration, operationGeneration == token else { return nil }
         let noEffects = opened.result.items.allSatisfy { $0.effects.isEmpty }
@@ -314,7 +314,7 @@ final class AppModel {
         cancelDetailPreload(); workspaceLoad?.task.cancel(); refreshGeneration += 1
         operation = Task {
             await previousEdit?.value
-            let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md")
+            let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow")
             let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: requireExistingRecord)
             var outcome = opened.result
             if let record = opened.record, outcome.status == "success", !quitPending {

@@ -39,10 +39,13 @@ struct WorkspaceCommitTests {
         let index = try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout
         let source = f.directory.appending(path: "SKILL.md")
         try Data("# Workflow\n".utf8).write(to: source)
+        let policy = f.directory.appending(path: "agents/openai.yaml")
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("policy:\n  allow_implicit_invocation: false\n".utf8).write(to: policy)
         let installer = InstallationService(support: f.service.store.support)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source, installer: installer)
         #expect(opened.result.status == "success" && opened.skillError == nil, "\(opened.result.items)")
-        #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md", ".gitignore"])
+        #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml", ".gitignore"])
         #expect(try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout == index)
         #expect(try Data(contentsOf: notes) == Data("unstaged\n".utf8))
         #expect(try await f.service.git.run(["diff", "--cached", "--name-only"], at: f.root).text == "notes.txt")
@@ -56,6 +59,36 @@ struct WorkspaceCommitTests {
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == "success")
         let skill = f.root.appending(path: "worktrees/feature/.agents/skills/modu-workflow/SKILL.md")
         #expect(try Data(contentsOf: skill) == Data(contentsOf: source))
+        #expect(try Data(contentsOf: skill.deletingLastPathComponent().appending(path: "agents/openai.yaml")) == Data(contentsOf: policy))
+    }
+
+    @Test(arguments: [false, true])
+    func skillPolicyUpdatePreservesWorkspaceChangesAndCommitsOnlyManagedFiles(_ existingPolicy: Bool) async throws {
+        let f = try await Fixture(); defer { f.remove() }
+        let source = f.directory.appending(path: "SKILL.md")
+        try Data("# Workflow\n".utf8).write(to: source)
+        let policy = f.directory.appending(path: "agents/openai.yaml")
+        if existingPolicy {
+            try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("policy:\n  allow_implicit_invocation: true\n".utf8).write(to: policy)
+        }
+        #expect(await f.service.openWorkspace(f.root, skill: source).status == "success")
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("policy:\n  allow_implicit_invocation: false\n".utf8).write(to: policy)
+        let extra = f.root.appending(path: ".agents/skills/modu-workflow/notes.txt")
+        try Data("user notes\n".utf8).write(to: extra)
+        _ = try await f.service.git.run(["add", extra.path], at: f.root)
+        try Data("unstaged notes\n".utf8).write(to: extra)
+        let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
+        #expect(opened.result.status == "success" && opened.skillError == nil, "\(opened.result.items)")
+        #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/agents/openai.yaml"])
+        #expect(try await f.service.git.run(["show", "HEAD:.agents/skills/modu-workflow/agents/openai.yaml"], at: f.root).stdout == Data(contentsOf: policy))
+        #expect(try await f.service.git.run(["show", ":.agents/skills/modu-workflow/notes.txt"], at: f.root).stdout == Data("user notes\n".utf8))
+        #expect(try Data(contentsOf: extra) == Data("unstaged notes\n".utf8))
+        #expect(try await f.service.git.run(["stash", "list"], at: f.root).stdout.isEmpty)
+        let head = try await f.service.git.oid("HEAD", at: f.root)
+        #expect(await f.service.openWorkspace(f.root, skill: source).status == "success")
+        #expect(try await f.service.git.oid("HEAD", at: f.root) == head)
     }
 
     @Test func conflictingSkillIsKeptAndExcludedFromAutomaticCommit() async throws {

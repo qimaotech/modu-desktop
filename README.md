@@ -27,4 +27,4 @@ xattr -dr com.apple.quarantine /Applications/Modu.app
 3. 创建 Worktree Group，选择本次任务涉及的仓库。
 4. 在外部开发工具中打开分组或成员目录，完成开发后清理不再需要的分组。
 
-命令行用法查看 `modu-cli --help` 及各子命令的 `--help`。从工作区根目录启动 Codex，可发现随工作区安装的工作流 skill。
+命令行用法查看 `modu-cli --help` 及各子命令的 `--help`。从工作区根目录启动 Codex，通过 `$modu-workflow` 手动调用随工作区安装的工作流 skill。

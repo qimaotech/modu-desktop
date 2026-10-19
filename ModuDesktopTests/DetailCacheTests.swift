@@ -477,7 +477,7 @@ import Testing
     }
 
     private func makeModel(_ fixture: Fixture, repository: Bool = true) async throws -> AppModel {
-        let skill = try #require(Bundle.main.url(forResource: "SKILL", withExtension: "md"))
+        let skill = try #require(Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow"))
         #expect(await fixture.service.openWorkspace(fixture.root, skill: skill).status == "success")
         if repository { #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == "success") }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))

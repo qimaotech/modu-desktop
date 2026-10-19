@@ -73,9 +73,9 @@ public struct WorkspaceService: Sendable {
                 var paths = [".gitignore"]
                 if let skill {
                     do {
-                        let path = ".agents/skills/modu-workflow/SKILL.md"
-                        if try installer.installSkill(from: skill, workspace: root) { item.effects.append(.init("install-skill", root.appending(path: path).path)) }
-                        paths.append(path)
+                        let directory = ".agents/skills/modu-workflow"
+                        if try installer.installSkill(from: skill, workspace: root) { item.effects.append(.init("install-skill", root.appending(path: "\(directory)/SKILL.md").path)) }
+                        paths += installer.skillPaths(from: skill).map { "\(directory)/\($0)" }
                     } catch { skillError = .wrap(error) }
                 }
                 let message = updatingSkill ? "chore: update Modu workflow skill" : "chore: initialize Modu workspace"

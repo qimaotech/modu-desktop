@@ -118,8 +118,8 @@ def generate(directory, jobs):
     git(root, "init", "--quiet", "-b", "main")
     git(root, "config", "--local", "include.path", str(config))
     write(root / ".gitignore", "/repositories/\n/worktrees/\n" + "".join(f"/{name}/\n" for name in REPOSITORIES))
-    skill = Path(__file__).resolve().parent.parent / "ModuDesktop/Resources/modu-workflow/SKILL.md"
-    write(root / ".agents/skills/modu-workflow/SKILL.md", skill.read_text())
+    skill = Path(__file__).resolve().parent.parent / "ModuDesktop/Resources/modu-workflow"
+    shutil.copytree(skill, root / ".agents/skills/modu-workflow")
     commit(root, "chore: initialize Modu workspace")
     write(root / "README.md", "# Modu sample workspace\n\nThis Debug workspace is temporary. It is deleted when Modu quits.\n")
     commit(root, "docs: describe sample workspace")
