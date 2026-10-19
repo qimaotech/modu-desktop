@@ -78,7 +78,7 @@ task
 | `task verify -- --mock linked-worktree-selected` | 验证独立实例启动，输出 PID 后保持运行 |
 | `task test` | 隔离运行单元测试并清理本次环境 |
 | `task test TEST_FILTER=ModuDesktopTests/WorkflowTests` | 只运行指定测试类，也可筛选到方法 |
-| `task package` | 生成发布版 DMG |
+| `task package` | 生成发布版 DMG，成功后自动打开（CI 除外） |
 
 调试与日志使用 `task debug`、`task logs`、`task telemetry`，均可追加 `-- --mock linked-worktree-selected`。日志流的 Ctrl-C 只停止日志，App 继续运行。**不带 mock 的 run、debug、logs、telemetry 会先停止已有 Modu 实例**；临时验证优先使用上表的隔离 verify 命令。
 

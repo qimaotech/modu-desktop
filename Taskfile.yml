@@ -54,7 +54,7 @@ tasks:
       - /usr/bin/python3 script/run_tests.py --filter {{.TEST_FILTER | default "ModuDesktopTests" | shellQuote}} --{{.SCRIPT_ARGS}}
 
   package:
-    desc: 构建、检查并打包 arm64 发布版 DMG
+    desc: 构建、检查并打包 arm64 发布版 DMG，本地完成后自动打开
     cmds:
       - ./script/package_app.sh
 

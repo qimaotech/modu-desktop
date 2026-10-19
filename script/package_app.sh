@@ -51,3 +51,7 @@ echo "Package: $DMG_PATH"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'dmg_name=%s\ndmg_path=%s\n' "$DMG_NAME" "$DMG_PATH" >> "$GITHUB_OUTPUT"
 fi
+
+if [[ -z "${CI:-}" ]]; then
+  open "$DMG_PATH"
+fi
