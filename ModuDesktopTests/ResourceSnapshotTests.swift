@@ -4,6 +4,46 @@ import Testing
 @testable import ModuDesktop
 
 struct ResourceSnapshotTests {
+    @Test(arguments: ["before-start", "between-resources", "after-completion"])
+    func inspectionCancellationPreservesCompletedItems(_ timing: String) async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        for group in ["first", "second"] { try await fixture.prepareEmptyGroup(group) }
+        let record = try fixture.service.store.load(fixture.root)
+        let inspection = Task {
+            if timing == "before-start" { withUnsafeCurrentTask { $0?.cancel() } }
+            return await fixture.service.inspect(record) { snapshot in
+                let target = timing == "after-completion" ? "second" : "first"
+                if snapshot.resource == .group(target) { withUnsafeCurrentTask { $0?.cancel() } }
+            }
+        }
+        let result = await inspection.value
+        #expect(inspection.isCancelled)
+        #expect(result.items.map(\.resource) == [.workspace(), .group("first"), .group("second")])
+        let expected: [OperationStatus] = timing == "before-start" ? [.cancelled, .cancelled, .cancelled]
+            : timing == "between-resources" ? [.success, .success, .cancelled] : [.success, .success, .success]
+        #expect(result.items.map(\.status) == expected)
+        #expect(result.status == (timing == "after-completion" ? .success : .cancelled))
+        #expect(result.reasonCode == (timing == "after-completion" ? nil : "cancelled"))
+        #expect(result.exitCode == (timing == "after-completion" ? 0 : 130))
+    }
+
+    @Test func inspectionCancellationKeepsEarlierFailures() async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        for group in ["broken", "first", "second"] { try await fixture.prepareEmptyGroup(group) }
+        let record = try fixture.service.store.load(fixture.root)
+        try Data("gitdir: missing-git-directory\n".utf8).write(to: record.groupURL("broken").appending(path: ".git"))
+        let inspection = Task {
+            await fixture.service.inspect(record) { _ in withUnsafeCurrentTask { $0?.cancel() } }
+        }
+        let result = await inspection.value
+        #expect(result.items.map(\.status) == [.success, .failed, .success, .cancelled])
+        #expect(result.status == .partialSuccess && result.reasonCode == nil && result.exitCode == 1)
+    }
+
     @Test func scopedInspectionOnlyReadsTheRequestedResourceTypes() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }

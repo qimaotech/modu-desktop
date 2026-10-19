@@ -134,7 +134,7 @@ public struct WorkspaceService: Sendable {
             } catch { fail(&item, error) }
             result.items.append(item)
         }
-        result.summarize()
+        result.summarize(cancelled: result.items.contains { $0.status == .cancelled })
         return result
     }
     public func resources(_ record: WorkspaceRecord) -> [Resource] {

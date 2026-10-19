@@ -299,6 +299,43 @@ struct WorkflowTests {
         #expect(try f.service.store.load(f.root).repositories == [.init(url: f.remoteURL)])
     }
 
+    @Test(arguments: ["workspace", "repo", "worktree"])
+    func cliInspectionCancellationReturnsExitCode130(_ command: String) async throws {
+        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        let record = try f.service.store.load(f.root)
+        let probe = f.directory.appending(path: "inspection-cancelled")
+        let monitor = f.directory.appending(path: "inspection-fsmonitor")
+        try Data("""
+        #!/bin/sh
+        : > "$MODU_INSPECTION_CANCEL_PROBE"
+        trap 'exit 143' TERM INT
+        kill -INT "$MODU_INSPECTION_CLI_PID" || exit 1
+        while :; do sleep 0.02; done
+        """.utf8).write(to: monitor)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
+        let target = command == "worktree" ? record.groupURL("feature") : record.repositoryURL("repo")
+        for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
+            _ = try await f.service.git.run(arguments, at: target)
+        }
+        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
+        var runner = f.service.git.runner
+        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
+        runner.environment["MODU_INSPECTION_CANCEL_PROBE"] = probe.path
+        let launch = """
+        export MODU_INSPECTION_CLI_PID=$$
+        exec "$@"
+        """
+        let operation = command == "workspace" ? "inspect" : "list"
+        let output = try await runner.run("/bin/bash", ["-c", launch, "modu-inspection-cancellation", executable.path,
+                                                       command, operation, "--json", "--workspace", f.root.path])
+        #expect(PathSafety.exists(probe))
+        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+        #expect(output.status == 130 && result.exitCode == 130)
+        #expect(result.command == "\(command).\(operation)" && result.status == .cancelled && result.reasonCode == "cancelled")
+        #expect(result.items.contains { $0.status == .cancelled })
+    }
+
     @Test(arguments: [false, true])
     func cliListsPreserveWorkspaceFailures(_ hasRepository: Bool) async throws {
         let f = try await Fixture(createRemote: hasRepository); defer { f.remove() }
