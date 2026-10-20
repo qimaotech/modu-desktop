@@ -62,7 +62,9 @@ def prepare_session(directory, build_command):
         if build_command:
             jobs.build = jobs.start(build_command)
         print(f"Preparing mock workspace: {directory / 'example-workspace'}", flush=True)
+        started = time.monotonic()
         generate(directory, jobs)
+        print(f"Mock Git data prepared in {time.monotonic() - started:.3f}s.", flush=True)
         if jobs.build is not None and jobs.build.wait() != 0:
             raise RuntimeError("Debug build failed.")
         session["ready"] = True

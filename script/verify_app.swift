@@ -2,16 +2,18 @@ import AppKit
 import Foundation
 
 func verifyApplication() -> Int32 {
-    guard CommandLine.arguments.count >= 2 else {
-        report("usage: verify_app.swift <App.app> [arguments]")
+    let activates = CommandLine.arguments.dropFirst().first == "--activate"
+    let arguments = Array(CommandLine.arguments.dropFirst(activates ? 2 : 1))
+    guard let applicationPath = arguments.first else {
+        report("usage: verify_app.swift [--activate] <App.app> [arguments]")
         return 2
     }
-    let applicationURL = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
+    let applicationURL = URL(fileURLWithPath: applicationPath).standardizedFileURL
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.createsNewApplicationInstance = true
-    configuration.activates = false
+    configuration.activates = activates
     configuration.promptsUserIfNeeded = false
-    configuration.arguments = Array(CommandLine.arguments.dropFirst(2))
+    configuration.arguments = Array(arguments.dropFirst())
     let environment = ProcessInfo.processInfo.environment
     let keys = ["MODU_TEST_DEFAULTS", "MODU_TEST_WORKSPACE", "MODU_TEST_SUPPORT_DIRECTORY", "MODU_TEST_HOME_DIRECTORY", "MODU_TEST_LOGIN_SHELL",
                 "MODU_UNIT_TEST_HOST", "MODU_TEST_SESSION_DIRECTORY"]

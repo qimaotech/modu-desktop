@@ -12,6 +12,7 @@ DERIVED_DATA_PATH="${MODU_DERIVED_DATA_PATH:-${TMPDIR%/}/modu-desktop-derived-da
 APP_BUNDLE="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 MOCK_SCENARIO=""
+BUILD_VERBOSE=false
 MOCK_DIRECTORY=""
 MOCK_PREPARATION_PID=""
 MOCK_HANDED_OFF=false
@@ -30,6 +31,10 @@ main() {
         MOCK_SCENARIO="$2"
         shift 2
         ;;
+      --verbose)
+        BUILD_VERBOSE=true
+        shift
+        ;;
       run|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|-verify|verify)
         if $mode_selected; then print_usage; exit 2; fi
         mode="$1"
@@ -47,7 +52,9 @@ main() {
   trap 'cancel_mock_preparation 130' INT
   trap 'cancel_mock_preparation 143' TERM
   if [[ -z "$MOCK_SCENARIO" && "$mode" != "--verify" && "$mode" != "-verify" && "$mode" != "verify" ]]; then stop_app; fi
-  build_app
+  local TIMEFORMAT='Build elapsed: %3Rs'
+  if [[ -n "$MOCK_SCENARIO" ]]; then TIMEFORMAT='Build and mock preparation elapsed: %3Rs'; fi
+  time build_app
 
   case "$mode" in
     run)
@@ -77,8 +84,13 @@ stop_app() {
 }
 
 build_app() {
+  local architecture
+  architecture="$(/usr/bin/uname -m)"
   local command=(xcodebuild -project "$PROJECT_PATH" -scheme "$SCHEME" -configuration "$CONFIGURATION"
-    -destination "platform=macOS" -derivedDataPath "$DERIVED_DATA_PATH" ENABLE_CODE_COVERAGE=NO build)
+    -destination "platform=macOS,arch=$architecture" -derivedDataPath "$DERIVED_DATA_PATH" -hideShellScriptEnvironment)
+  if $BUILD_VERBOSE; then command+=(-showBuildTimingSummary); else command+=(-quiet); fi
+  command+=(ENABLE_CODE_COVERAGE=NO build)
+  echo "Building $CONFIGURATION app for $architecture..."
   if [[ -n "$MOCK_SCENARIO" ]]; then
     MOCK_DIRECTORY="$(/usr/bin/python3 "$ROOT_DIR/script/prepare_mock_workspace.py" allocate)"
     /usr/bin/python3 "$ROOT_DIR/script/prepare_mock_workspace.py" prepare --directory "$MOCK_DIRECTORY" --build "${command[@]}" &
@@ -90,28 +102,35 @@ build_app() {
   else
     "${command[@]}"
   fi
+  echo "Build succeeded."
 }
 
 open_app() {
+  if [[ -n "$MOCK_SCENARIO" ]]; then
+    verify_app --activate
+    MOCK_HANDED_OFF=true
+    return
+  fi
   local arguments=(-n)
   local variable
   for variable in MODU_TEST_DEFAULTS MODU_TEST_WORKSPACE MODU_TEST_SUPPORT_DIRECTORY MODU_TEST_HOME_DIRECTORY MODU_TEST_LOGIN_SHELL; do
     if [[ -n "${!variable:-}" ]]; then arguments+=(--env "$variable=${!variable}"); fi
   done
   MOCK_LAUNCH_ATTEMPTED=true
-  if [[ -n "$MOCK_SCENARIO" ]]; then /usr/bin/open "${arguments[@]}" "$APP_BUNDLE" --args --mock "$MOCK_SCENARIO" --mock-workspace "$MOCK_DIRECTORY/example-workspace"
-  else /usr/bin/open "${arguments[@]}" "$APP_BUNDLE"; fi
+  /usr/bin/open "${arguments[@]}" "$APP_BUNDLE"
   MOCK_HANDED_OFF=true
 }
 
 verify_app() {
-  local arguments=("$APP_BUNDLE")
+  local arguments=("$@" "$APP_BUNDLE")
+  local TIMEFORMAT='App startup elapsed: %3Rs'
   if [[ -n "$MOCK_SCENARIO" ]]; then arguments+=(--mock "$MOCK_SCENARIO" --mock-workspace "$MOCK_DIRECTORY/example-workspace"); fi
+  echo "Launching $APP_NAME..."
   MOCK_LAUNCH_ATTEMPTED=true
   if [[ -n "$MOCK_DIRECTORY" ]]; then
-    launch_verified_app "${arguments[@]}" | tee "$MOCK_DIRECTORY/launch.log"
+    time launch_verified_app "${arguments[@]}" | tee "$MOCK_DIRECTORY/launch.log"
   else
-    launch_verified_app "${arguments[@]}"
+    time launch_verified_app "${arguments[@]}"
   fi
 }
 
@@ -148,7 +167,7 @@ cancel_mock_preparation() {
 }
 
 print_usage() {
-  echo "usage: $0 [run|--debug|--logs|--telemetry|--verify] [--mock linked-worktree-selected]" >&2
+  echo "usage: $0 [run|--debug|--logs|--telemetry|--verify] [--mock linked-worktree-selected] [--verbose]" >&2
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

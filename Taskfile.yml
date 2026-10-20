@@ -16,7 +16,7 @@ tasks:
       - ./script/build_and_run.sh{{.SCRIPT_ARGS}}
 
   mock:
-    desc: 构建开发版 App 并加载隔离的临时 Git 场景
+    desc: 构建开发版 App，打开隔离的临时 Git 场景并验证启动
     cmds:
       - ./script/build_and_run.sh --mock linked-worktree-selected{{.SCRIPT_ARGS}}
 

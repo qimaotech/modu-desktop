@@ -5,14 +5,14 @@ import Testing
 
 @MainActor
 struct BuildAndRunLifecycleTests {
-    @Test(arguments: [SIGINT, SIGTERM])
-    func interruptedVerificationKeepsItsLiveInstanceAndData(_ signal: Int32) async throws {
+    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run"])
+    func interruptedVerificationKeepsItsLiveInstanceAndData(_ signal: Int32, _ mode: String) async throws {
         for printsPID in [true, false] {
             let session = try await Session.allocate()
             defer { session.cleanup() }
             let own = try session.startApp(workspace: session.workspace)
             let unrelated = try session.startApp(workspace: session.otherWorkspace)
-            let result = try await runScript(session, mode: "--verify", signal: signal, overrides: """
+            let result = try await runScript(session, mode: mode, signal: signal, overrides: """
             launch_verified_app() {
               if \(printsPID); then echo "App instance PID: $test_pid"; fi
               if \(printsPID); then kill -"$test_signal" "$$"; else kill -"$test_signal" -- "-$$"; fi
@@ -27,12 +27,12 @@ struct BuildAndRunLifecycleTests {
         }
     }
 
-    @Test(arguments: [SIGINT, SIGTERM])
-    func interruptedVerificationWithoutAnInstanceCleansOnlyItsData(_ signal: Int32) async throws {
+    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run"])
+    func interruptedVerificationWithoutAnInstanceCleansOnlyItsData(_ signal: Int32, _ mode: String) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: "--verify", signal: signal, overrides: """
+        let result = try await runScript(session, mode: mode, signal: signal, overrides: """
         launch_verified_app() { kill -"$test_signal" -- "-$$"; /bin/sleep 0.05; }
         """)
         #expect(result.status == 128 + signal)
@@ -51,7 +51,7 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: ["--debug", "--verify"])
+    @Test(arguments: ["--debug", "--verify", "run"])
     func completedLaunchKeepsItsLiveInstanceForExplicitQuit(_ mode: String) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
