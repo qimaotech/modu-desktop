@@ -8,6 +8,7 @@ final class AppModel {
     let installer: InstallationService
     let toolService: ExternalTools
     let preferences: AppPreferences
+    let globalShortcut: GlobalShortcutModel
     let operations: OperationLifecycle
     let presentation: OperationPresentation
     let workspace: WorkspaceModel
@@ -40,6 +41,7 @@ final class AppModel {
         self.installer = installer
         let preferences = AppPreferences(defaults: defaults ?? Self.launchDefaults())
         self.preferences = preferences
+        globalShortcut = GlobalShortcutModel(preferences: preferences)
         let operations = OperationLifecycle()
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })

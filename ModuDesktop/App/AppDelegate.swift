@@ -11,6 +11,7 @@ import ModuCore
     func start(model: AppModel, onReady: @escaping @MainActor () -> Void, onFinished: @escaping @MainActor (Bool) -> Void) {
         guard startupTask == nil, !model.started else { return }
         self.model = model
+        model.globalShortcut.start { [weak self] in self?.toggleVisibility() }
         startupTask = Task {
             defer { startupTask = nil }
             let needsCLISetup = await model.start(onReady: onReady)
@@ -23,6 +24,7 @@ import ModuCore
         return false
     }
     func applicationWillTerminate(_ notification: Notification) {
+        model?.globalShortcut.stop()
         #if DEBUG
         model?.mockWorkspace?.remove()
         #endif
@@ -40,5 +42,21 @@ import ModuCore
             return .terminateLater
         }
         return .terminateNow
+    }
+
+    private func toggleVisibility() {
+        if NSApp.isActive, !NSApp.isHidden, NSApp.orderedWindows.contains(where: { $0.isVisible && !$0.isMiniaturized && $0.canBecomeMain }) {
+            NSApp.hide(nil)
+            return
+        }
+        NSApp.unhide(nil)
+        let window = NSApp.orderedWindows.first(where: { $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized })
+            ?? NSApp.windows.first(where: { $0.canBecomeMain && $0.isMiniaturized })
+        if let window {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+            window.attachedSheet?.makeKeyAndOrderFront(nil)
+        } else { reopenWindow?() }
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
