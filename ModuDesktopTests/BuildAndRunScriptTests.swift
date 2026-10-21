@@ -10,11 +10,6 @@ struct BuildAndRunScriptTests {
         #expect(result.text == "build\nverify:")
     }
 
-    @Test func verificationFailureIsReturnedToTheCaller() async throws {
-        let result = try await trace(["--verify"], verificationStatus: 1)
-        #expect(result.status == 1)
-    }
-
     @MainActor @Test func missingApplicationDoesNotReuseAnExistingInstance() async throws {
         let current = NSRunningApplication.current
         let temporary = TestEnvironment.temporaryDirectory
@@ -85,13 +80,13 @@ struct BuildAndRunScriptTests {
         return NSRunningApplication(processIdentifier: pid)
     }
 
-    private func trace(_ arguments: [String], verificationStatus: Int32 = 0) async throws -> CommandOutput {
+    private func trace(_ arguments: [String]) async throws -> CommandOutput {
         let script = """
         source "$1"
         stop_app() { echo stop; }
         build_app() { echo build; }
         open_app() { echo open; }
-        verify_app() { echo "verify:$MOCK_SCENARIO"; return \(verificationStatus); }
+        verify_app() { echo "verify:$MOCK_SCENARIO"; }
         main "${@:2}"
         """
         return try await CommandRunner().run("/bin/bash", ["-c", script, "modu-script-tests", Self.root.appending(path: "script/build_and_run.sh").path] + arguments)

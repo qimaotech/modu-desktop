@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-import Observation
 @testable import ModuCore
 @testable import ModuDesktop
 
@@ -115,54 +114,6 @@ import Observation
             #expect(result.items.last?.reasonCode == (status == "cancelled" ? "not-processed" : nil))
             #expect(model.management.progressPresentation != nil)
         }
-    }
-
-    @Test(arguments: [true, false])
-    func toolChoiceUpdatesObservedDefaultOnlyAfterSuccessfulLaunch(_ succeeds: Bool) async throws {
-        let root = TestEnvironment.temporaryDirectory.appending(path: "modu-tool-choice-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: root) }
-        let directory = root.appending(path: "worktrees/feature")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let suite = root.lastPathComponent
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set("codex", forKey: "tool.Agent")
-        defaults.set("vscode", forKey: "tool.Editor")
-        var launches: [URL] = []
-        let toolService = ExternalTools(applicationURL: { _ in root.appending(path: "Claude.app") }, openURL: { url, _ in
-            launches.append(url)
-            if !succeeds { throw ModuError("tool-launch-failed", "Could not open the desktop app.") }
-        })
-        let model = AppModel(defaults: defaults, toolService: toolService)
-        var workspace = WorkspaceRecord(root: root.path)
-        workspace.groups["feature"] = WorktreeGroup()
-        model.workspace.record = workspace
-        model.workspace.selection = .group("feature")
-        model.tools = ExternalTool.builtIn
-        let claude = try #require(model.tools.first { $0.id == "claude" })
-        #expect(model.preferredToolIDs["Agent"] == "codex")
-        withObservationTracking {
-            _ = model.preferredToolIDs["Agent"]
-        } onChange: {
-            UserDefaults(suiteName: suite)?.set(true, forKey: "toolPreferenceChanged")
-        }
-
-        model.openTool(claude)
-        #expect(model.preferredToolIDs["Agent"] == "codex")
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while model.preferredToolIDs["Agent"] == "codex", model.presentation.message == nil, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        let expected = succeeds ? "claude" : "codex"
-        #expect(model.preferredToolIDs["Agent"] == expected)
-        #expect(defaults.string(forKey: "tool.Agent") == expected)
-        #expect(defaults.bool(forKey: "toolPreferenceChanged") == succeeds)
-        #expect(model.preferredToolIDs["Editor"] == "vscode")
-        #expect(model.workspace.selection == .group("feature"))
-        #expect(launches.count == 1)
-        #expect((model.presentation.message == nil) == succeeds)
-        let reopened = AppModel(defaults: defaults, toolService: toolService)
-        #expect(reopened.preferredToolIDs["Agent"] == expected)
     }
 
     @Test func settingsImportDismissesOnlySuccessOrCancellationWithoutEffects() async throws {

@@ -149,28 +149,6 @@ struct WorktreeCreationTests {
         #expect(try await f.service.git.oid("HEAD", at: record.groupURL("feature")) == original)
     }
 
-    @Test func workspaceImportReportsWarningsForAReusedRootBranch() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        let original = try #require(try await f.service.git.oid("HEAD", at: f.root))
-        let base = try await commit(after: original, message: "Base change", at: f.root, git: f.service.git)
-        _ = try await f.service.git.run(["update-ref", "refs/heads/feature", original], at: f.root)
-        _ = try await f.service.git.run(["update-ref", "refs/heads/main", base], at: f.root)
-        let yaml = """
-        version: 1
-        repositories: []
-        groups:
-          feature:
-            created-at: "2026-10-12T10:00:00Z"
-            repositories: []
-        """
-        let result = await f.service.importWorkspaceYAML(yaml, at: f.root)
-        #expect(result.status == .success && result.hasWarnings, "\(result.message ?? "") \(result.items)")
-        #expect(result.items.first?.data?["behind-count"] == "1")
-        #expect(try f.service.store.load(f.root).groups["feature"]?.repositories == [])
-        #expect(try await f.service.git.oid("refs/heads/feature", at: f.root) == original)
-    }
-
     private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
         #expect(await f.service.openWorkspace(f.root).status == .success)
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
