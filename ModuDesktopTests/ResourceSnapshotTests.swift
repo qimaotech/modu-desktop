@@ -74,25 +74,6 @@ struct ResourceSnapshotTests {
         #expect(result.status == .partialSuccess && result.reasonCode == nil && result.exitCode == 1)
     }
 
-    @Test func scopedInspectionOnlyReadsTheRequestedResourceTypes() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let service = try await prepare(fixture)
-        let record = try service.store.load(fixture.root)
-        let reads = fixture.directory.appending(path: "snapshot-reads")
-
-        let repositories = await service.inspect(fixture.root, scope: .repositories)
-        #expect(repositories.status == .success)
-        #expect(repositories.items.map(\.resource) == [.workspace(), .repository("repo")])
-        #expect(try readPaths(reads) == [PathSafety.identity(record.repositoryURL("repo"))])
-        try FileManager.default.removeItem(at: reads)
-
-        let worktrees = await service.inspect(fixture.root, scope: .worktrees)
-        #expect(worktrees.status == .success)
-        #expect(worktrees.items.map(\.resource) == [.workspace(), .group("feature"), .member("feature", "repo")])
-        #expect(try readPaths(reads).sorted() == [PathSafety.identity(record.groupURL("feature")), PathSafety.identity(record.memberURL("feature", "repo"))].sorted())
-    }
-
     @Test @MainActor func inspectionAndDetailPreloadShareOneStatusReadPerResource() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }

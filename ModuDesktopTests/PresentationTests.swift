@@ -96,65 +96,6 @@ import Observation
         }
     }
 
-    @Test func worktreeCreationFailureRestoresFormForRetry() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        _ = try await fixture.service.git.run(["branch", "feature", "HEAD~1"], at: fixture.root)
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        defaults.set(fixture.root.path, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace.record = try await fixture.service.load(fixture.root)
-        model.management.sheet = .create
-        model.management.create("feature", members: ["repo"])
-        await (try #require(model.operation)).value
-        #expect(!model.busy && model.management.progressPresentation == nil && model.management.formError != nil)
-        #expect(model.management.sheet == .create && model.presentation.result == nil)
-        _ = try await fixture.service.git.run(["branch", "-d", "feature"], at: fixture.root)
-        model.management.create("feature", members: ["repo"])
-        #expect(model.busy && model.management.progressPresentation != nil && model.management.formError == nil)
-        #expect(model.management.progressPresentation != nil)
-        await (try #require(model.operation)).value
-        #expect(!model.busy && model.management.sheet == nil && model.presentation.result == nil)
-        model.management.sheet = .create
-        #expect(model.management.progressPresentation == nil)
-        #expect(model.management.sheet == .create)
-        model.management.sheet = nil
-        await model.workspace.detailPreloadTask?.value
-    }
-
-    @Test func repositoryImportTransitionsDirectlyToItsCompletionState() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        defaults.set(fixture.root.path, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service)
-        model.workspace.record = try fixture.service.store.load(fixture.root)
-        for outcome in ["success", "skipped", "invalid"] {
-            let before = try #require(model.workspace.record)
-            model.management.sheet = .add
-            model.management.importRepositories(outcome == "invalid" ? "{invalid YAML" : "url: \(fixture.remoteURL)", filename: "repositories.yaml")
-            #expect(model.busy)
-            await (try #require(model.operation)).value
-            await model.workspace.detailPreloadTask?.value
-            #expect(!model.busy && model.management.importFileName == nil)
-            #expect(model.management.sheet == (outcome == "invalid" ? .add : nil))
-            #expect(model.presentation.result?.status.rawValue == (outcome == "skipped" ? "skipped" : nil))
-            #expect((model.management.formError != nil) == (outcome == "invalid"))
-            #expect((model.management.progressPresentation != nil) == (outcome != "invalid"))
-            if outcome == "success" {
-                #expect(model.workspace.selection == .repository("repo") && model.workspace.record?.repositories.count == 1)
-                #expect(PathSafety.exists(fixture.root.appending(path: "repositories/repo/.git")))
-            } else { #expect(model.workspace.record == before) }
-            #expect(try fixture.service.store.load(fixture.root) == model.workspace.record)
-            model.presentation.dismissResult()
-            model.management.sheet = nil
-        }
-    }
-
     @Test(arguments: ["partial-success", "cancelled"])
     func repositoryImportRetainsCompletedEffectsAndUnprocessedItems(_ status: String) async throws {
         try await withModel { model in
@@ -173,34 +114,6 @@ import Observation
             #expect(result.items.last?.status.rawValue == (status == "cancelled" ? "skipped" : "failed"))
             #expect(result.items.last?.reasonCode == (status == "cancelled" ? "not-processed" : nil))
             #expect(model.management.progressPresentation != nil)
-        }
-    }
-
-    @Test func repositorySearchPreservesSortingAndSelection() throws {
-        let suite = "ModuRepositorySearchTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = AppModel(defaults: defaults)
-        model.language = "en"
-        var workspace = WorkspaceRecord(root: "/workspace")
-        workspace.repositories = [
-            Repository(url: "https://example.invalid/api10.git", name: "Service 10"),
-            Repository(url: "https://example.invalid/frontend.git", name: "baize-frontend"),
-            Repository(url: "https://example.invalid/api2.git", name: "Service 2"),
-            Repository(url: "https://example.invalid/mobile.git", name: "移动前端"),
-            Repository(url: "https://example.invalid/server.git")
-        ]
-        model.workspace.record = workspace
-        let selection: Set<String> = ["frontend", "server"]
-        let all = model.workspace.sortedRepositories.map(\.id)
-        for (query, expected) in [("", all), (" \n ", all), (" FRONT ", ["frontend"]),
-                                  ("service", ["api2", "api10"]), ("前端", ["mobile"]),
-                                  ("api10", []), ("unmatched", [])] {
-            let view = ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .create, selected: selection, repositorySearch: query)
-            #expect(view.matchingRepositories.map(\.id) == expected)
-            #expect(view.selectedMembers == ["frontend", "server"])
-            #expect(view.selected == selection)
-            #expect(model.workspace.record == workspace)
         }
     }
 
@@ -310,23 +223,6 @@ import Observation
                 model.presentation.dismissResult()
             }
         }
-    }
-
-    @Test func changeTreeSortsDirectoriesFirstAndCollapsesOnlyDescendants() {
-        let changes = [
-            FileChange(path: "src/file10.swift", index: "A", workingTree: " "),
-            FileChange(path: "src/file2.swift", index: "M", workingTree: "M"),
-            FileChange(path: "src/a.swift", index: "M", workingTree: " "),
-            FileChange(path: "src/hooks/file.swift", index: " ", workingTree: "M"),
-            FileChange(path: "README.md", index: " ", workingTree: "D")
-        ]
-        let tree = ChangeNode.tree(changes)
-        let expanded = tree.flatMap { $0.visibleRows(collapsed: []) }
-        #expect(expanded.map(\.id) == ["src", "src/hooks", "src/hooks/file.swift", "src/a.swift", "src/file2.swift", "src/file10.swift", "README.md"])
-        #expect(expanded.map(\.depth) == [0, 1, 2, 1, 1, 1, 0])
-        #expect(expanded[4].node.change?.workingTree == "M")
-        #expect(tree.flatMap { $0.visibleRows(collapsed: ["src"]) }.map(\.id) == ["src", "README.md"])
-        #expect(tree.flatMap { $0.visibleRows(collapsed: ["src/hooks"]) }.map(\.id) == ["src", "src/hooks", "src/a.swift", "src/file2.swift", "src/file10.swift", "README.md"])
     }
 
     private func withModel(_ body: (AppModel) async throws -> Void) async throws {

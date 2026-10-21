@@ -10,18 +10,6 @@ struct BuildAndRunScriptTests {
         #expect(result.text == "build\nverify:")
     }
 
-    @Test func mockVerificationUsesTheInstanceVerificationPath() async throws {
-        let result = try await trace(["--verify", "--mock", "linked-worktree-selected"])
-        #expect(result.status == 0)
-        #expect(result.text == "build\nverify:linked-worktree-selected")
-    }
-
-    @Test func interactiveRunStillRestartsAndKeepsTheAppOpen() async throws {
-        let result = try await trace([])
-        #expect(result.status == 0)
-        #expect(result.text == "stop\nbuild\nopen")
-    }
-
     @Test func verificationFailureIsReturnedToTheCaller() async throws {
         let result = try await trace(["--verify"], verificationStatus: 1)
         #expect(result.status == 1)

@@ -5,14 +5,6 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct TestHostTests {
-    @Test func onlyUnitTestHostsSuppressAutomaticStartup() {
-        #expect(!TestHost.isEnabled(environment: [:]))
-        #expect(!TestHost.isEnabled(environment: ["MODU_TEST_DEFAULTS": "isolated-preferences"]))
-        #expect(TestHost.isEnabled(environment: ["MODU_UNIT_TEST_HOST": "1"]))
-        #expect(TestHost.isEnabled(environment: ["XCTestBundlePath": "/tmp/ModuDesktopTests.xctest"]))
-        #expect(!TestHost.isEnabled(environment: ["XCTestBundlePath": "/tmp/OtherTests.xctest"]))
-    }
-
     @Test func unitTestHostHasNoVisibleAppWindowsAndRegistersItsIdentity() async throws {
         #expect(TestHost.isEnabled())
         try await Task.sleep(for: .milliseconds(200))

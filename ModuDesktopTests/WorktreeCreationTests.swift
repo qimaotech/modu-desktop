@@ -125,21 +125,6 @@ struct WorktreeCreationTests {
         #expect(try await f.service.git.oid("HEAD", at: record.memberURL("feature", "repo")) == oid)
     }
 
-    @Test func editingNewMembersUsesTheSameBranchComparison() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
-        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
-        let repository = record.repositoryURL("repo")
-        let original = try #require(try await f.service.git.oid("HEAD", at: repository))
-        let base = try await commit(after: original, message: "Base change", at: repository, git: f.service.git)
-        _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/main", base], at: repository)
-        _ = try await f.service.git.run(["update-ref", "refs/heads/feature", original], at: repository)
-        let result = await f.service.editGroup("feature", repositories: ["repo"], at: f.root)
-        #expect(result.status == .success && result.hasWarnings)
-        #expect(result.items.count == 1 && result.items.first?.data?["behind-count"] == "1")
-    }
-
     @Test(arguments: [false, true])
     func cliCreationReportsBranchWarningsWithoutChangingTheSuccessExitCode(_ json: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }

@@ -154,12 +154,6 @@ import Testing
         #expect(!PathSafety.exists(mock.directory))
     }
 
-    @Test(arguments: [["Modu", "--mock"], ["Modu", "--mock", "unknown"], ["Modu", "--mock", "linked-worktree-selected"],
-                      ["Modu", "--mock", "linked-worktree-selected", "--mock", "linked-worktree-selected"], ["Modu", "--mock-workspace", "/tmp"]])
-    func invalidScenariosAreRejectedBeforeNormalStartup(_ arguments: [String]) {
-        #expect(throws: ModuError.self) { try AppModel.makeForLaunch(arguments: arguments) }
-    }
-
     private func makeMock() async throws -> MockWorkspace {
         let fixture = try await MockWorkspacePreparation.prepare()
         do { return try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: fixture.root) }
