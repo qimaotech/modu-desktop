@@ -11,6 +11,7 @@ enum FilePanels {
     }
     static func readYAML(prompt: String) async throws -> (name: String, text: String)? {
         let panel = NSOpenPanel(); panel.allowedContentTypes = [UTType(filenameExtension: "yaml")!, UTType(filenameExtension: "yml")!]; panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
         panel.prompt = prompt
         guard await panel.begin() == .OK, let url = panel.url else { return nil }
         return (url.lastPathComponent, try String(contentsOf: url, encoding: .utf8))

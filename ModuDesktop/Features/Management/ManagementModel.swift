@@ -11,6 +11,7 @@ final class ManagementModel {
     private let preferences: AppPreferences
     // SwiftUI can still render the closed sheet; reset its progress when the next sheet opens.
     private(set) var progressPresentation: ManagementProgressPresentation?
+    var repositoryImport: RepositoryImportSelection?
     var importFileName: String?
     var formError: String? { didSet { formErrorDetails = nil } }
     var formErrorDetails: String?
@@ -29,6 +30,7 @@ final class ManagementModel {
             }
             if oldValue == .delete && sheet != .delete { cancelDeletePreview() }
             if oldValue == .edit && sheet != .edit { cancelEditPreview() }
+            if oldValue == .importRepositories && sheet != .importRepositories { repositoryImport = nil }
         }
     }
     var deletion: [DeletionTarget] = []
@@ -55,7 +57,7 @@ final class ManagementModel {
 
     func contextChanged(rootChanged: Bool) {
         cancelEditPreview()
-        if rootChanged, sheet == .delete { sheet = nil }
+        if rootChanged, sheet == .delete || sheet == .importRepositories { sheet = nil }
     }
 
     func finishDismissal() {
@@ -197,7 +199,27 @@ final class ManagementModel {
         if let edit = pendingEdit { run({ service, root, progress in await service.editGroup(edit.0, repositories: edit.1, at: root, authorization: authorization, progress: progress) }) }
         else if let request = deleteRequest { run({ service, root, progress in await service.remove(request, at: root, authorization: authorization, progress: progress) }) }
     }
-    func importRepositories(_ text: String, filename: String) { importFileName = filename; run { service, root, progress in await service.importRepositoryYAML(text, at: root, progress: progress) } }
+    func prepareRepositoryImport(_ text: String, filename: String) {
+        guard let root = session.record?.rootURL, sheet == .add, !busy else { return }
+        formError = nil
+        do {
+            var seen = Set<String>()
+            let urls = try WorkspaceService.repositoryURLs(in: text).filter { seen.insert($0).inserted }
+            guard !urls.isEmpty else { throw ModuError("invalid-input", "No complete, supported Git repository URLs were found in this YAML file.") }
+            repositoryImport = .init(root: root, filename: filename, urls: urls, selectedURLs: Set(urls))
+            sheet = .importRepositories
+        } catch { formError = error.localizedDescription }
+    }
+    var canConfirmRepositoryImport: Bool {
+        guard sheet == .importRepositories, !busy, let repositoryImport, repositoryImport.root == session.record?.rootURL else { return false }
+        return repositoryImport.urls.contains { repositoryImport.selectedURLs.contains($0) }
+    }
+    func confirmRepositoryImport() {
+        guard canConfirmRepositoryImport, let repositoryImport else { return }
+        let urls = repositoryImport.urls.filter { repositoryImport.selectedURLs.contains($0) }
+        importFileName = repositoryImport.filename
+        run { service, root, progress in await service.importRepositories(urls, at: root, progress: progress) }
+    }
     func importWorkspace(_ text: String, filename: String) { importFileName = filename; run { service, root, progress in await service.importWorkspaceYAML(text, at: root, progress: progress) } }
     func update() { run { service, root, progress in await service.updateRepositories(at: root, progress: progress) } }
 
@@ -211,7 +233,13 @@ final class ManagementModel {
 
 }
 
-enum ManagementSheet: String, Identifiable { case add, create, edit, delete; var id: String { rawValue } }
+enum ManagementSheet: String, Identifiable { case add, importRepositories, create, edit, delete; var id: String { rawValue } }
+struct RepositoryImportSelection {
+    let root: URL
+    let filename: String
+    let urls: [String]
+    var selectedURLs: Set<String>
+}
 struct ManagementProgressPresentation {
     var progress: OperationProgress?
     var importFileName: String?

@@ -73,7 +73,7 @@ task
 
 | 命令 | 用途 |
 | --- | --- |
-| `task run` | 构建并启动 Debug App，使用本机工作区配置 |
+| `task run` | 构建并启动 Debug App，使用独立开发偏好并恢复上次选择的开发工作区 |
 | `task mock` | 构建并打开隔离的临时 Git 工作区，验证启动并输出本次 PID |
 | `task verify -- --mock linked-worktree-selected` | 验证独立实例启动，输出 PID 后保持运行 |
 | `task test` | 隔离运行单元测试并清理本次环境 |
@@ -81,6 +81,10 @@ task
 | `task package` | 生成发布版 DMG，成功后自动打开（CI 除外） |
 
 调试与日志使用 `task debug`、`task logs`、`task telemetry`，均可追加 `-- --mock linked-worktree-selected`。日志流的 Ctrl-C 只停止日志，App 继续运行。**不带 mock 的 run、debug、logs、telemetry 会先停止已有 Modu 实例**；临时验证优先使用上表的隔离 verify 命令。
+
+Debug App 默认使用 `fun.armantang.ModuDesktop.development` 偏好配置域，与正式安装版分别保存上次选择的工作区、语言、快捷键和工具选择等应用偏好。首次启动需选择一次开发工作区，后续启动自动恢复；不会复制或迁移正式版偏好。Release 保持原有偏好配置域，测试环境变量与 mock 的独立配置仍优先使用。
+
+开发版与正式版继续共用 `~/Library/Application Support/Modu/` 下的工作区记录、锁和 CLI，以及 `~/.local/bin/modu-cli` 链接。偏好隔离只改变默认打开哪个工作区；选择同一个工作区仍会操作相同的仓库与 worktree 文件。
 
 开发构建使用当前运行架构，默认只显示阶段进度、耗时、警告和错误；追加 `-- --verbose` 可查看完整构建日志和构建任务耗时汇总，例如 `task mock -- --verbose`。mock 会单独报告 Git 数据准备耗时，以及并行构建与准备的总耗时；启动耗时包含启动验证脚本的编译与执行。普通 mock 启动会激活新实例，`--verify` 保持后台验证。启动验证只确认 App 完成启动，不代表工作区加载或界面行为已经通过验证。
 

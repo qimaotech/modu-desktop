@@ -28,10 +28,11 @@ struct ManagementView: View {
                         Text(title).font(.headline).frame(minHeight: 22)
                         if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(DesignStyle.secondary).fixedSize(horizontal: false, vertical: true) }
                     }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 18)
-                    Divider()
+                    if sheet != .importRepositories { Divider() }
                     VStack(alignment: .leading, spacing: 16) {
                         switch sheet {
                         case .add: addForm
+                        case .importRepositories: RepositoryImportForm(management: management, text: presentation.text)
                         case .create, .edit: groupForm
                         case .delete: deletionForm
                         }
@@ -41,13 +42,13 @@ struct ManagementView: View {
                                           details: management.formErrorDetails,
                                           detailsTitle: presentation.text.t("Details", "详细信息"))
                         }
-                    }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
-                    Divider()
-                    actions.padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 24)
+                    }.padding(.horizontal, 24).padding(.top, sheet == .importRepositories ? 0 : 20).padding(.bottom, 24)
+                    if sheet != .importRepositories { Divider() }
+                    actions.padding(.horizontal, 24).padding(.top, sheet == .importRepositories ? 0 : 16).padding(.bottom, 24)
                 }.frame(width: DesignStyle.sheetWidth)
             }
         }
-        .font(.body).background(DesignStyle.background).fixedSize(horizontal: false, vertical: true)
+        .font(.body).background(sheet == .importRepositories ? Color.clear : DesignStyle.background).fixedSize(horizontal: false, vertical: true)
         .interactiveDismissDisabled(operations.busy)
         .onAppear {
             focused = true
@@ -170,19 +171,26 @@ struct ManagementView: View {
     private var actions: some View {
         HStack(spacing: 8) {
             if sheet == .add {
-                Button { Task { do { if let file = try await FilePanels.readYAML(prompt: presentation.text.t("Import", "导入")) { management.importRepositories(file.text, filename: file.name) } } catch { self.error = error.localizedDescription } } } label: { Text(presentation.text.t("Import YAML…", "导入 YAML…")).padding(.horizontal, 4) }
+                Button { Task { await chooseRepositoryYAML() } } label: { Text(presentation.text.t("Import YAML…", "导入 YAML…")).padding(.horizontal, 4) }
             }
+            if sheet == .importRepositories { Button(presentation.text.t("Back", "返回")) { management.sheet = .add } }
             if sheet == .delete && management.deletionPresentation.editingGroup { Button(presentation.text.t("Back to Edit", "返回编辑")) { management.sheet = .edit } }
             Spacer()
             Button(role: .cancel) { management.sheet = nil } label: { Text(presentation.text.t("Cancel", "取消")).padding(.horizontal, 4) }.keyboardShortcut(.cancelAction)
-            Button(role: sheet == .delete ? .destructive : nil) { submit() } label: { Text(actionTitle).padding(.horizontal, 4) }
-                .keyboardShortcut(sheet == .delete || repositorySearchFocused ? nil : .defaultAction).disabled(disabled)
+            if sheet == .importRepositories { submitButton.buttonStyle(.borderedProminent) }
+            else { submitButton }
         }.controlSize(.regular)
+    }
+
+    private var submitButton: some View {
+        Button(role: sheet == .delete ? .destructive : nil) { submit() } label: { Text(actionTitle).padding(.horizontal, 4) }
+            .keyboardShortcut(sheet == .delete || repositorySearchFocused ? nil : .defaultAction).disabled(disabled)
     }
 
     private var title: String {
         switch sheet {
         case .add: presentation.text.t("Add Repository", "添加仓库")
+        case .importRepositories: presentation.text.t("Import Repositories", "导入仓库")
         case .create: presentation.text.t("Create Worktree Group", "创建工作树分组")
         case .edit: presentation.text.t("Edit Worktree Group", "编辑工作树分组")
         case .delete:
@@ -195,6 +203,7 @@ struct ManagementView: View {
     }
 
     private var subtitle: String? {
+        if sheet == .importRepositories { return presentation.text.t("Choose repositories to clone into this workspace.", "选择要克隆到此工作区的仓库。") }
         if sheet == .delete {
             switch management.deletionPresentation.request {
             case .group: return presentation.text.t("The group workspace worktree, its members, and their current local branches (including unmerged commits) will be permanently deleted.", "将永久删除分组根工作树、成员工作树及它们当前的本地分支（包括未合并提交）。")
@@ -209,6 +218,7 @@ struct ManagementView: View {
         if management.progressPresentation?.importFileName != nil { return presentation.text.t("Importing repositories…", "正在导入仓库…") }
         switch sheet {
         case .add: return presentation.text.t("Adding repository…", "正在添加仓库…")
+        case .importRepositories: return presentation.text.t("Importing repositories…", "正在导入仓库…")
         case .create: return presentation.text.t("Creating worktree group…", "正在创建工作树分组…")
         case .edit: return presentation.text.t("Updating worktree group…", "正在更新工作树分组…")
         case .delete: return presentation.text.t("Deleting…", "正在删除…")
@@ -219,8 +229,8 @@ struct ManagementView: View {
         guard target.exists, let dirty = target.dirty else { return "Other" }
         return dirty ? "Dirty" : "Clean"
     }
-    private var actionTitle: String { switch sheet { case .add: presentation.text.t("Add", "添加"); case .create: presentation.text.t("Create", "创建"); case .edit: presentation.text.t("Save Changes", "保存更改"); case .delete: management.deletionPresentation.editingGroup ? presentation.text.t("Save Changes", "保存更改") : presentation.text.t("Delete", "删除") } }
-    private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositories ?? []); case .delete: !management.canConfirmDelete } }
+    private var actionTitle: String { switch sheet { case .add: presentation.text.t("Add", "添加"); case .importRepositories: presentation.text.t("Import", "导入"); case .create: presentation.text.t("Create", "创建"); case .edit: presentation.text.t("Save Changes", "保存更改"); case .delete: management.deletionPresentation.editingGroup ? presentation.text.t("Save Changes", "保存更改") : presentation.text.t("Delete", "删除") } }
+    private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .importRepositories: !management.canConfirmRepositoryImport; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositories ?? []); case .delete: !management.canConfirmDelete } }
     private func memberStatus(_ repo: String) -> String {
         guard workspace.record?.groups[group]?.repositories.contains(repo) == true else { return "Unset" }
         let state = workspace.states[Resource.member(group, repo).id]
@@ -233,10 +243,24 @@ struct ManagementView: View {
         switch sheet {
         case .add:
             do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, name: displayName) } catch { fieldError = error.localizedDescription }
+        case .importRepositories: management.confirmRepositoryImport()
         case .create:
             do { try PathSafety.groupName(group); management.create(group, members: members) } catch { fieldError = error.localizedDescription }
         case .edit: management.edit(group, members: members)
         case .delete: management.confirmDelete()
+        }
+    }
+
+    private func chooseRepositoryYAML() async {
+        let root = workspace.record?.rootURL
+        error = nil; fieldError = nil; management.formError = nil
+        do {
+            guard let file = try await FilePanels.readYAML(prompt: presentation.text.t("Import", "导入")),
+                  management.sheet == .add, workspace.record?.rootURL == root else { return }
+            management.prepareRepositoryImport(file.text, filename: file.name)
+        } catch {
+            guard management.sheet == .add, workspace.record?.rootURL == root else { return }
+            self.error = error.localizedDescription
         }
     }
 }

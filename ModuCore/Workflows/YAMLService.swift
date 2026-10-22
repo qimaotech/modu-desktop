@@ -18,13 +18,16 @@ extension WorkspaceService {
         return try YAMLEncoder().encode(WorkspaceExport(version: 1, repositories: record.repositories, groups: record.groups))
     }
     public func importRepositoryYAML(_ text: String, at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
+        do { return await importRepositories(try Self.repositoryURLs(in: text), at: root, progress: progress) }
+        catch { return .init(command: "repo.import-yaml", workspace: root.path, status: .failed, error: .wrap(error, code: "invalid-input")) }
+    }
+    public func importRepositories(_ urls: [String], at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
         var result = OperationResult(command: "repo.import-yaml", workspace: root.path)
         do {
-            let urls = try Self.repositoryURLs(in: text)
             guard !urls.isEmpty else { throw ModuError("invalid-input", "No complete, supported Git repository URLs were found in this YAML file.") }
+            let identities = try Dictionary(grouping: Set(urls), by: { try RepositoryIdentity($0).name.lowercased() })
             let lease = try store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
-            let identities = Dictionary(grouping: Set(urls), by: { (try! RepositoryIdentity($0)).name.lowercased() })
             var seen = Set<String>()
             var stopped = false
             for (index, url) in urls.enumerated() {

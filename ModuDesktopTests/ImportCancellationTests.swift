@@ -6,6 +6,46 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct ImportCancellationTests {
+    @Test(arguments: ["confirm", "dismiss", "workspace-change"])
+    func repositoryImportWaitsForConfirmation(_ action: String) async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        _ = try await prepare(fixture)
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let model = AppModel(defaults: defaults, service: fixture.service)
+        let record = try fixture.service.store.load(fixture.root)
+        model.workspace.record = record
+        model.management.sheet = .add
+        let unselected = "https://other.invalid/repo.git"
+        model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL), \(unselected), \(fixture.remoteURL)]", filename: "repos.yaml")
+        let pending = try #require(model.management.repositoryImport)
+        #expect(pending.urls == [fixture.remoteURL, unselected] && pending.selectedURLs == Set(pending.urls))
+        #expect(model.operation == nil && !model.busy && model.management.sheet == .importRepositories)
+        #expect(try fixture.service.store.load(fixture.root) == record)
+        #expect(!PathSafety.exists(record.repositoryURL("repo")))
+        if action == "confirm" {
+            model.management.repositoryImport?.selectedURLs = []
+            model.management.confirmRepositoryImport()
+            #expect(model.operation == nil)
+            model.management.repositoryImport?.selectedURLs = [fixture.remoteURL]
+            model.management.confirmRepositoryImport()
+            let operation = try #require(model.operation)
+            await operation.value
+            await model.workspace.detailPreloadTask?.value
+            let saved = try fixture.service.store.load(fixture.root)
+            #expect(saved.repositories.map(\.url) == [fixture.remoteURL])
+            #expect(model.presentation.result == nil && model.management.sheet == nil)
+        } else {
+            if action == "dismiss" { model.management.sheet = nil }
+            else { model.management.contextChanged(rootChanged: true) }
+            model.management.confirmRepositoryImport()
+            #expect(model.operation == nil && !model.busy)
+            #expect(try fixture.service.store.load(fixture.root) == record)
+            #expect(!PathSafety.exists(record.repositoryURL("repo")))
+        }
+        #expect(model.management.repositoryImport == nil)
+    }
+
     @Test(arguments: ["repositories", "workspace", "quit"], [false, true])
     func cancellationDuringSavingFinishesTheCurrentRepository(_ kind: String, _ finalItem: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
@@ -26,7 +66,8 @@ import Testing
             model.management.importWorkspace(workspaceYAML(fixture, other: finalItem ? nil : other), filename: "workspace.yaml")
         } else {
             model.management.sheet = .add
-            model.management.importRepositories("repos: [\(fixture.remoteURL)\(finalItem ? "" : ", \(other)")]", filename: "repos.yaml")
+            model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL)\(finalItem ? "" : ", \(other)")]", filename: "repos.yaml")
+            model.management.confirmRepositoryImport()
         }
         let operation = try #require(model.operation)
         do {
@@ -135,7 +176,10 @@ import Testing
         var writer: Int32 = -1
         defer { if writer >= 0 { close(writer) } }
         if kind == "add" { model.management.add(fixture.remoteURL, name: "") }
-        else { model.management.importRepositories("repos: [\(fixture.remoteURL)]", filename: "repos.yaml") }
+        else {
+            model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL)]", filename: "repos.yaml")
+            model.management.confirmRepositoryImport()
+        }
         let operation = try #require(model.operation)
         do {
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))

@@ -187,8 +187,10 @@ final class AppModel {
             if let root = ProcessInfo.processInfo.environment["MODU_TEST_WORKSPACE"] { defaults.set(root, forKey: "workspace") }
             return defaults
         }
-        #endif
+        return UserDefaults(suiteName: "fun.armantang.ModuDesktop.development")!
+        #else
         return .standard
+        #endif
     }
 
     #if DEBUG
