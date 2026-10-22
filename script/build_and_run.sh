@@ -21,6 +21,7 @@ MOCK_LAUNCH_ATTEMPTED=false
 main() {
   local mode="run"
   local mode_selected=false
+  local reset_workspace=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --mock)
@@ -33,6 +34,10 @@ main() {
         ;;
       --verbose)
         BUILD_VERBOSE=true
+        shift
+        ;;
+      --reset)
+        reset_workspace=true
         shift
         ;;
       run|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|-verify|verify)
@@ -48,6 +53,11 @@ main() {
     esac
   done
 
+  if $reset_workspace && [[ "$mode" != "run" || -n "$MOCK_SCENARIO" ]]; then
+    echo "Use --reset with run without --mock." >&2
+    exit 2
+  fi
+
   trap cleanup_unlaunched_mock EXIT
   trap 'cancel_mock_preparation 130' INT
   trap 'cancel_mock_preparation 143' TERM
@@ -55,6 +65,7 @@ main() {
   local TIMEFORMAT='Build elapsed: %3Rs'
   if [[ -n "$MOCK_SCENARIO" ]]; then TIMEFORMAT='Build and mock preparation elapsed: %3Rs'; fi
   time build_app
+  if $reset_workspace; then reset_saved_workspace; fi
 
   case "$mode" in
     run)
@@ -81,6 +92,15 @@ main() {
 
 stop_app() {
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+}
+
+reset_saved_workspace() {
+  local preferences_domain="${MODU_TEST_DEFAULTS:-$BUNDLE_ID.development}"
+  if /usr/bin/defaults read "$preferences_domain" workspace >/dev/null 2>&1; then
+    /usr/bin/defaults delete "$preferences_domain" workspace
+  fi
+  unset MODU_TEST_WORKSPACE
+  echo "Cleared saved workspace selection ($preferences_domain)."
 }
 
 build_app() {
@@ -167,7 +187,7 @@ cancel_mock_preparation() {
 }
 
 print_usage() {
-  echo "usage: $0 [run|--debug|--logs|--telemetry|--verify] [--mock linked-worktree-selected] [--verbose]" >&2
+  echo "usage: $0 [run|--debug|--logs|--telemetry|--verify] [--mock linked-worktree-selected] [--verbose] [--reset (run only, without --mock)]" >&2
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

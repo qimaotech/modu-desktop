@@ -74,6 +74,7 @@ task
 | 命令 | 用途 |
 | --- | --- |
 | `task run` | 构建并启动 Debug App，使用独立开发偏好并恢复上次选择的开发工作区 |
+| `task run -- --reset` | 构建成功后、启动前清除保存的开发工作区选择，重新进入设置流程 |
 | `task mock` | 构建并打开隔离的临时 Git 工作区，验证启动并输出本次 PID |
 | `task verify -- --mock linked-worktree-selected` | 验证独立实例启动，输出 PID 后保持运行 |
 | `task test` | 隔离运行单元测试并清理本次环境 |
@@ -83,6 +84,8 @@ task
 调试与日志使用 `task debug`、`task logs`、`task telemetry`，均可追加 `-- --mock linked-worktree-selected`。日志流的 Ctrl-C 只停止日志，App 继续运行。**不带 mock 的 run、debug、logs、telemetry 会先停止已有 Modu 实例**；临时验证优先使用上表的隔离 verify 命令。
 
 Debug App 默认使用 `fun.armantang.ModuDesktop.development` 偏好配置域，与正式安装版分别保存上次选择的工作区、语言、快捷键和工具选择等应用偏好。首次启动需选择一次开发工作区，后续启动自动恢复；不会复制或迁移正式版偏好。Release 保持原有偏好配置域，测试环境变量与 mock 的独立配置仍优先使用。
+
+`task run -- --reset` 只删除开发偏好中的 `workspace` 键，保留语言、快捷键、工具选择及工作区记录、仓库和 worktree 数据；CLI 安装状态也保留。该参数仅用于普通 run，不与 mock 或其他启动模式组合。若设置了 `MODU_TEST_DEFAULTS`，则清除该隔离偏好域中的工作区选择；本次启动不再传入 `MODU_TEST_WORKSPACE`，避免重新写入工作区选择。
 
 开发版与正式版继续共用 `~/Library/Application Support/Modu/` 下的工作区记录、锁和 CLI，以及 `~/.local/bin/modu-cli` 链接。偏好隔离只改变默认打开哪个工作区；选择同一个工作区仍会操作相同的仓库与 worktree 文件。
 

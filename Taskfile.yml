@@ -11,7 +11,7 @@ tasks:
       - task --list
 
   run:
-    desc: 构建并启动开发版 App
+    desc: 构建并启动开发版 App（-- --reset 清除保存的工作区选择）
     cmds:
       - ./script/build_and_run.sh{{.SCRIPT_ARGS}}
 
