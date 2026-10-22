@@ -6,6 +6,12 @@ struct AppCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button(model.t("Check for Updates…", "检查更新…")) {
+                openWindow(id: "updates")
+                model.updates.check()
+            }
+        }
         CommandGroup(replacing: .newItem) {}
         CommandGroup(replacing: .singleWindowList) {
             Button("Modu") { openWindow(id: "main") }.disabled(!startupWindowReady)

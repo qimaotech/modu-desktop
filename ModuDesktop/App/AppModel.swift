@@ -9,6 +9,7 @@ final class AppModel {
     let toolService: ExternalTools
     let preferences: AppPreferences
     let globalShortcut: GlobalShortcutModel
+    let updates: AppUpdateModel
     let operations: OperationLifecycle
     let presentation: OperationPresentation
     let workspace: WorkspaceModel
@@ -42,6 +43,7 @@ final class AppModel {
         let preferences = AppPreferences(defaults: defaults ?? Self.launchDefaults())
         self.preferences = preferences
         globalShortcut = GlobalShortcutModel(preferences: preferences)
+        updates = AppUpdateModel(preferences: preferences)
         let operations = OperationLifecycle()
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })

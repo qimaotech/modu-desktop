@@ -35,6 +35,8 @@ example-workspace/
 
 当前安装包适用于 Apple Silicon Mac。可从 [Releases](https://github.com/qimaotech/modu-desktop/releases) 下载 DMG，也可从 [GitHub Actions](https://github.com/qimaotech/modu-desktop/actions/workflows/ci.yml) 的构建产物获取；打开后将 `Modu.app` 拖入 Applications。系统要求见对应发布说明。
 
+安装后可通过菜单栏 **Modu → 检查更新…（Check for Updates…）** 检查 GitHub 最新正式版本。点击“下载更新”会将 DMG 保存到 Downloads 下的独立目录并打开；退出 Modu 后，将新版本拖入 Applications 替换即可，工作区数据会保留。
+
 当前为测试包，采用 ad-hoc 签名，尚未做 Developer ID 签名与 Apple 公证。
 
 若 App 因下载隔离标记而无法打开，确认安装包来源可信后，可在终端运行以下命令移除隔离标记，再重新打开 Modu：

@@ -24,6 +24,7 @@ import ModuCore
         return false
     }
     func applicationWillTerminate(_ notification: Notification) {
+        model?.updates.cancel()
         model?.globalShortcut.stop()
         #if DEBUG
         model?.mockWorkspace?.remove()

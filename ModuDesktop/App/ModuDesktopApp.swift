@@ -58,6 +58,14 @@ struct ModuDesktopApp: App {
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         .commandsRemoved()
+        Window(model.t("Software Update", "软件更新"), id: "updates") {
+            AppUpdateView(model: model.updates)
+                .environment(\.locale, Locale(identifier: model.language))
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+        .commandsRemoved()
         Settings {
             SettingsView(model: model).frame(width: 640, height: 480 - settingsChromeHeight)
                 .background(WindowChromeHeight(height: $settingsChromeHeight))
