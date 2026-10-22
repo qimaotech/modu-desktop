@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 @testable import ModuCore
 @testable import ModuDesktop
@@ -16,6 +17,11 @@ import Testing
         }, openURL: { _, _ in })
         let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools)
         let setup = SetupModel(model: model)
+        let window = NSWindow()
+        var quitRequested = false
+        let closeHandler = WindowCloseHandler.Coordinator(shouldQuit: { !model.hasSavedWorkspace }, terminate: { quitRequested = true })
+        #expect(!closeHandler.windowShouldClose(window) && quitRequested)
+        quitRequested = false
         let skill = fixture.root.appending(path: ".agents/skills/modu-workflow")
         if conflict {
             try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -23,7 +29,11 @@ import Testing
         }
         await setup.checkCandidate(fixture.root)
         var ready = false
-        setup.continueSetup { ready = true }
+        let onReady = {
+            ready = true
+            #expect(closeHandler.windowShouldClose(window) && !quitRequested)
+        }
+        setup.continueSetup(onReady: onReady)
         let operation = try #require(model.operation)
         #expect(model.busy && model.operations.kind == .setup && setup.settingUp)
         await operation.value
@@ -31,7 +41,7 @@ import Testing
         if conflict {
             #expect(!ready && model.workspace.record == nil && setup.skillConflict && setup.error != nil)
             #expect(try String(contentsOf: skill, encoding: .utf8) == "user skill")
-            setup.continueSetup { ready = true }
+            setup.continueSetup(onReady: onReady)
             await (try #require(model.operation)).value
         }
         #expect(ready && model.workspace.record?.root == fixture.root.path && model.hasSavedWorkspace)
