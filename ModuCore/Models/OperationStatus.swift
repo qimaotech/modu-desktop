@@ -14,6 +14,7 @@ public enum OperationPhase: String, Codable, Sendable, CustomStringConvertible {
     case cleaningUp = "Cleaning up…"
     case updatingRepositories = "Updating repositories…"
     case importingRepositories = "Importing repositories…"
+    case scanningRepositories = "Scanning local repositories…"
     case creatingWorkspaceWorktree = "Creating workspace worktree…"
     case creating = "Creating…"
     case deleting = "Deleting…"

@@ -17,6 +17,7 @@ final class ManagementModel {
     var formErrorDetails: String?
     var sheet: ManagementSheet? {
         didSet {
+            if sheet != .add, progressPresentation?.scanningRepositories == true { operations.cancel() }
             if sheet == nil, oldValue == .delete {
                 dismissedDeletion = deletionPresentation
             }
@@ -57,6 +58,7 @@ final class ManagementModel {
 
     func contextChanged(rootChanged: Bool) {
         cancelEditPreview()
+        if rootChanged, progressPresentation?.scanningRepositories == true { operations.cancel() }
         if rootChanged, sheet == .delete || sheet == .importRepositories { sheet = nil }
     }
 
@@ -210,6 +212,37 @@ final class ManagementModel {
             sheet = .importRepositories
         } catch { formError = error.localizedDescription }
     }
+    func prepareLocalRepositoryImport(_ directories: [URL]) {
+        guard let root = session.record?.rootURL, sheet == .add, !directories.isEmpty,
+              let operationID = operations.begin(.management) else { return }
+        formError = nil
+        progressPresentation = .init(scanningRepositories: true)
+        let report: ProgressHandler = { [self] progress in Task { @MainActor in
+            guard operations.isCurrent(operationID), session.record?.rootURL == root, sheet == .add else { return }
+            operations.report(progress, for: operationID)
+            progressPresentation?.progress = progress
+        } }
+        let task = Task {
+            let outcome = await Result(catching: { try await service.scanLocalRepositories(in: directories, at: root, progress: report) })
+            guard operations.isCurrent(operationID) else { return }
+            operations.finish(operationID)
+            progressPresentation = nil
+            if presentation.quitPending { presentation.finishQuitIfPossible(); return }
+            guard !Task.isCancelled, session.record?.rootURL == root, sheet == .add else { return }
+            switch outcome {
+            case .success(let scan):
+                if scan.urls.isEmpty {
+                    formError = t("No repositories with an accessible remote and a valid default branch were found. Check the remote URLs, default branches, network connection, and access permissions.", "未找到可从远端克隆的仓库，请检查远端地址、默认分支、网络连接和访问权限。")
+                } else {
+                    repositoryImport = .init(root: root, filename: t("Local repositories", "本地仓库"), urls: scan.urls, selectedURLs: Set(scan.urls))
+                    sheet = .importRepositories
+                }
+            case .failure(let error):
+                if ModuError.wrap(error).code != "cancelled" { formError = error.localizedDescription }
+            }
+        }
+        operations.attach(task, to: operationID)
+    }
     var canConfirmRepositoryImport: Bool {
         guard sheet == .importRepositories, !busy, let repositoryImport, repositoryImport.root == session.record?.rootURL else { return false }
         return repositoryImport.urls.contains { repositoryImport.selectedURLs.contains($0) }
@@ -243,6 +276,7 @@ struct RepositoryImportSelection {
 struct ManagementProgressPresentation {
     var progress: OperationProgress?
     var importFileName: String?
+    var scanningRepositories = false
 }
 struct DeletionPresentation {
     let request: DeleteRequest?

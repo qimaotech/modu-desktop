@@ -16,6 +16,12 @@ enum FilePanels {
         guard await panel.begin() == .OK, let url = panel.url else { return nil }
         return (url.lastPathComponent, try String(contentsOf: url, encoding: .utf8))
     }
+    static func repositoryDirectories(prompt: String, message: String) async -> [URL]? {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = true
+        panel.showsHiddenFiles = true
+        panel.prompt = prompt; panel.message = message
+        return await panel.begin() == .OK ? panel.urls : nil
+    }
     static func yamlDestination(name: String, directory: URL? = nil) async -> URL? {
         let panel = NSSavePanel(); panel.allowedContentTypes = [UTType(filenameExtension: "yaml")!]; panel.nameFieldStringValue = name + ".yaml"
         panel.directoryURL = directory

@@ -68,6 +68,7 @@ struct InterfaceText {
             "Added": ("Added", "新增"), "Moved": ("Moved", "移动"), "Modified": ("Modified", "修改"), "Deleted": ("Deleted", "删除"), "Untracked": ("Untracked", "未跟踪"), "Conflict": ("Conflict", "冲突"),
             "Checking repository…": ("Checking repository…", "正在检查仓库…"), "Cloning…": ("Cloning…", "正在克隆…"),
             "Updating repositories…": ("Updating repositories…", "正在更新仓库…"),
+            "Scanning local repositories…": ("Scanning local repositories…", "正在扫描本地仓库…"),
             "Creating…": ("Creating…", "正在创建…"), "Creating workspace worktree…": ("Creating workspace worktree…", "正在创建工作区工作树…"),
             "Saving…": ("Saving…", "正在保存…"), "Cleaning up…": ("Cleaning up…", "正在清理…"), "Deleting…": ("Deleting…", "正在删除…"),
             "Importing repositories…": ("Importing repositories…", "正在导入仓库…"), "Created": ("Created", "已创建"),

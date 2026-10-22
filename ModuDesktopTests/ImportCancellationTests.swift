@@ -6,8 +6,8 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct ImportCancellationTests {
-    @Test(arguments: ["confirm", "dismiss", "workspace-change"])
-    func repositoryImportWaitsForConfirmation(_ action: String) async throws {
+    @Test(arguments: ["yaml", "local"], ["confirm", "dismiss", "workspace-change"])
+    func repositoryImportWaitsForConfirmation(_ source: String, _ action: String) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         _ = try await prepare(fixture)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -17,7 +17,19 @@ import Testing
         model.workspace.record = record
         model.management.sheet = .add
         let unselected = "https://other.invalid/repo.git"
-        model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL), \(unselected), \(fixture.remoteURL)]", filename: "repos.yaml")
+        if source == "yaml" {
+            model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL), \(unselected), \(fixture.remoteURL)]", filename: "repos.yaml")
+        } else {
+            let first = fixture.directory.appending(path: "source"), second = fixture.directory.appending(path: "other")
+            _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", unselected], at: fixture.root)
+            _ = try await fixture.service.git.run(["remote", "add", "origin", fixture.remoteURL], at: first)
+            try FileManager.default.createDirectory(at: second, withIntermediateDirectories: false)
+            _ = try await fixture.service.git.run(["init"], at: second)
+            _ = try await fixture.service.git.run(["remote", "add", "origin", unselected], at: second)
+            model.management.prepareLocalRepositoryImport([first, second, first])
+            let scan = try #require(model.operation)
+            await scan.value
+        }
         let pending = try #require(model.management.repositoryImport)
         #expect(pending.urls == [fixture.remoteURL, unselected] && pending.selectedURLs == Set(pending.urls))
         #expect(model.operation == nil && !model.busy && model.management.sheet == .importRepositories)
@@ -44,6 +56,28 @@ import Testing
             #expect(!PathSafety.exists(record.repositoryURL("repo")))
         }
         #expect(model.management.repositoryImport == nil)
+    }
+
+    @Test(arguments: ["cancel", "workspace-change", "dismiss"])
+    func cancelledLocalScanDoesNotPublishASelection(_ action: String) async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        _ = try await prepare(fixture)
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let model = AppModel(defaults: defaults, service: fixture.service)
+        let record = try fixture.service.store.load(fixture.root)
+        model.workspace.record = record
+        model.management.sheet = .add
+        model.management.prepareLocalRepositoryImport([fixture.directory.appending(path: "source")])
+        let scan = try #require(model.operation)
+        if action == "cancel" { model.cancel() }
+        else if action == "workspace-change" { model.management.contextChanged(rootChanged: true) }
+        else { model.management.sheet = nil }
+        await scan.value
+        #expect(!model.busy && model.management.repositoryImport == nil && model.management.progressPresentation == nil)
+        #expect(model.management.sheet == (action == "dismiss" ? nil : .add))
+        #expect(model.management.formError == nil)
+        #expect(try fixture.service.store.load(fixture.root) == record)
     }
 
     @Test(arguments: ["repositories", "workspace", "quit"], [false, true])

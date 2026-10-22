@@ -171,7 +171,15 @@ struct ManagementView: View {
     private var actions: some View {
         HStack(spacing: 8) {
             if sheet == .add {
-                Button { Task { await chooseRepositoryYAML() } } label: { Text(presentation.text.t("Import YAML…", "导入 YAML…")).padding(.horizontal, 4) }
+                Menu {
+                    Button { Task { await chooseLocalRepositories() } } label: {
+                        Label(presentation.text.t("Local Repositories…", "本地仓库…"), systemImage: "folder")
+                    }
+                    Button { Task { await chooseRepositoryYAML() } } label: {
+                        Label(presentation.text.t("YAML File…", "YAML 文件…"), systemImage: "doc")
+                    }
+                } label: { Text(presentation.text.t("Import", "导入")).padding(.horizontal, 4) }
+                .fixedSize()
             }
             if sheet == .importRepositories { Button(presentation.text.t("Back", "返回")) { management.sheet = .add } }
             if sheet == .delete && management.deletionPresentation.editingGroup { Button(presentation.text.t("Back to Edit", "返回编辑")) { management.sheet = .edit } }
@@ -215,6 +223,7 @@ struct ManagementView: View {
     }
 
     private var progressTitle: String {
+        if management.progressPresentation?.scanningRepositories == true { return presentation.text.t("Scanning local repositories…", "正在扫描本地仓库…") }
         if management.progressPresentation?.importFileName != nil { return presentation.text.t("Importing repositories…", "正在导入仓库…") }
         switch sheet {
         case .add: return presentation.text.t("Adding repository…", "正在添加仓库…")
@@ -262,5 +271,15 @@ struct ManagementView: View {
             guard management.sheet == .add, workspace.record?.rootURL == root else { return }
             self.error = error.localizedDescription
         }
+    }
+
+    private func chooseLocalRepositories() async {
+        let root = workspace.record?.rootURL
+        error = nil; fieldError = nil; management.formError = nil
+        guard let directories = await FilePanels.repositoryDirectories(
+            prompt: presentation.text.t("Scan", "扫描"),
+            message: presentation.text.t("Select one or more folders to find Git repositories. Their remote URLs will be used to clone into this workspace.", "选择一个或多个文件夹以查找 Git 仓库，随后可选择要从远端克隆到此工作区的仓库。")),
+              management.sheet == .add, workspace.record?.rootURL == root else { return }
+        management.prepareLocalRepositoryImport(directories)
     }
 }
