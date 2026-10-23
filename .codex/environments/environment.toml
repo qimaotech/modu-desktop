@@ -29,13 +29,13 @@ name = "Modu Debug"
 icon = "run"
 command = "task debug"
 
-# 构建并启动开发版 App，按 Modu 进程名查看统一日志，Ctrl-C 仅停止日志流。
+# 构建并验证开发版 App 启动，按本次实例 PID 查看统一日志，Ctrl-C 仅停止日志流。
 [[actions]]
 name = "Modu Logs"
 icon = "run"
 command = "task logs"
 
-# 构建并启动开发版 App，查看 subsystem 日志，Ctrl-C 仅停止日志流。
+# 构建并验证开发版 App 启动，按本次实例 PID 查看 Modu subsystem 日志，Ctrl-C 仅停止日志流。
 [[actions]]
 name = "Modu Telemetry"
 icon = "run"

@@ -25,8 +25,8 @@
 | 构建并激活隔离 Git 场景，验证启动并输出 PID | `task mock` |
 | 隔离构建与启动验证，不停止已有实例；输出 PID 后保持后台运行 | `task verify -- --mock linked-worktree-selected` |
 | 隔离 LLDB 调试，输入 run 启动 | `task debug -- --mock linked-worktree-selected` |
-| 隔离场景的 Modu 进程日志 | `task logs -- --mock linked-worktree-selected` |
-| 隔离场景的 subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
+| 本次隔离实例的进程日志 | `task logs -- --mock linked-worktree-selected` |
+| 本次隔离实例的 Modu subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
 
 - 临时验证优先使用隔离 verify；构建或启动相关改动用它检查构建与启动，原生窗口或交互改动按需临时执行 UI 自动化。
 - 调试与日志命令使用临时场景示例；普通开发模式可省略 mock 参数。
@@ -42,6 +42,7 @@
 
 - 开发构建使用当前运行架构，默认显示阶段进度、耗时、警告和错误；启动任务追加 `-- --verbose` 可查看完整构建日志与耗时汇总，例如 `task mock -- --verbose`。
 - mock 会报告数据准备耗时和并行构建总耗时；启动耗时包含验证脚本的编译与执行。
+- logs 与 telemetry 验证启动后，按本次实例的 PID 收集日志；telemetry 额外筛选 Modu subsystem。启动失败或无法取得有效 PID 时返回失败，不进入日志流。监听从启动验证完成后开始，可能遗漏最早的启动日志。
 - 日志流的 Ctrl-C 只停止日志，App 继续运行。
 
 ## 测试执行与诊断

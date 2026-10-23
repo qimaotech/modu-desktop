@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct BuildAndRunLifecycleTests {
-    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run"])
+    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run", "--logs", "--telemetry"])
     func interruptedVerificationKeepsItsLiveInstanceAndData(_ signal: Int32, _ mode: String) async throws {
         for printsPID in [true, false] {
             let session = try await Session.allocate()
@@ -27,7 +27,7 @@ struct BuildAndRunLifecycleTests {
         }
     }
 
-    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run"])
+    @Test(arguments: [SIGINT, SIGTERM], ["--verify", "run", "--logs", "--telemetry"])
     func interruptedVerificationWithoutAnInstanceCleansOnlyItsData(_ signal: Int32, _ mode: String) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
@@ -51,7 +51,7 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: ["--debug", "--verify", "run"])
+    @Test(arguments: ["--debug", "--verify", "run", "--logs", "--telemetry"])
     func completedLaunchKeepsItsLiveInstanceForExplicitQuit(_ mode: String) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
@@ -66,6 +66,22 @@ struct BuildAndRunLifecycleTests {
         #expect(!result.text.contains("App instance PID: \(unrelated.processIdentifier)"))
         #expect(own.isRunning)
         #expect(PathSafety.exists(session.workspace))
+        try session.expectUnrelatedIsIntact(unrelated)
+    }
+
+    @Test(arguments: [SIGINT, SIGTERM], ["--logs", "--telemetry"])
+    func stoppingLogCollectionKeepsItsAppAndRemovesTemporaryCapture(_ signal: Int32, _ mode: String) async throws {
+        let session = try await Session.allocate()
+        defer { session.cleanup() }
+        let own = try session.startApp(workspace: session.workspace)
+        let unrelated = try session.startApp(workspace: session.otherWorkspace)
+        let result = try await runScript(session, mode: mode, signal: signal, overrides: """
+        launch_verified_app() { echo "App instance PID: $test_pid"; }
+        stream_log() { kill -"$test_signal" -- "-$$"; /bin/sleep 0.05; }
+        """, pid: own.processIdentifier)
+        #expect(result.status == 128 + signal)
+        #expect(own.isRunning)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: session.base.path).allSatisfy { !$0.hasPrefix("modu-app-launch.") })
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
@@ -117,11 +133,13 @@ struct BuildAndRunLifecycleTests {
         let script = """
         source "$1"
         MOCK_DIRECTORY="$2"
+        TMPDIR="${MOCK_DIRECTORY%/*}"
         APP_BINARY=/bin/bash
         test_pid="$3"
         test_signal="$4"
         test_status="$5"
         build_app() { :; }
+        stream_log() { return "$test_status"; }
         \(overrides)
         main "${@:6}"
         """

@@ -17,6 +17,7 @@ MOCK_DIRECTORY=""
 MOCK_PREPARATION_PID=""
 MOCK_HANDED_OFF=false
 MOCK_LAUNCH_ATTEMPTED=false
+APP_LAUNCH_LOG=""
 
 main() {
   local mode="run"
@@ -77,12 +78,10 @@ main() {
       else lldb -- "$APP_BINARY"; fi
       ;;
     --logs|logs)
-      open_app
-      /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\""
+      stream_app_logs
       ;;
     --telemetry|telemetry)
-      open_app
-      /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
+      stream_app_logs --predicate "subsystem == \"$BUNDLE_ID\""
       ;;
     --verify|-verify|verify)
       verify_app
@@ -141,14 +140,36 @@ open_app() {
   MOCK_HANDED_OFF=true
 }
 
+stream_app_logs() {
+  APP_LAUNCH_LOG="$(mktemp "${TMPDIR%/}/modu-app-launch.XXXXXX")"
+  verify_app --activate
+  local pid
+  pid="$(sed -n 's/^App instance PID: //p' "$APP_LAUNCH_LOG")"
+  rm -f -- "$APP_LAUNCH_LOG"
+  APP_LAUNCH_LOG=""
+  if [[ ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Could not identify the launched App instance for log collection." >&2
+    return 1
+  fi
+  MOCK_HANDED_OFF=true
+  stream_log --process "$pid" "$@"
+}
+
+stream_log() {
+  /usr/bin/log stream --info --style compact "$@"
+}
+
 verify_app() {
   local arguments=("$@" "$APP_BUNDLE")
+  local outputs=()
   local TIMEFORMAT='App startup elapsed: %3Rs'
   if [[ -n "$MOCK_SCENARIO" ]]; then arguments+=(--mock "$MOCK_SCENARIO" --mock-workspace "$MOCK_DIRECTORY/example-workspace"); fi
+  if [[ -n "$MOCK_DIRECTORY" ]]; then outputs+=("$MOCK_DIRECTORY/launch.log"); fi
+  if [[ -n "$APP_LAUNCH_LOG" ]]; then outputs+=("$APP_LAUNCH_LOG"); fi
   echo "Launching $APP_NAME..."
   MOCK_LAUNCH_ATTEMPTED=true
-  if [[ -n "$MOCK_DIRECTORY" ]]; then
-    time launch_verified_app "${arguments[@]}" | tee "$MOCK_DIRECTORY/launch.log"
+  if [[ ${#outputs[@]} -gt 0 ]]; then
+    time launch_verified_app "${arguments[@]}" | tee "${outputs[@]}"
   else
     time launch_verified_app "${arguments[@]}"
   fi
@@ -160,6 +181,7 @@ launch_verified_app() {
 
 cleanup_unlaunched_mock() {
   trap '' INT TERM
+  if [[ -n "$APP_LAUNCH_LOG" ]]; then rm -f -- "$APP_LAUNCH_LOG"; fi
   if [[ -z "$MOCK_DIRECTORY" || "$MOCK_HANDED_OFF" == true ]]; then return; fi
   if $MOCK_LAUNCH_ATTEMPTED; then
     local status=0

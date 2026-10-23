@@ -32,12 +32,12 @@ tasks:
       - ./script/build_and_run.sh --debug{{.SCRIPT_ARGS}}
 
   logs:
-    desc: 构建并启动开发版 App，持续查看 Modu 进程日志
+    desc: 构建并验证开发版 App 启动，按本次实例 PID 查看进程日志
     cmds:
       - ./script/build_and_run.sh --logs{{.SCRIPT_ARGS}}
 
   telemetry:
-    desc: 构建并启动开发版 App，持续查看 Modu subsystem 日志
+    desc: 构建并验证开发版 App 启动，按本次实例 PID 查看 Modu subsystem 日志
     cmds:
       - ./script/build_and_run.sh --telemetry{{.SCRIPT_ARGS}}
 
