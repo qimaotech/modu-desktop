@@ -49,6 +49,16 @@ public struct WorkspaceService: Sendable {
                 if let skill {
                     do { updatingSkill = try installer.skillNeedsUpdate(from: skill, workspace: root) }
                     catch { skillError = .wrap(error) }
+                    let directory = root.appending(path: ".agents/skills/modu-workflow")
+                    // Legacy managed links are replaced by the installer without modifying their targets.
+                    if skillError == nil, (try? FileManager.default.attributesOfItem(atPath: directory.path)[.type] as? FileAttributeType) != .typeSymbolicLink {
+                        for path in installer.skillPaths(from: skill).map({ ".agents/skills/modu-workflow/\($0)" }) {
+                            if try await git.discardWorkspaceFileChanges(path, at: root) {
+                                item.effects.append(.init("discard-workspace-file-changes", root.appending(path: path).path))
+                            }
+                        }
+                        updatingSkill = try installer.skillNeedsUpdate(from: skill, workspace: root)
+                    }
                 }
                 if updatingSkill {
                     if try await validateAndClean(&record) { item.effects.append(.init("save-configuration", store.recordURL(root).path)) }

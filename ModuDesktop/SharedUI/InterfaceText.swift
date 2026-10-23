@@ -75,6 +75,7 @@ struct InterfaceText {
             "update-ignore": ("Updated .gitignore", "已更新 .gitignore"), "git-init": ("Initialized Git", "已初始化 Git"),
             "install-skill": ("Installed workflow skill", "已安装工作流技能"), "commit-workspace-files": ("Committed workspace files", "已提交工作区文件"),
             "stash-workspace": ("Stashed workspace changes", "已暂存工作区改动至 stash"), "restore-workspace": ("Restored workspace changes", "已恢复工作区改动"),
+            "discard-workspace-file-changes": ("Discarded managed file changes", "已丢弃受管文件改动"),
             "create-directory": ("Created directory", "已创建目录"), "save-configuration": ("Saved configuration", "已保存配置"),
             "clone": ("Clone", "克隆"), "create-worktree": ("Create worktree", "创建工作树"), "create-branch": ("Create branch", "创建分支"),
             "remove-worktree": ("Remove worktree", "移除工作树"), "remove-declaration": ("Remove declaration", "移除记录"), "delete-branch": ("Delete branch", "删除分支"),

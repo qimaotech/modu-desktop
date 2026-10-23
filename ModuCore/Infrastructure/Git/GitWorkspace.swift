@@ -1,6 +1,29 @@
 import Foundation
 
 extension Git {
+    func discardWorkspaceFileChanges(_ path: String, at root: URL) async throws -> Bool {
+        let file = root.appending(path: path)
+        _ = try PathSafety.child((path as NSString).deletingLastPathComponent, of: root)
+        if PathSafety.exists(file) {
+            guard try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else {
+                throw ModuError("unsafe-path", "Workspace change discard requires a regular file: \(path)")
+            }
+        }
+        let literal = ":(literal)\(path)"
+        let options = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
+        let status = try await run(options + ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--", literal], at: root, cancellable: false)
+        guard let change = try Self.parseChanges(status.stdout).first else { return false }
+        if let head = try await oid("HEAD", at: root, cancellable: false), change.workingTree != "?" {
+            _ = try await run(options + ["restore", "--source=\(head)", "--staged", "--worktree", "--", literal], at: root, cancellable: false)
+        } else {
+            if change.workingTree != "?" {
+                _ = try await run(options + ["rm", "--cached", "--force", "--", literal], at: root, cancellable: false)
+            }
+            if PathSafety.exists(file) { try FileManager.default.removeItem(at: file) }
+        }
+        return true
+    }
+
     func stashWorkspaceChanges(at root: URL) async throws -> String? {
         let options = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
         let status = try await run(options + ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".", ":(exclude)repositories", ":(exclude)worktrees"], at: root, cancellable: false)
@@ -25,7 +48,7 @@ extension Git {
                     catch { recovery = " " + ModuError.wrap(error).message }
                 }
             }
-            throw ModuError("workspace-stash-failed", "Could not stash workspace changes before updating the workflow skill; the skill was not overwritten.\(recovery) \(ModuError.wrap(error).message)")
+            throw ModuError("workspace-stash-failed", "Could not stash workspace changes before updating the workflow skill; the bundled skill was not installed.\(recovery) \(ModuError.wrap(error).message)")
         }
     }
 

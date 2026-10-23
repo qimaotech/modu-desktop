@@ -386,7 +386,7 @@ struct FailureTests {
         #expect(try String(contentsOf: skill.appending(path: "SKILL.md"), encoding: .utf8) == "updated")
         #expect(try String(contentsOf: extra, encoding: .utf8) == "keep me")
     }
-    @Test(arguments: ["file", "missing-skill", "link", "file-link", "policy-link", "agents-link"])
+    @Test(arguments: ["file", "link", "file-link", "policy-link", "agents-link"])
     func skillConflictDoesNotOverwriteWorkspaceFile(_ kind: String) throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-skill-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -412,9 +412,6 @@ struct FailureTests {
                 try FileManager.default.createDirectory(at: agents, withIntermediateDirectories: false)
                 try FileManager.default.createSymbolicLink(at: agents.appending(path: "openai.yaml"), withDestinationURL: userFile)
             }
-        case "missing-skill":
-            try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: false)
-            userFile = existing.appending(path: "notes.txt")
         case "link", "file-link":
             let target = directory.appending(path: "user-skill")
             try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)

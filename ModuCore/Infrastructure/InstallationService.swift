@@ -115,11 +115,9 @@ public struct InstallationService: Sendable {
         let skills = agents.appending(path: "skills")
         for directory in [agents, skills] { try PathSafety.directory(directory, allowMissing: true) }
         let directory = skills.appending(path: "modu-workflow")
-        let file = directory.appending(path: "SKILL.md")
         guard PathSafety.exists(directory) else { return .missing }
         let attrs = try FileManager.default.attributesOfItem(atPath: directory.path)
-        if attrs[.type] as? FileAttributeType == .typeDirectory,
-           (try? FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType) == .typeRegular {
+        if attrs[.type] as? FileAttributeType == .typeDirectory {
             var current = true
             for path in content.keys.sorted() {
                 let target = directory.appending(path: path)

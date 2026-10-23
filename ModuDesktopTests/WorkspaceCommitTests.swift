@@ -107,24 +107,37 @@ struct WorkspaceCommitTests {
         #expect(try Data(contentsOf: skill) == Data("user content".utf8))
     }
 
-    @Test func updatedSkillIsCommittedAndIdenticalContentDoesNotCreateAnotherCommit() async throws {
+    @Test(arguments: [false, true])
+    func updatedSkillIsCommittedAndIdenticalContentDoesNotCreateAnotherCommit(_ legacyLink: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
+        let installer = InstallationService(support: f.service.store.support)
         try Data("old skill\n".utf8).write(to: source)
-        #expect(await f.service.openWorkspace(f.root, skill: source).status == .success)
+        #expect(await f.service.openWorkspace(f.root, skill: source, installer: installer).status == .success)
+        if legacyLink {
+            let directory = f.root.appending(path: ".agents/skills/modu-workflow")
+            let target = installer.support.appending(path: "versions/0.1.0/modu-workflow")
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: directory, to: target)
+            try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: target)
+        }
         let previous = try await f.service.git.oid("HEAD", at: f.root)
         try Data("new skill\n".utf8).write(to: source)
-        let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
+        let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source, installer: installer)
         #expect(opened.result.status == .success && opened.skillError == nil, "\(opened.result.items)")
-        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: update Modu workflow skill\n\nAuto-committed-by: Modu")
+        let message = legacyLink ? "chore: initialize Modu workspace" : "chore: update Modu workflow skill"
+        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "\(message)\n\nAuto-committed-by: Modu")
         #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md"])
         #expect(try await f.service.git.run(["show", "HEAD:.agents/skills/modu-workflow/SKILL.md"], at: f.root).stdout == Data(contentsOf: source))
         #expect(try await f.service.git.run(["status", "--porcelain"], at: f.root).stdout.isEmpty)
         #expect(!opened.result.items.flatMap(\.effects).contains { $0.action == "stash-workspace" })
         let updated = try await f.service.git.oid("HEAD", at: f.root)
         #expect(updated != previous)
-        #expect(await f.service.openWorkspace(f.root, skill: source).status == .success)
+        #expect(await f.service.openWorkspace(f.root, skill: source, installer: installer).status == .success)
         #expect(try await f.service.git.oid("HEAD", at: f.root) == updated)
+        if legacyLink {
+            #expect(try Data(contentsOf: installer.support.appending(path: "versions/0.1.0/modu-workflow/SKILL.md")) == Data("old skill\n".utf8))
+        }
     }
 
     @Test func skillUpdateRestoresDirtyWorkspaceAndPreservesExistingStashes() async throws {
@@ -147,9 +160,19 @@ struct WorkspaceCommitTests {
         try Data("ignored resource\n".utf8).write(to: ignored)
         let status = try await f.service.git.run(["status", "--porcelain=v1", "-z"], at: f.root).stdout
         let index = try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout
+        let managedPaths = [".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml"]
+        for path in managedPaths {
+            try Data("staged user customization\n".utf8).write(to: f.root.appending(path: path))
+            _ = try await f.service.git.run(["add", "--", path], at: f.root)
+            try Data("unstaged user customization\n".utf8).write(to: f.root.appending(path: path))
+        }
+        let policy = source.deletingLastPathComponent().appending(path: "agents/openai.yaml")
+        try Data("new policy\n".utf8).write(to: policy)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
         #expect(opened.result.status == .success && opened.skillError == nil, "\(opened.result.items)")
-        #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md"])
+        #expect(try await changedPaths(f) == managedPaths)
+        #expect(try Data(contentsOf: f.root.appending(path: managedPaths[0])) == Data(contentsOf: source))
+        #expect(try Data(contentsOf: f.root.appending(path: managedPaths[1])) == Data(contentsOf: policy))
         #expect(try await f.service.git.run(["status", "--porcelain=v1", "-z"], at: f.root).stdout == status)
         #expect(try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout == index)
         #expect(try Data(contentsOf: notes) == Data("unstaged\n".utf8))
@@ -166,6 +189,9 @@ struct WorkspaceCommitTests {
         try Data("staged\n".utf8).write(to: notes)
         _ = try await f.service.git.run(["add", "notes.txt"], at: f.root)
         try Data("unstaged\n".utf8).write(to: notes)
+        let skillPath = ".agents/skills/modu-workflow/SKILL.md"
+        try Data("user customization\n".utf8).write(to: f.root.appending(path: skillPath))
+        _ = try await f.service.git.run(["add", "--", skillPath], at: f.root)
         let head = try await f.service.git.oid("HEAD", at: f.root)
         try await failSigning(f)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
@@ -178,19 +204,47 @@ struct WorkspaceCommitTests {
         #expect(try await f.service.git.run(["stash", "list"], at: f.root).stdout.isEmpty)
     }
 
-    @Test func conflictingStashRestoreKeepsSkillCommitAndSavedChanges() async throws {
+    @Test(arguments: ["staged-only", "deleted", "added", "untracked"])
+    func managedSkillChangesAreDiscardedWithoutCreatingStash(_ scenario: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        let source = try await prepareSkillUpdate(f)
-        let path = ".agents/skills/modu-workflow/SKILL.md"
-        try Data("user skill\n".utf8).write(to: f.root.appending(path: path))
+        let source = f.directory.appending(path: "SKILL.md")
+        let policy = f.directory.appending(path: "agents/openai.yaml")
+        try Data("bundled skill\n".utf8).write(to: source)
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let addingPolicy = scenario == "added" || scenario == "untracked"
+        if !addingPolicy { try Data("bundled policy\n".utf8).write(to: policy) }
+        #expect(await f.service.openWorkspace(f.root, skill: source).status == .success)
+        let skillPath = ".agents/skills/modu-workflow/SKILL.md"
+        let policyPath = ".agents/skills/modu-workflow/agents/openai.yaml"
+        let skill = f.root.appending(path: skillPath), installedPolicy = f.root.appending(path: policyPath)
+        let head = try await f.service.git.oid("HEAD", at: f.root)
+        switch scenario {
+        case "staged-only":
+            for (path, bundled) in [(skillPath, source), (policyPath, policy)] {
+                try Data("staged customization\n".utf8).write(to: f.root.appending(path: path))
+                _ = try await f.service.git.run(["add", "--", path], at: f.root)
+                try Data(contentsOf: bundled).write(to: f.root.appending(path: path))
+            }
+        case "deleted":
+            _ = try await f.service.git.run(["rm", "--", skillPath], at: f.root)
+            try FileManager.default.removeItem(at: installedPolicy)
+        default:
+            try Data("bundled policy\n".utf8).write(to: policy)
+            try FileManager.default.createDirectory(at: installedPolicy.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("user policy\n".utf8).write(to: installedPolicy)
+            if scenario == "added" { _ = try await f.service.git.run(["add", "--", policyPath], at: f.root) }
+        }
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source)
-        #expect(opened.result.items.first?.reasonCode == "workspace-stash-restore-failed", "\(opened.result.items)")
-        #expect(opened.record == nil)
-        let stash = try #require(opened.result.items.flatMap(\.effects).first { $0.action == "stash-workspace" }?.target)
-        #expect(opened.result.items.first?.message?.contains(stash) == true)
-        #expect(try await f.service.git.run(["show", "\(stash):\(path)"], at: f.root).stdout == Data("user skill\n".utf8))
-        #expect(try await f.service.git.run(["show", "HEAD:\(path)"], at: f.root).stdout == Data(contentsOf: source))
-        #expect(try await f.service.git.oid("refs/stash", at: f.root) == stash)
+        #expect(opened.result.status == .success && opened.record != nil && opened.skillError == nil, "\(opened.result.items)")
+        #expect(try Data(contentsOf: skill) == Data(contentsOf: source))
+        #expect(try Data(contentsOf: installedPolicy) == Data(contentsOf: policy))
+        #expect(try await f.service.git.run(["status", "--porcelain=v1", "-z"], at: f.root).stdout.isEmpty)
+        #expect(try await f.service.git.run(["stash", "list"], at: f.root).stdout.isEmpty)
+        let effects = opened.result.items.flatMap(\.effects)
+        #expect(!effects.contains { $0.action == "stash-workspace" })
+        #expect(effects.filter { $0.action == "discard-workspace-file-changes" }.count == (addingPolicy ? 1 : 2))
+        if addingPolicy { #expect(try await changedPaths(f) == [policyPath]) }
+        else { #expect(try await f.service.git.oid("HEAD", at: f.root) == head) }
     }
 
     @Test func failedStashDoesNotOverwriteSkill() async throws {
@@ -381,6 +435,9 @@ struct WorkspaceCommitTests {
     private func prepareSkillUpdate(_ f: Fixture) async throws -> URL {
         let source = f.directory.appending(path: "SKILL.md")
         try Data("old skill\n".utf8).write(to: source)
+        let policy = f.directory.appending(path: "agents/openai.yaml")
+        try FileManager.default.createDirectory(at: policy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("old policy\n".utf8).write(to: policy)
         #expect(await f.service.openWorkspace(f.root, skill: source).status == .success)
         for name in ["notes.txt", "deleted.txt"] { try Data("original\n".utf8).write(to: f.root.appending(path: name)) }
         _ = try await f.service.git.run(["add", "notes.txt", "deleted.txt"], at: f.root)
