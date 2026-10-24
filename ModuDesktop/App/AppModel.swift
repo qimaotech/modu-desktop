@@ -90,7 +90,7 @@ final class AppModel {
 
     func activate() async {
         guard !busy else { return }
-        async let workspaceReload: Void = workspace.reload(afterLoad: nil)
+        async let workspaceReload: Void = workspace.reload(showProgress: false, afterLoad: nil)
         tools = await toolService.available()
         await workspaceReload
     }
