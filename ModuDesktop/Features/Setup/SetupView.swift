@@ -35,14 +35,15 @@ struct SetupView: View {
                     Divider().padding(.horizontal, 20).frame(height: 11)
                     HStack(spacing: 16) {
                         stepGraphic("2.", icon: "DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
-                        Text(model.t("Choose Workspace", "选择工作区")).opacity(setup.cliReady ? 1 : 0.4)
-                        Spacer(minLength: 8)
+                        Text(model.t("Choose Workspace", "选择工作区")).fixedSize().opacity(setup.cliReady ? 1 : 0.4)
                         if let candidate = setup.candidate {
                             HStack(spacing: 4) {
                                 DesignIcon(name: "Success", size: 20)
                                 Text((candidate.path as NSString).abbreviatingWithTildeInPath).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary).lineLimit(1).truncationMode(.middle).help(candidate.path)
                                     .accessibilityIdentifier("workspaceCandidate").accessibilityValue(candidate.path)
-                            }.frame(maxWidth: 210)
+                            }.frame(maxWidth: .infinity, alignment: .trailing)
+                        } else {
+                            Spacer(minLength: 8)
                         }
                         Button(model.t("Choose…", "选择…")) { choose() }.disabled(!setup.cliReady || setup.working)
                     }.padding(.horizontal, 20).frame(height: 68)
