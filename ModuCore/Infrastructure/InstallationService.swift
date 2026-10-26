@@ -9,14 +9,16 @@ public struct CLIInstallation: Sendable {
 
 public struct InstallationService: Sendable {
     public let support: URL
+    public let executable: URL
     public let runner: CommandRunner
     private let home: URL
     private let shell: String
     private let shellArguments: [String]
     private let directoryBoundary: URL?
-    public init(support: URL = WorkspaceStore().support, runner: CommandRunner = .init(), home: URL? = nil, shell: String? = nil,
+    public init(support: URL = WorkspaceStore().support, executable: URL = Bundle.main.bundleURL.appending(path: "Contents/Resources/modu-cli"),
+                runner: CommandRunner = .init(), home: URL? = nil, shell: String? = nil,
                 shellArguments: [String] = ["-lic"], directoryBoundary: URL? = nil) {
-        self.support = support; self.runner = runner
+        self.support = support; self.executable = executable; self.runner = runner
         self.shellArguments = shellArguments; self.directoryBoundary = directoryBoundary.map(PathSafety.canonical)
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
@@ -27,7 +29,7 @@ public struct InstallationService: Sendable {
         self.shell = shell ?? getpwuid(getuid()).map { String(cString: $0.pointee.pw_shell) } ?? "/bin/zsh"
         #endif
     }
-    public var executable: URL { support.appending(path: "versions/\(ModuVersion.current)/modu-cli") }
+    public var commandLink: URL { home.appending(path: ".local/bin/modu-cli") }
 
     public func checkCLI() async -> CLIInstallation {
         let installation = await checkCLIInstallation()
@@ -37,13 +39,12 @@ public struct InstallationService: Sendable {
     public func checkCLIInstallation() async -> CLIInstallation {
         do {
             try checkBoundary()
-            guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", "Install modu-cli to continue.") }
-            let link = home.appending(path: ".local/bin/modu-cli")
-            guard FileManager.default.isExecutableFile(atPath: link.path), PathSafety.canonical(link) == PathSafety.canonical(executable) else {
-                throw ModuError("cli-unavailable", "Reinstall modu-cli to restore ~/.local/bin/modu-cli to the managed executable.")
+            guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", "The app’s bundled CLI is missing or not executable.") }
+            guard FileManager.default.isExecutableFile(atPath: commandLink.path), PathSafety.canonical(commandLink) == PathSafety.canonical(executable) else {
+                throw ModuError("cli-unavailable", "Reinstall modu-cli to link ~/.local/bin/modu-cli to this app’s bundled CLI.")
             }
             let run = try await runner.run(executable.path, ["--version"], timeout: 10)
-            guard run.status == 0 else { throw ModuError("cli-unavailable", "The managed modu-cli could not run. Reinstall and retry.") }
+            guard run.status == 0 else { throw ModuError("cli-unavailable", "The app’s bundled CLI could not run.") }
             return .init(available: true, message: "Installed")
         } catch { return .init(available: false, message: ModuError.wrap(error).message) }
     }
@@ -55,20 +56,16 @@ public struct InstallationService: Sendable {
             return .init(available: true, message: "Installed")
         } catch { return .init(available: false, message: ModuError.wrap(error).message) }
     }
-    public func installCLI(from source: URL) async throws -> CLIInstallation {
+    public func installCLI() async throws -> CLIInstallation {
         try checkBoundary()
-        guard FileManager.default.isExecutableFile(atPath: source.path) else { throw ModuError("cli-unavailable", "The app’s bundled CLI is missing or not executable.") }
+        guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", "The app’s bundled CLI is missing or not executable.") }
         let installDirectory = try PathSafety.child(".local/bin", of: home)
         for directory in [installDirectory.deletingLastPathComponent(), installDirectory] {
             if !PathSafety.exists(directory) { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false) }
             guard eligible(directory) else { throw ModuError("cli-install-conflict", "Check ~/.local/bin ownership and permissions. Modu requires user-owned directories without group or world write access.") }
         }
         let link = installDirectory.appending(path: "modu-cli")
-        guard try canLink(link) else { throw ModuError("cli-install-conflict", "The existing non-Modu ~/.local/bin/modu-cli was kept. Move it before retrying.") }
-        let directory = executable.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try Data(contentsOf: source).write(to: executable, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        guard try canLink(link, to: executable) else { throw ModuError("cli-install-conflict", "The existing non-Modu ~/.local/bin/modu-cli was kept. Move it before retrying.") }
         if PathSafety.exists(link) { try FileManager.default.removeItem(at: link) }
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable)
         let path = try await loginShell("/usr/bin/printf '%s' \"$PATH\"")
@@ -76,7 +73,7 @@ public struct InstallationService: Sendable {
             let url = PathSafety.canonical(URL(fileURLWithPath: String(component), isDirectory: true))
             if let directoryBoundary, (try? PathSafety.confined(url, to: directoryBoundary)) == nil { continue }
             let oldLink = url.appending(path: "modu-cli")
-            if PathSafety.identity(url) != PathSafety.identity(installDirectory), eligible(url), PathSafety.exists(oldLink), try canLink(oldLink) {
+            if PathSafety.identity(url) != PathSafety.identity(installDirectory), eligible(url), PathSafety.exists(oldLink), try canLink(oldLink, to: executable) {
                 try FileManager.default.removeItem(at: oldLink)
             }
         }
@@ -133,13 +130,20 @@ public struct InstallationService: Sendable {
         guard try canLink(directory) else { throw ModuError("skill-conflict", "The existing non-directory modu-workflow, non-regular SKILL.md, or third-party link was kept.") }
         return .managedLink
     }
-    private func canLink(_ url: URL) throws -> Bool {
+    private func canLink(_ url: URL, to executable: URL? = nil) throws -> Bool {
         guard PathSafety.exists(url) else { return true }
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         guard attrs[.type] as? FileAttributeType == .typeSymbolicLink else { return false }
         let destination = try FileManager.default.destinationOfSymbolicLink(atPath: url.path)
         let target = URL(fileURLWithPath: destination, relativeTo: url.deletingLastPathComponent())
-        return PathSafety.canonical(target).path.hasPrefix(PathSafety.canonical(support.appending(path: "versions")).path + "/")
+        if PathSafety.canonical(target).path.hasPrefix(PathSafety.canonical(support.appending(path: "versions")).path + "/") { return true }
+        guard let executable else { return false }
+        if PathSafety.canonical(target) == PathSafety.canonical(executable) { return true }
+        let application = target.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        guard target.path == application.appending(path: "Contents/Resources/modu-cli").path else { return false }
+        if PathSafety.exists(application) { return Bundle(url: application)?.bundleIdentifier == "fun.armantang.ModuDesktop" }
+        // A moved app leaves a dangling link without bundle metadata to check.
+        return application.lastPathComponent == "Modu.app"
     }
     private func eligible(_ url: URL) -> Bool {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path), attrs[.type] as? FileAttributeType == .typeDirectory,
@@ -161,7 +165,7 @@ public struct InstallationService: Sendable {
     }
     private func checkBoundary() throws {
         guard let directoryBoundary else { return }
-        for path in [home, home.appending(path: ".local/bin"), support, executable] {
+        for path in [home, home.appending(path: ".local/bin"), support] {
             try PathSafety.confined(path, to: directoryBoundary)
         }
     }

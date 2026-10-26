@@ -325,7 +325,7 @@ import SwiftUI
             try FileManager.default.createSymbolicLink(at: directory.appending(path: "modu-cli"), withDestinationURL: URL(fileURLWithPath: "/usr/bin/true"))
             environment["PATH"] = directory.path + ":/usr/bin:/bin"
         }
-        let installer = InstallationService(support: baseInstaller.support, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
+        let installer = InstallationService(support: baseInstaller.support, executable: baseInstaller.executable, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
         let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: installer)
         var completed = false
@@ -674,7 +674,7 @@ import SwiftUI
         let next = fixture.directory.appending(path: "new-workspace")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
         try Data("keep me".utf8).write(to: next.appending(path: "notes.txt"))
-        #expect(!PathSafety.exists(model.installer.executable))
+        #expect(!PathSafety.exists(model.installer.commandLink))
 
         #expect(model.changeWorkspace(next, cancellable: cancellable))
         #expect(model.busy && model.openingWorkspace)
@@ -863,7 +863,7 @@ import SwiftUI
     private func makeInstaller(_ fixture: Fixture, resolved: Bool = true) throws -> InstallationService {
         let shell = fixture.directory.appending(path: "login-shell")
         try Data("#!/bin/sh\nexec /bin/sh -c \"$2\"\n".utf8).write(to: shell)
-        let executable = fixture.service.store.support.appending(path: "versions/\(ModuVersion.current)/modu-cli")
+        let executable = fixture.directory.appending(path: "Modu.app/Contents/Resources/modu-cli")
         try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("#!/bin/sh\nprintf '\(ModuVersion.current)\\n'\n".utf8).write(to: executable)
         for file in [shell, executable] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path) }
@@ -872,7 +872,7 @@ import SwiftUI
         if !PathSafety.exists(link) { try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable) }
         var environment = fixture.service.git.runner.environment
         environment["PATH"] = (resolved ? link.deletingLastPathComponent().path + ":" : "") + "/usr/bin:/bin"
-        return InstallationService(support: fixture.service.store.support, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
+        return InstallationService(support: fixture.service.store.support, executable: executable, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
     }
 
     private func waitForReadLock(_ fixture: Fixture) async throws {

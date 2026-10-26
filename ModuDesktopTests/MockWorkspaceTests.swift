@@ -66,11 +66,14 @@ import Testing
         defer { mock.remove() }
         let model = mock.makeModel()
         let source = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        #expect(try await model.installer.installCLI(from: source).available)
+        let sourceBytes = try Data(contentsOf: source)
+        #expect(try await model.installer.installCLI().available)
         #expect(await model.installer.checkCLI().available)
-        #expect(model.installer.executable.path.hasPrefix(mock.directory.path + "/"))
+        #expect(model.installer.executable == source)
+        #expect(try Data(contentsOf: source) == sourceBytes)
+        #expect(!PathSafety.exists(model.installer.support.appending(path: "versions")))
         let link = mock.directory.appending(path: "home/.local/bin/modu-cli")
-        #expect(PathSafety.canonical(link) == model.installer.executable)
+        #expect(PathSafety.canonical(link) == PathSafety.canonical(model.installer.executable))
         model.language = "zh"
         #expect(mock.defaults.string(forKey: "language") == "zh")
         #expect(UserDefaults.standard.string(forKey: "workspace") == savedWorkspace)
@@ -121,10 +124,9 @@ import Testing
         do { try await model.service.exportYAML(at: record.rootURL, to: inwardLink); Issue.record("Outside symlink should be kept.") }
         catch { #expect((error as? ModuError)?.code == "unsafe-path") }
         #expect(try FileManager.default.attributesOfItem(atPath: inwardLink.path)[.type] as? FileAttributeType == .typeSymbolicLink)
-        let source = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         let cliDirectory = mock.directory.appending(path: "home/.local")
         try FileManager.default.createSymbolicLink(at: cliDirectory, withDestinationURL: other.directory.appending(path: "home"))
-        do { _ = try await model.installer.installCLI(from: source); Issue.record("Outside CLI install should be rejected.") }
+        do { _ = try await model.installer.installCLI(); Issue.record("Outside CLI install should be rejected.") }
         catch { #expect((error as? ModuError)?.code == "unsafe-path") }
         #expect(!PathSafety.exists(other.directory.appending(path: "home/bin/modu-cli")))
         #expect(throws: ModuError.self) { try model.service.store.save(original) }

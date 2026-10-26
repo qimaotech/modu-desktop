@@ -37,16 +37,15 @@ final class SetupModel {
             var outcome = OperationResult(command: "cli.install", workspace: nil)
             defer { cliActivity = nil; working = false }
             do {
-                guard let source = Bundle.main.url(forResource: "modu-cli", withExtension: nil) else { throw ModuError("cli-unavailable", "Bundled modu-cli is missing.") }
-                let check = try await model.installer.installCLI(from: source)
+                let check = try await model.installer.installCLI()
                 cliReady = check.available; cliMessage = check.message
                 outcome.status = check.available ? .success : .failed; outcome.message = check.message
                 cliActivity = nil
                 if check.available { await restoreSavedCandidate() }
             } catch { self.error = error.localizedDescription; outcome.status = Task.isCancelled ? .cancelled : .failed; outcome.message = error.localizedDescription }
-            if PathSafety.exists(model.installer.executable) {
-                var item = ItemResult(.cli(path: model.installer.executable.path), status: outcome.status)
-                item.effects = [.init("install-cli", model.installer.executable.path, state: cliReady ? "applied" : "unknown")]; outcome.items = [item]
+            if PathSafety.exists(model.installer.commandLink) {
+                var item = ItemResult(.cli(path: model.installer.commandLink.path), status: outcome.status)
+                item.effects = [.init("install-cli", model.installer.commandLink.path, state: cliReady ? "applied" : "unknown")]; outcome.items = [item]
             }
             return outcome
         }

@@ -218,7 +218,7 @@ struct FailureTests {
         for executable in [source, shell] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path) }
         var environment = ProcessInfo.processInfo.environment
         environment["MODU_FAKE_PATH"] = [shims, legacy, other, bin, shims].map(\.path).joined(separator: ":")
-        let installer = InstallationService(support: support, runner: .init(environment: environment), home: directory, shell: shell.path)
+        let installer = InstallationService(support: support, executable: source, runner: .init(environment: environment), home: directory, shell: shell.path)
         let previousExecutable = support.appending(path: "versions/previous/modu-cli")
         try FileManager.default.createDirectory(at: previousExecutable.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("previous CLI".utf8).write(to: previousExecutable)
@@ -228,31 +228,96 @@ struct FailureTests {
         try FileManager.default.createSymbolicLink(at: oldLink, withDestinationURL: installer.executable)
         try FileManager.default.createSymbolicLink(at: legacyLink, withDestinationURL: support.appending(path: "versions/0.0.1/modu-cli"))
         #expect(await installer.checkCLI().available == false)
-        #expect(try await installer.installCLI(from: source).available)
-        #expect(installer.executable.deletingLastPathComponent().lastPathComponent == ModuVersion.current)
-        #expect(try Data(contentsOf: installer.executable) == Data(contentsOf: source))
+        #expect(try await installer.installCLI().available)
+        #expect(!PathSafety.exists(support.appending(path: "versions/\(ModuVersion.current)")))
         #expect(try String(contentsOf: previousExecutable, encoding: .utf8) == "previous CLI")
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: bin.appending(path: "modu-cli").path) == installer.executable.path)
         #expect(!PathSafety.exists(oldLink) && !PathSafety.exists(legacyLink))
         #expect(!PathSafety.exists(other.appending(path: "modu-cli")))
         #expect(await installer.checkCLI().available)
-        try FileManager.default.createSymbolicLink(at: oldLink, withDestinationURL: source)
-        #expect(try await installer.installCLI(from: source).available == false)
-        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: oldLink.path) == source.path)
+        let thirdParty = directory.appending(path: "third-party-cli")
+        try FileManager.default.copyItem(at: source, to: thirdParty)
+        try FileManager.default.createSymbolicLink(at: oldLink, withDestinationURL: thirdParty)
+        #expect(try await installer.installCLI().available == false)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: oldLink.path) == thirdParty.path)
         try FileManager.default.removeItem(at: oldLink)
         try Data("third-party".utf8).write(to: oldLink)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: oldLink.path)
-        #expect(try await installer.installCLI(from: source).available == false)
+        #expect(try await installer.installCLI().available == false)
         #expect(try String(contentsOf: oldLink, encoding: .utf8) == "third-party")
         try FileManager.default.removeItem(at: oldLink)
         environment["MODU_FAKE_PATH"] = other.path
-        let missingPATH = try await InstallationService(support: support, runner: .init(environment: environment), home: directory, shell: shell.path).installCLI(from: source)
+        let missingPATH = try await InstallationService(support: support, executable: source, runner: .init(environment: environment), home: directory, shell: shell.path).installCLI()
         #expect(!missingPATH.available && missingPATH.message.contains("~/.local/bin"))
         #expect(PathSafety.exists(bin.appending(path: "modu-cli")))
         #expect(!PathSafety.exists(other.appending(path: "modu-cli")))
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: installer.executable.path)
         #expect(await installer.checkCLI().available == false)
     }
+
+    @Test func cliLinkFollowsAppReplacementAndRollbackWithoutReinstallation() async throws {
+        let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-cli-update-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let application = directory.appending(path: "Modu.app"), replacement = directory.appending(path: "replacement.app")
+        for (app, version) in [(application, "1.0.0"), (replacement, "2.0.0")] {
+            let executable = app.appending(path: "Contents/Resources/modu-cli")
+            try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("#!/bin/sh\nprintf '\(version)\\n'\n".utf8).write(to: executable)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        }
+        let shell = directory.appending(path: "login-shell")
+        try Data("#!/bin/sh\nexec /bin/sh -c \"$2\"\n".utf8).write(to: shell)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shell.path)
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = directory.appending(path: ".local/bin").path + ":/usr/bin:/bin"
+        let installer = InstallationService(support: directory.appending(path: "support"), executable: application.appending(path: "Contents/Resources/modu-cli"),
+                                            runner: .init(environment: environment), home: directory, shell: shell.path)
+        #expect(try await installer.installCLI().available)
+        #expect(try await installer.runner.run(installer.commandLink.path, ["--version"]).text == "1.0.0")
+        let backup = directory.appending(path: "backup.app")
+        try FileManager.default.moveItem(at: application, to: backup)
+        try FileManager.default.moveItem(at: replacement, to: application)
+        #expect(await installer.checkCLI().available)
+        #expect(try await installer.runner.run(installer.commandLink.path, ["--version"]).text == "2.0.0")
+        try FileManager.default.moveItem(at: application, to: replacement)
+        try FileManager.default.moveItem(at: backup, to: application)
+        #expect(await installer.checkCLI().available)
+        #expect(try await installer.runner.run(installer.commandLink.path, ["--version"]).text == "1.0.0")
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: installer.commandLink.path) == installer.executable.path)
+        #expect(!PathSafety.exists(installer.support))
+    }
+
+    @Test(arguments: ["existing", "missing", "renamed"])
+    func cliInstallationRepairsLinksToPreviousAppLocations(_ kind: String) async throws {
+        let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-cli-move-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let previousApp = directory.appending(path: kind == "renamed" ? "Previous Modu.app" : "previous/Modu.app")
+        let executable = directory.appending(path: "current/Modu.app/Contents/Resources/modu-cli")
+        let previousExecutable = previousApp.appending(path: "Contents/Resources/modu-cli")
+        for file in [executable, previousExecutable] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        }
+        let info = try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "fun.armantang.ModuDesktop"], format: .xml, options: 0)
+        try info.write(to: previousApp.appending(path: "Contents/Info.plist"))
+        let shell = directory.appending(path: "login-shell")
+        try Data("#!/bin/sh\nexec /bin/sh -c \"$2\"\n".utf8).write(to: shell)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shell.path)
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = directory.appending(path: ".local/bin").path + ":/usr/bin:/bin"
+        let installer = InstallationService(support: directory.appending(path: "support"), executable: executable,
+                                            runner: .init(environment: environment), home: directory, shell: shell.path)
+        try FileManager.default.createDirectory(at: installer.commandLink.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: installer.commandLink, withDestinationURL: previousExecutable)
+        if kind == "missing" { try FileManager.default.removeItem(at: previousApp) }
+        #expect(!(await installer.checkCLI().available))
+        #expect(try await installer.installCLI().available)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: installer.commandLink.path) == executable.path)
+        #expect(!PathSafety.exists(installer.support))
+        #expect(PathSafety.exists(previousExecutable) == (kind != "missing"))
+    }
+
     @Test(arguments: [("quiet", false), ("stdout", false), ("multiline", false), ("stderr", false), ("exit", false), ("exit", true)])
     func cliInstallationReadsInteractiveLoginPATH(_ output: String, _ conflictingCommand: Bool) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-login-shell-tests-\(UUID().uuidString) with 'quotes' and $signs")
@@ -284,8 +349,8 @@ struct FailureTests {
         let runner = CommandRunner(environment: environment)
         let noninteractive = try await runner.run("/bin/zsh", ["-lc", "command -v modu-cli"], timeout: 10)
         #expect(noninteractive.status != 0)
-        let installer = InstallationService(support: support, runner: runner, home: directory, shell: "/bin/zsh")
-        let installed = try await installer.installCLI(from: source)
+        let installer = InstallationService(support: support, executable: source, runner: runner, home: directory, shell: "/bin/zsh")
+        let installed = try await installer.installCLI()
         #expect(installed.available == !conflictingCommand, "\(installed.message)")
         #expect(await installer.checkCLI().available == !conflictingCommand)
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: bin.appending(path: "modu-cli").path) == installer.executable.path)
@@ -299,8 +364,9 @@ struct FailureTests {
         let shell = directory.appending(path: "login-shell")
         var environment = ProcessInfo.processInfo.environment
         let support = directory.appending(path: "support")
-        environment["MODU_FAKE_RESOLVED"] = support.appending(path: "versions/\(ModuVersion.current)/modu-cli").path
-        let installer = InstallationService(support: support, runner: .init(environment: environment), home: directory, shell: shell.path)
+        let executable = directory.appending(path: "Modu.app/Contents/Resources/modu-cli")
+        environment["MODU_FAKE_RESOLVED"] = executable.path
+        let installer = InstallationService(support: support, executable: executable, runner: .init(environment: environment), home: directory, shell: shell.path)
         let link = directory.appending(path: ".local/bin/modu-cli")
         try FileManager.default.createDirectory(at: installer.executable.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -312,7 +378,7 @@ struct FailureTests {
         #expect(!(await installer.checkCLIPath()).available)
     }
 
-    @Test(arguments: ["file", "link", "unsafe-parent", "unsafe-bin", "parent-link", "bin-link"])
+    @Test(arguments: ["file", "link", "app-link", "unsafe-parent", "unsafe-bin", "parent-link", "bin-link"])
     func cliInstallationRejectsConflictsAndUnsafeDirectories(_ kind: String) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-install-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -322,12 +388,17 @@ struct FailureTests {
         try FileManager.default.createDirectory(at: shims, withIntermediateDirectories: true)
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: source)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: source.path)
-        let installer = InstallationService(support: directory.appending(path: "support"), home: directory)
+        let installer = InstallationService(support: directory.appending(path: "support"), executable: source, home: directory)
         let oldLink = shims.appending(path: "modu-cli"), link = bin.appending(path: "modu-cli")
         try FileManager.default.createSymbolicLink(at: oldLink, withDestinationURL: installer.executable)
         switch kind {
         case "file": try Data("third-party".utf8).write(to: link)
-        case "link": try FileManager.default.createSymbolicLink(at: link, withDestinationURL: source)
+        case "link": try FileManager.default.createSymbolicLink(at: link, withDestinationURL: directory.appending(path: "third-party-cli"))
+        case "app-link":
+            let other = directory.appending(path: "Other.app/Contents/Resources/modu-cli")
+            try FileManager.default.createDirectory(at: other.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: source, to: other)
+            try FileManager.default.createSymbolicLink(at: link, withDestinationURL: other)
         case "unsafe-parent", "unsafe-bin":
             try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: (kind == "unsafe-parent" ? local : bin).path)
         default:
@@ -336,12 +407,14 @@ struct FailureTests {
             try FileManager.default.moveItem(at: replaced, to: target)
             try FileManager.default.createSymbolicLink(at: replaced, withDestinationURL: target)
         }
-        do { _ = try await installer.installCLI(from: source); Issue.record("Expected the unsafe installation to be rejected.") }
+        do { _ = try await installer.installCLI(); Issue.record("Expected the unsafe installation to be rejected.") }
         catch { #expect(["cli-install-conflict", "unsafe-path"].contains((error as? ModuError)?.code ?? "")) }
-        #expect(!PathSafety.exists(installer.executable))
+        #expect(try String(contentsOf: source, encoding: .utf8) == "#!/bin/sh\nexit 0\n")
+        #expect(!PathSafety.exists(installer.support))
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: oldLink.path) == installer.executable.path)
         if kind == "file" { #expect(try String(contentsOf: link, encoding: .utf8) == "third-party") }
-        if kind == "link" { #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == source.path) }
+        if kind == "link" { #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == directory.appending(path: "third-party-cli").path) }
+        if kind == "app-link" { #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == directory.appending(path: "Other.app/Contents/Resources/modu-cli").path) }
         if kind == "parent-link" || kind == "bin-link" { #expect(!PathSafety.exists(link)) }
     }
     @Test(arguments: ["copy", "link", "dangling-link"])

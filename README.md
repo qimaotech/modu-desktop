@@ -60,7 +60,7 @@ Modu 提供工作树更改与提交查看，业务开发、运行及提交合并
 
 ## CLI 与 Agent
 
-引导会在 `~/.local/bin` 中安装 `modu-cli` 命令入口，该目录需在登录 shell 的 `PATH` 中。在工作区根目录运行，例如：
+引导会创建 `~/.local/bin/modu-cli` 符号链接，直接指向当前 App 内置的 CLI，该目录需在登录 shell 的 `PATH` 中。App 路径不变时，更新 App 后 CLI 会自动跟随，无需重新安装；旧版复制安装首次迁移、移动 App 后，需在引导中重新安装以修复链接。在工作区根目录运行，例如：
 
 ```bash
 modu-cli workspace inspect

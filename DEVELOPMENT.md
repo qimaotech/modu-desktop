@@ -35,7 +35,7 @@
 ### 偏好与工作区选择
 
 - Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，独立保存工作区选择、语言、快捷键和工具选择，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
-- 工作区记录、锁和已安装 CLI 位于 `~/Library/Application Support/Modu/`，命令链接位于 `~/.local/bin/modu-cli`；不带 mock 的 verify 使用当前开发偏好所选的工作区。
+- 工作区记录和锁位于 `~/Library/Application Support/Modu/`；`~/.local/bin/modu-cli` 直接链接当前 App 的 `Contents/Resources/modu-cli`，更新 App 无需重新安装 CLI。旧版 CLI 链接在重新安装时迁移，保留原版本目录；不带 mock 的 verify 使用当前开发偏好所选的工作区。
 - `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复选择。
 
 ### 构建与日志诊断
@@ -69,7 +69,7 @@
 
 ### 版本生成与本地准备
 
-- [generate_version.sh](script/generate_version.sh) 从 [Version.xcconfig](Version.xcconfig) 生成 Core 的 `ModuVersion`，App Info.plist 与 CLI 的 `--version` 使用同一配置；CLI 安装目录和 DMG 文件名随产品版本生成。
+- [generate_version.sh](script/generate_version.sh) 从 [Version.xcconfig](Version.xcconfig) 生成 Core 的 `ModuVersion`，App Info.plist 与 CLI 的 `--version` 使用同一配置；DMG 文件名随产品版本生成。
 - 版本选择、格式、构建号递增、CHANGELOG 收录、暂存提交及 tag 授权、失败续跑按 [发布流程](.agents/skills/modu-desktop-release/SKILL.md) 执行，仅在用户显式调用该流程时运行完整步骤。
 
 | 任务 | 命令 |
