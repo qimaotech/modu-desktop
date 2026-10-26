@@ -6,6 +6,7 @@ import ModuCore
     weak var model: AppModel?
     weak var mainWindow: NSWindow?
     private(set) var startupTask: Task<Void, Never>?
+    private var terminationTask: Task<Void, Never>?
     var reopenWindow: (() -> Void)?
 
     func start(model: AppModel, onReady: @escaping @MainActor () -> Void, onFinished: @escaping @MainActor (Bool) -> Void) {
@@ -31,18 +32,25 @@ import ModuCore
         #endif
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if terminationTask != nil { return .terminateLater }
         if let model, model.busy {
+            if model.updates.restartPending { model.presentation.quitPending = true }
             guard model.operations.canCancel || model.cancelling else { return .terminateCancel }
             model.presentation.quitPending = true; model.cancel()
             return .terminateCancel
         }
         if model?.presentation.result != nil { model?.presentation.quitPending = true; return .terminateCancel }
-        if let startupTask {
+        if startupTask != nil || model?.updates.needsTerminationPreparation == true {
+            let model = model
             model?.presentation.quitPending = true
-            startupTask.cancel()
-            Task {
-                await startupTask.value
-                sender.reply(toApplicationShouldTerminate: true)
+            let startupTask = startupTask
+            startupTask?.cancel()
+            terminationTask = Task {
+                await startupTask?.value
+                let canTerminate = await model?.updates.prepareToTerminate() ?? true
+                if !canTerminate { model?.presentation.quitPending = false }
+                terminationTask = nil
+                sender.reply(toApplicationShouldTerminate: canTerminate)
             }
             return .terminateLater
         }

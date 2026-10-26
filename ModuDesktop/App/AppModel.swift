@@ -48,6 +48,7 @@ final class AppModel {
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
+        updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
         let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
         self.workspace = workspace
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation, preferences: preferences)

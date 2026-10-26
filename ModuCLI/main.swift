@@ -9,6 +9,13 @@ struct Modu: AsyncParsableCommand {
 let original = Array(CommandLine.arguments.dropFirst())
 let task = Task {
     do {
+        if original.first == "--internal-install-update" {
+            guard original.count == 3, let pid = Int32(original[2]) else {
+                throw ModuError("invalid-input", "Invalid update installer arguments.")
+            }
+            try await AppUpdateInstaller().run(directory: URL(fileURLWithPath: original[1]), parentPID: pid)
+            return
+        }
         var command = try Modu.parseAsRoot(normalizedArguments(original))
         if var command = command as? any AsyncParsableCommand { try await command.run() }
         else { try command.run() }
