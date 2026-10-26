@@ -664,7 +664,8 @@ import SwiftUI
         #expect(try Data(contentsOf: fixture.service.store.recordURL(history)) == historyRecord)
     }
 
-    @Test func changingWorkspaceCreatesOrLoadsWithoutCLIAndPublishesOnlyWhenReady() async throws {
+    @Test(arguments: [true, false])
+    func changingWorkspaceCreatesOrLoadsWithoutCLIAndPublishesOnlyWhenReady(_ cancellable: Bool) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -675,11 +676,19 @@ import SwiftUI
         try Data("keep me".utf8).write(to: next.appending(path: "notes.txt"))
         #expect(!PathSafety.exists(model.installer.executable))
 
-        model.changeWorkspace(next)
+        #expect(model.changeWorkspace(next, cancellable: cancellable))
         #expect(model.busy && model.openingWorkspace)
+        #expect(model.operations.canCancel == cancellable)
         #expect(model.workspace.record == original)
         #expect(model.defaults.string(forKey: "workspace") == original.root)
         let opening = try #require(model.operation)
+        if !cancellable {
+            model.cancel(); model.requestReload()
+            let delegate = AppDelegate()
+            delegate.model = model
+            #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
+            #expect(!model.cancelling && !opening.isCancelled && !model.presentation.quitPending)
+        }
         model.changeWorkspace(fixture.root)
         await opening.value
         #expect(!model.busy && !model.openingWorkspace && model.operation == nil)
@@ -692,9 +701,10 @@ import SwiftUI
 
         let alias = fixture.directory.appending(path: "alias")
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: next)
-        model.changeWorkspace(alias)
+        #expect(!model.changeWorkspace(alias, cancellable: false))
         #expect(!model.busy && model.operation == nil)
         model.changeWorkspace(fixture.root)
+        #expect(model.operations.canCancel)
         await model.operation?.value
         #expect(model.workspace.record == original && model.presentation.result == nil)
     }

@@ -45,4 +45,22 @@ import Testing
         lifecycle.finish(token)
         #expect(lifecycle.begin(.management) != nil && lifecycle.canCancel)
     }
+
+    @Test func noncancellableOperationsKeepRunningAndDoNotAffectTheirSuccessor() async throws {
+        let lifecycle = OperationLifecycle()
+        let token = try #require(lifecycle.begin(.workspace, cancellable: false))
+        lifecycle.cancel()
+        let task = Task<Void, Never> {}
+        lifecycle.attach(task, to: token)
+        #expect(lifecycle.begin(.management) == nil)
+        lifecycle.cancel()
+        #expect(lifecycle.busy && !lifecycle.canCancel && !lifecycle.cancelling && !task.isCancelled)
+        await task.value
+        lifecycle.finish(token)
+        let next = try #require(lifecycle.begin(.management))
+        #expect(lifecycle.canCancel)
+        lifecycle.cancel()
+        #expect(lifecycle.cancelling)
+        lifecycle.finish(next)
+    }
 }

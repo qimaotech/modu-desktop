@@ -100,14 +100,14 @@ final class AppModel {
         else { Task { await workspace.reload() } }
     }
 
-    func changeWorkspace(_ url: URL, requireExistingRecord: Bool = false) {
-        guard !busy, presentation.result == nil else { return }
+    @discardableResult func changeWorkspace(_ url: URL, requireExistingRecord: Bool = false, cancellable: Bool = true) -> Bool {
+        guard !busy, presentation.result == nil else { return false }
         let root = PathSafety.canonical(url)
-        if let record = workspace.record, PathSafety.identity(root) == PathSafety.identity(record.rootURL) { return }
+        if let record = workspace.record, PathSafety.identity(root) == PathSafety.identity(record.rootURL) { return false }
         let previousEdit = management.editPreviewTask
         management.cancelEditPreview()
         if management.sheet == .delete { management.sheet = nil }
-        guard let operationID = operations.begin(.workspace) else { return }
+        guard let operationID = operations.begin(.workspace, cancellable: cancellable) else { return false }
         presentation.completionMessage = nil; presentation.resultHost = .settings
         workspace.invalidateReads(cancelReload: true)
         let task = Task {
@@ -135,6 +135,7 @@ final class AppModel {
             workspace.startDetailPreload()
         }
         operations.attach(task, to: operationID)
+        return true
     }
 
     func completeSetup(_ root: URL, loaded: WorkspaceRecord? = nil) async throws {

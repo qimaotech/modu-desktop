@@ -31,7 +31,11 @@ import ModuCore
         #endif
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if model?.busy == true { model?.presentation.quitPending = true; model?.cancel(); return .terminateCancel }
+        if let model, model.busy {
+            guard model.operations.canCancel || model.cancelling else { return .terminateCancel }
+            model.presentation.quitPending = true; model.cancel()
+            return .terminateCancel
+        }
         if model?.presentation.result != nil { model?.presentation.quitPending = true; return .terminateCancel }
         if let startupTask {
             model?.presentation.quitPending = true

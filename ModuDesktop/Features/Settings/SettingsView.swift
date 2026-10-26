@@ -4,10 +4,12 @@ import ModuCore
 struct SettingsView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openWindow) private var openWindow
     @State private var choosingWorkspace = false
-    @State private var showingProgress = false
+    @State private var openingWorkspaceURL: URL?
+    @State private var closingAfterWorkspaceChange = false
     @State private var choosingAgain = false
-    private var presentingOperation: Bool { model.presentation.resultHost == .settings && (model.presentation.result != nil || (model.busy && !model.openingWorkspace)) }
+    private var presentingOperation: Bool { openingWorkspaceURL != nil || (model.presentation.resultHost == .settings && (model.presentation.result != nil || (model.busy && !model.openingWorkspace))) }
 
     var body: some View {
         ScrollView {
@@ -34,10 +36,6 @@ struct SettingsView: View {
                                 }
                             }
                             Spacer(minLength: 16)
-                            if showingProgress && model.openingWorkspace {
-                                ProgressView().controlSize(.small)
-                                Text(model.t("Opening workspace…", "正在打开工作区…")).font(.system(size: 11)).foregroundStyle(DesignStyle.secondary)
-                            }
                             Button(model.workspace.record == nil ? model.t("Choose…", "选择…") : model.t("Change…", "更改…")) { chooseWorkspace() }
                                 .accessibilityIdentifier("changeWorkspace").disabled(model.busy || presentingOperation || choosingWorkspace)
                                 .accessibilityValue(model.openingWorkspace ? model.t("Opening workspace…", "正在打开工作区…") : "")
@@ -62,27 +60,24 @@ struct SettingsView: View {
             }.font(.system(size: 13)).padding(.horizontal, 32).padding(.top, 36).padding(.bottom, 40)
         }.background(DesignStyle.background)
         .navigationTitle(model.t("Settings", "设置"))
-        .onChange(of: model.workspace.record?.root) { _, root in
-            if root != nil { dismiss() }
-        }
         .alert(model.presentation.messageTitle ?? model.t("Configuration error", "配置文件错误"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.message ?? "") }
-        .task(id: model.openingWorkspace) {
-            showingProgress = false
-            guard model.openingWorkspace else { return }
-            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-            if model.openingWorkspace { showingProgress = true }
-        }
         .sheet(isPresented: operationSheetPresentation, onDismiss: {
-            if choosingAgain { choosingAgain = false; chooseWorkspace() }
+            if closingAfterWorkspaceChange {
+                closingAfterWorkspaceChange = false
+                dismiss(); openWindow(id: "main")
+            } else if choosingAgain { choosingAgain = false; chooseWorkspace() }
         }) {
             operationSheetContents
         }
     }
     var operationSheetPresentation: Binding<Bool> {
-        Binding(get: { presentingOperation }, set: { if !$0 { model.presentation.dismissResult() } })
+        Binding(get: { presentingOperation }, set: { if !$0 && openingWorkspaceURL == nil { model.presentation.dismissResult() } })
     }
     @ViewBuilder var operationSheetContents: some View {
-        if let result = model.presentation.result {
+        if let url = openingWorkspaceURL {
+            WorkspaceOpeningProgressView(title: model.t("Opening workspace…", "正在打开工作区…"), url: url)
+                .task { await openWorkspace(url) }
+        } else if let result = model.presentation.result {
             ResultView(text: model.presentation.text, result: result, retry: result.command == "workspace.open" && !model.presentation.quitPending ? { choosingAgain = true; model.presentation.dismissResult() } : nil) { model.presentation.dismissResult() }
         } else if model.busy && !model.openingWorkspace {
             OperationProgressView(operations: model.operations, operationPresentation: model.presentation, title: model.t("Importing workspace…", "正在导入工作区…"), context: model.management.importFileName)
@@ -93,8 +88,15 @@ struct SettingsView: View {
         Task {
             defer { choosingWorkspace = false }
             guard let url = await FilePanels.directory(at: model.workspace.record?.rootURL.deletingLastPathComponent(), prompt: model.t("Open", "打开")), !model.busy else { return }
-            model.changeWorkspace(url)
+            openingWorkspaceURL = PathSafety.canonical(url)
         }
+    }
+    private func openWorkspace(_ url: URL) async {
+        guard model.changeWorkspace(url, cancellable: false) else { openingWorkspaceURL = nil; return }
+        await model.operation?.value
+        guard !Task.isCancelled, openingWorkspaceURL == url else { return }
+        closingAfterWorkspaceChange = model.presentation.result == nil && !model.presentation.quitPending && model.workspace.record?.root == url.path
+        openingWorkspaceURL = nil
     }
     private func importYAML() {
         Task {

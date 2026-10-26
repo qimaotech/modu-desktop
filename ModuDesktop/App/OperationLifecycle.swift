@@ -10,12 +10,14 @@ final class OperationLifecycle {
     private(set) var progress: OperationProgress?
     private(set) var task: Task<Void, Never>?
     private var generation = 0
+    private var cancellationAllowed = true
     var busy: Bool { kind != nil }
-    var canCancel: Bool { busy && !cancelling }
+    var canCancel: Bool { busy && cancellationAllowed && !cancelling }
 
-    func begin(_ kind: Kind) -> Int? {
+    func begin(_ kind: Kind, cancellable: Bool = true) -> Int? {
         guard !busy else { return nil }
         generation += 1
+        cancellationAllowed = cancellable
         self.kind = kind; cancelling = false; progress = nil
         return generation
     }
