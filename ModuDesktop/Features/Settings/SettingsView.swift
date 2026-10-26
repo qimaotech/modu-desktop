@@ -3,6 +3,7 @@ import ModuCore
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @State private var choosingWorkspace = false
     @State private var showingProgress = false
     @State private var choosingAgain = false
@@ -61,6 +62,9 @@ struct SettingsView: View {
             }.font(.system(size: 13)).padding(.horizontal, 32).padding(.top, 36).padding(.bottom, 40)
         }.background(DesignStyle.background)
         .navigationTitle(model.t("Settings", "设置"))
+        .onChange(of: model.workspace.record?.root) { _, root in
+            if root != nil { dismiss() }
+        }
         .alert(model.presentation.messageTitle ?? model.t("Configuration error", "配置文件错误"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.message ?? "") }
         .task(id: model.openingWorkspace) {
             showingProgress = false
