@@ -16,7 +16,6 @@ struct SetupView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 28) {
-                Text(model.t("Set Up Workspace", "设置工作区")).font(DesignStyle.windowTitle).frame(maxWidth: .infinity, minHeight: 24)
                 VStack(spacing: 0) {
                     HStack(spacing: 16) {
                         stepGraphic("1.", icon: "ToolIcons/Terminal")
