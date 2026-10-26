@@ -7,9 +7,9 @@ struct AppUpdateView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title).font(.title2).fontWeight(.semibold)
+            Text(title).font(DesignStyle.windowTitle)
             Text(model.t("Installed version: \(ModuVersion.current)", "当前版本：\(ModuVersion.current)"))
-                .foregroundStyle(.secondary)
+                .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
             if model.working {
                 HStack(spacing: 12) {
                     ProgressView().controlSize(.small)
@@ -41,6 +41,7 @@ struct AppUpdateView: View {
                 }
             }
         }
+        .font(DialogTypography.body)
         .padding(24).frame(width: 520, alignment: .leading).fixedSize(horizontal: false, vertical: true)
         .background(WindowCloseHandler(shouldQuit: { model.cancel(); return false }))
         .onDisappear { model.cancel() }

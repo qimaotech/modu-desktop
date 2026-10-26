@@ -80,7 +80,7 @@ struct ContentView: View {
             ContentUnavailableView { Label(model.t("No workspace selected", "尚未选择工作区"), systemImage: "folder") } actions: { Button(model.t("Set Up Workspace", "设置工作区")) { openWindow(id: "setup") } }
         } else if model.workspace.selection == nil {
             VStack(spacing: 24) {
-                Text(model.t("Let’s start", "开始使用")).font(.system(size: 24)).frame(height: 32)
+                Text(model.t("Let’s start", "开始使用")).font(DesignStyle.welcomeTitle).frame(height: 32)
                 HStack(spacing: 12) {
                     Button(model.t("Add Repository", "添加仓库")) { model.management.sheet = .add }
                     Button(model.t("Create Group", "创建分组")) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)

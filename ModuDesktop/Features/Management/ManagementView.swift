@@ -25,8 +25,8 @@ struct ManagementView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(title).font(.headline).frame(minHeight: 22)
-                        if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundStyle(DesignStyle.secondary).fixedSize(horizontal: false, vertical: true) }
+                        Text(title).font(DialogTypography.title).frame(minHeight: 22)
+                        if let subtitle { Text(subtitle).font(DialogTypography.body).foregroundStyle(DesignStyle.secondary).fixedSize(horizontal: false, vertical: true) }
                     }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 18)
                     if sheet != .importRepositories { Divider() }
                     VStack(alignment: .leading, spacing: 16) {
@@ -48,7 +48,7 @@ struct ManagementView: View {
                 }.frame(width: DesignStyle.sheetWidth)
             }
         }
-        .font(.body).background(sheet == .importRepositories ? Color.clear : DesignStyle.background).fixedSize(horizontal: false, vertical: true)
+        .font(DialogTypography.body).background(sheet == .importRepositories ? Color.clear : DesignStyle.background).fixedSize(horizontal: false, vertical: true)
         .interactiveDismissDisabled(operations.busy)
         .onAppear {
             focused = true
@@ -94,10 +94,10 @@ struct ManagementView: View {
                     Text(presentation.text.t("Repositories", "仓库"))
                     Spacer()
                     if !repositorySearch.isEmpty {
-                        Text(presentation.text.t("\(repositories.count) matches", "匹配 \(repositories.count) 个")).foregroundStyle(DesignStyle.secondary)
+                        Text(presentation.text.t("\(repositories.count) matches", "匹配 \(repositories.count) 个")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             .accessibilityIdentifier("repositoryMatches")
                     }
-                    Text("\(selected.count) / \(workspace.sortedRepositories.count) " + presentation.text.t("selected", "已选择")).foregroundStyle(DesignStyle.secondary)
+                    Text("\(selected.count) / \(workspace.sortedRepositories.count) " + presentation.text.t("selected", "已选择")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                         .accessibilityIdentifier("repositorySelectionCount")
                 }.frame(height: 18)
                 RepositorySearchField(text: $repositorySearch, focused: $repositorySearchFocused, placeholder: presentation.text.t("Search repositories", "搜索仓库"))
@@ -124,7 +124,7 @@ struct ManagementView: View {
                             Text(presentation.text.t("No matching repositories", "没有匹配的仓库")).foregroundStyle(DesignStyle.secondary)
                             Button(presentation.text.t("Clear Search", "清除搜索")) { repositorySearch = "" }.buttonStyle(.link)
                                 .accessibilityIdentifier("clearRepositorySearch")
-                        }
+                        }.font(DialogTypography.auxiliary)
                     }
                 }.frame(height: CGFloat(min(workspace.sortedRepositories.count, 7) * 28)).formPlate()
             }
@@ -142,7 +142,7 @@ struct ManagementView: View {
 
     private var deletionForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if management.deletionPresentation.editingGroup { Text(presentation.text.t("The group workspace worktree will be kept.", "将保留分组根工作树。")) }
+            if management.deletionPresentation.editingGroup { Text(presentation.text.t("The group workspace worktree will be kept.", "将保留分组根工作树。")).font(DialogTypography.auxiliary) }
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(deletionDisplayResources) { resource in deletionRow(resource) }
@@ -154,7 +154,7 @@ struct ManagementView: View {
     func deletionRow(_ resource: Resource) -> some View {
         let target = management.deletionPresentation.targets.first { $0.resource == resource }
         return HStack(spacing: 12) {
-            Text(resource.path).font(.system(size: 13, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+            Text(resource.path).font(DialogTypography.path).lineLimit(1).truncationMode(.middle)
                 .help(target?.path ?? workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path)
             Spacer(minLength: 0)
             WorkingTreeStatus(text: presentation.text, status: "Clean").hidden().overlay(alignment: .trailing) {

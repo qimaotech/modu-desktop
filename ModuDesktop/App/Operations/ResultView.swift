@@ -11,20 +11,20 @@ struct ResultView: View {
         if result.reasonCode == "workspace-not-empty" {
             VStack(alignment: .leading, spacing: 16) {
                 resultHeader
-                if let workspace = result.workspace { Text(text.t("Workspace: ", "工作区：") + (workspace as NSString).abbreviatingWithTildeInPath).textSelection(.enabled) }
+                if let workspace = result.workspace { Text(text.t("Workspace: ", "工作区：") + (workspace as NSString).abbreviatingWithTildeInPath).font(DialogTypography.path).textSelection(.enabled) }
                 Text(text.t("The workspace must have no registered repositories or worktree groups, and no content in its repositories or worktrees folders.", "工作区不能包含已登记的仓库或工作树分组，repositories 和 worktrees 目录也必须为空。"))
                 Text(text.t("Choose another workspace in Settings, then try again. Your files and configuration have not been changed.", "请在设置中选择其他工作区后重试。你的文件和配置未被修改。"))
                 Divider()
                 Button(text.t("OK", "好"), action: dismiss).keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)
-            }.font(.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)
+            }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)
         } else {
             resultContents
         }
     }
     private var resultHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: resultSymbol).font(.body).foregroundStyle(resultColor).accessibilityHidden(true)
-            Text(result.reasonCode == "workspace-not-empty" ? text.t("Can’t import into this workspace", "无法导入此工作区") : text.resultTitle(result)).font(.headline)
+            Image(systemName: resultSymbol).font(DialogTypography.body).foregroundStyle(resultColor).accessibilityHidden(true)
+            Text(result.reasonCode == "workspace-not-empty" ? text.t("Can’t import into this workspace", "无法导入此工作区") : text.resultTitle(result)).font(DialogTypography.title)
         }
     }
     private var resultSymbol: String {
@@ -52,12 +52,12 @@ struct ResultView: View {
             VStack(alignment: .leading, spacing: result.command == "repo.update" ? 4 : 6) {
                 resultHeader
                 if let summary = text.resultSummaryText(result) {
-                    Text(summary).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    Text(summary).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
                 }
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(.system(.caption, design: .monospaced)) }
+                    if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(DialogTypography.path) }
                     if let message = result.message { Text(message) }
                     if result.command == "repo.update", !items.isEmpty {
                         RepositoryUpdateResultsView(text: text, result: result)
@@ -78,21 +78,21 @@ struct ResultView: View {
                     Button(text.t("OK", "好"), action: dismiss).keyboardShortcut(.defaultAction)
                 }
             }.frame(maxWidth: .infinity, alignment: .trailing)
-        }.font(.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)
+        }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)
     }
 
     private func itemContents(_ item: ItemResult, count: Int) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             if result.command != "workspace.open" {
-                Text(item.resource.path).font(.system(.body, design: .monospaced))
+                Text(item.resource.path).font(DialogTypography.path)
                 if result.command != "repo.add" || count > 1 || result.status != .failed {
-                    Text(text.resultStatus(item)).font(.caption).foregroundStyle(.secondary)
+                    Text(text.resultStatus(item)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 }
             }
             let message = text.resultMessage(item, overallMessage: result.message, command: result.command)
-            if let message { Text(message).foregroundStyle(.secondary) }
-            ForEach(text.effectSummaries(item, workspace: result.workspace), id: \.self) { Text($0).font(.caption) }
-            if let trash = item.trashPath { Text(text.t("Trash: ", "废纸篓：") + trash).font(.system(.caption, design: .monospaced)) }
+            if let message { Text(message).foregroundStyle(DesignStyle.secondary) }
+            ForEach(text.effectSummaries(item, workspace: result.workspace), id: \.self) { Text($0).font(DialogTypography.auxiliary) }
+            if let trash = item.trashPath { Text(text.t("Trash: ", "废纸篓：") + trash).font(DialogTypography.path) }
             let errorDetails = item.message.flatMap { raw in !item.hasWarning && message != nil && message != raw ? Git.sanitize(raw) : nil }
             if !item.effects.isEmpty || errorDetails != nil {
                 DisclosureGroup(text.t("Details", "详细信息")) {
@@ -101,8 +101,8 @@ struct ResultView: View {
                         ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
                             Text("\(effect.action): \(effect.target) [\(effect.state)]")
                         }
-                    }.font(.system(.caption, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading)
-                }.foregroundStyle(.secondary)
+                    }.font(DialogTypography.path).frame(maxWidth: .infinity, alignment: .leading)
+                }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
             }
         }
     }

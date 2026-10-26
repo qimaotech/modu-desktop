@@ -15,18 +15,18 @@ struct OperationProgressView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
+                Text(title).font(DialogTypography.title)
                 if let context {
-                    Text(context).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(context).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary)
                         .lineLimit(1).truncationMode(.middle).help(context)
                 }
             }
             HStack(spacing: 12) {
                 ProgressView().controlSize(.small).frame(width: 20, height: 20).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(progress?.target ?? " ").font(.system(.body, design: .monospaced))
+                    Text(progress?.target ?? " ").font(DialogTypography.path)
                         .lineLimit(1).truncationMode(.middle).help(progress?.target ?? "")
-                    Text(phaseText).font(.caption).foregroundStyle(.secondary)
+                    Text(phaseText).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.frame(minHeight: 36)
             VStack(alignment: .leading, spacing: 8) {
@@ -36,19 +36,19 @@ struct OperationProgressView: View {
                     } else { ProgressView() }
                 }.progressViewStyle(.linear).controlSize(.small)
                     .accessibilityLabel(title).accessibilityValue(summaryText ?? phaseText)
-                Text(summaryText ?? " ").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(summaryText ?? " ").font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
                     .accessibilityHidden(summaryText == nil)
             }
             Divider()
             HStack(spacing: 12) {
                 if keepsCompletedItems {
                     Text(operationPresentation.text.t("Completed items are kept when cancelled.", "取消后保留已完成项。"))
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 Button(operationPresentation.text.t("Cancel", "取消")) { operations.cancel() }.keyboardShortcut(.cancelAction)
                     .disabled(!operations.canCancel)
             }.controlSize(.regular)
-        }.font(.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background).interactiveDismissDisabled(operations.busy)
+        }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background).interactiveDismissDisabled(operations.busy)
     }
 }

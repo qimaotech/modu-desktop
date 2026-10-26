@@ -13,7 +13,7 @@ struct RepositoryUpdateResultsView: View {
             HStack(spacing: 12) {
                 Text(text.t("Repository", "仓库")).frame(maxWidth: .infinity, alignment: .leading)
                 Text(text.t("Result", "结果")).frame(width: Self.resultColumnWidth)
-            }.font(.caption).foregroundStyle(.secondary).padding(.bottom, 6)
+            }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).padding(.bottom, 6)
             Divider()
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 RepositoryUpdateResultRow(text: text, item: item, workspace: result.workspace)
@@ -31,7 +31,7 @@ struct RepositoryUpdateResultRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(repositoryName).font(.system(.body, design: .monospaced))
+                Text(repositoryName).font(DialogTypography.body.monospaced())
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                     .help(fullPath)
@@ -47,9 +47,9 @@ struct RepositoryUpdateResultRow: View {
                     .help(statusLabel)
             }
             if let message = text.resultMessage(item, overallMessage: nil, command: "repo.update") {
-                Text(message).foregroundStyle(.secondary)
+                Text(message).foregroundStyle(DesignStyle.secondary)
             }
-            ForEach(visibleEffects, id: \.self) { Text($0).font(.caption) }
+            ForEach(visibleEffects, id: \.self) { Text($0).font(DialogTypography.auxiliary) }
             DisclosureGroup(text.t("Details", "详细信息")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(fullPath)
@@ -60,12 +60,12 @@ struct RepositoryUpdateResultRow: View {
                     if let workingTree = item.data?["working-tree"] {
                         Text(text.t("Working tree: ", "工作树：") + text.statusText(workingTree == "clean" ? "Clean" : "Dirty"))
                     }
-                }.font(.system(.caption, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading)
+                }.font(DialogTypography.path).frame(maxWidth: .infinity, alignment: .leading)
             }
             .disclosureGroupStyle(RepositoryResultDetailsStyle(
                 identifier: "repo-update-details-\(item.resource.id)",
                 expandedLabel: text.t("Expanded", "已展开"), collapsedLabel: text.t("Collapsed", "已折叠")))
-            .font(.callout).foregroundStyle(.secondary)
+            .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
         }.padding(.vertical, 4)
     }
 
@@ -76,7 +76,7 @@ struct RepositoryUpdateResultRow: View {
     var visibleEffects: [String] { item.status == .success ? [] : text.effectSummaries(item, workspace: workspace) }
 
     private var repositoryFont: NSFont {
-        .monospacedSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .body, options: [:]).pointSize, weight: .regular)
+        .monospacedSystemFont(ofSize: DialogTypography.bodySize, weight: .regular)
     }
 }
 

@@ -14,14 +14,14 @@ struct RepositoryImportForm: View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Toggle(text.t("Select All", "全选"), sources: pending.urls.map { selectionBinding(for: $0) }, isOn: \.self)
-                        .toggleStyle(.checkbox).font(.body).fontWeight(.medium)
+                        .toggleStyle(.checkbox).font(DialogTypography.body)
                         .background {
                             Button(text.t("Select All", "全选")) { management.repositoryImport?.selectedURLs = Set(pending.urls) }
                                 .keyboardShortcut("a").hidden().accessibilityHidden(true)
                         }
                     Spacer(minLength: 8)
                     Text(text.t("\(pending.selectedURLs.count) of \(pending.urls.count) selected", "已选择 \(pending.selectedURLs.count) / \(pending.urls.count) 个"))
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                        .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
                 }.padding(.horizontal, horizontalInset).frame(height: 32)
                     .background(Color.primary.opacity(0.035))
                 Divider()
@@ -48,7 +48,7 @@ struct RepositoryImportForm: View {
                 .lineLimit(1).truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .toggleStyle(.checkbox).font(.body)
+        .toggleStyle(.checkbox).font(DialogTypography.body)
         .help(url).accessibilityHint(url)
     }
 

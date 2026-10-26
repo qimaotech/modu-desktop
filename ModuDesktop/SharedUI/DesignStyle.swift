@@ -3,6 +3,8 @@ import AppKit
 
 enum DesignStyle {
     static let sheetWidth: CGFloat = 460
+    static let windowTitle = Font.system(size: 17, weight: .semibold)
+    static let welcomeTitle = Font.system(size: 19, weight: .semibold)
     static let background = adaptive(light: 0xffffff, dark: 0x202020)
     static let sidebar = adaptive(light: 0xfdfdfd, dark: 0x252525)
     static let sidebarHighlight = Color(.sRGB, red: 238.0 / 255, green: 238.0 / 255, blue: 239.0 / 255, opacity: 1)

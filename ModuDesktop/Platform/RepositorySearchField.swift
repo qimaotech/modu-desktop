@@ -14,7 +14,7 @@ struct RepositorySearchField: NSViewRepresentable {
         field.action = #selector(Coordinator.search(_:))
         field.sendsSearchStringImmediately = true
         field.maximumRecents = 0
-        field.font = .systemFont(ofSize: 13)
+        field.font = .systemFont(ofSize: DialogTypography.bodySize, weight: .regular)
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setAccessibilityIdentifier("repositorySearch")
         return field

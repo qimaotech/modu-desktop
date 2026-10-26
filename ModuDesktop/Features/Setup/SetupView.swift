@@ -16,14 +16,14 @@ struct SetupView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 28) {
-                Text(model.t("Set Up Workspace", "设置工作区")).font(.system(size: 19, weight: .bold)).frame(maxWidth: .infinity, minHeight: 24)
+                Text(model.t("Set Up Workspace", "设置工作区")).font(DesignStyle.windowTitle).frame(maxWidth: .infinity, minHeight: 24)
                 VStack(spacing: 0) {
                     HStack(spacing: 16) {
                         stepGraphic("1.", icon: "ToolIcons/Terminal")
-                        Text(model.t("Install modu-cli", "安装 modu-cli")).font(.system(size: 13))
+                        Text(model.t("Install modu-cli", "安装 modu-cli"))
                         Spacer(minLength: 8)
                         if setup.cliReady && setup.cliActivity == nil {
-                            HStack(spacing: 4) { DesignIcon(name: "Success", size: 20); Text(model.t("Installed", "已安装")).font(.system(size: 11)).foregroundStyle(DesignStyle.secondary) }
+                            HStack(spacing: 4) { DesignIcon(name: "Success", size: 20); Text(model.t("Installed", "已安装")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
                         } else {
                             Button { setup.install() } label: {
                                 installButtonLabel
@@ -35,12 +35,12 @@ struct SetupView: View {
                     Divider().padding(.horizontal, 20).frame(height: 11)
                     HStack(spacing: 16) {
                         stepGraphic("2.", icon: "DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
-                        Text(model.t("Choose Workspace", "选择工作区")).font(.system(size: 13)).opacity(setup.cliReady ? 1 : 0.4)
+                        Text(model.t("Choose Workspace", "选择工作区")).opacity(setup.cliReady ? 1 : 0.4)
                         Spacer(minLength: 8)
                         if let candidate = setup.candidate {
                             HStack(spacing: 4) {
                                 DesignIcon(name: "Success", size: 20)
-                                Text((candidate.path as NSString).abbreviatingWithTildeInPath).font(.system(size: 11)).lineLimit(1).truncationMode(.middle).help(candidate.path)
+                                Text((candidate.path as NSString).abbreviatingWithTildeInPath).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary).lineLimit(1).truncationMode(.middle).help(candidate.path)
                                     .accessibilityIdentifier("workspaceCandidate").accessibilityValue(candidate.path)
                             }.frame(maxWidth: 210)
                         }
@@ -54,7 +54,7 @@ struct SetupView: View {
                     }
                     if let error = setup.error { ScrollView { Text(error).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 90) }
                     if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
-                }.font(.system(size: 11)).foregroundStyle(DesignStyle.secondary)
+                }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 Spacer(minLength: 0)
             }.padding(.horizontal, 36).padding(.top, 24).padding(.bottom, 20)
             Divider()
@@ -70,7 +70,7 @@ struct SetupView: View {
                 .accessibilityLabel(continueButtonTitle)
                 .keyboardShortcut(.defaultAction).disabled(!setup.cliReady || setup.candidate == nil || setup.working)
             }.padding(.horizontal, 20).frame(height: 52)
-        }.background(DesignStyle.background)
+        }.font(DialogTypography.body).background(DesignStyle.background)
         .interactiveDismissDisabled(setup.working)
         .sheet(isPresented: Binding(get: { model.presentation.resultHost == .setup && model.presentation.result != nil }, set: { if !$0 { model.presentation.dismissResult() } })) {
             if let result = model.presentation.result { ResultView(text: model.presentation.text, result: result) { model.presentation.dismissResult() } }
@@ -123,7 +123,7 @@ struct SetupView: View {
 
     private func stepGraphic(_ number: String, icon: String) -> some View {
         HStack(spacing: 12) {
-            Text(number).font(.system(size: 13, weight: .semibold)).foregroundStyle(DesignStyle.secondary)
+            Text(number).font(DialogTypography.body.weight(.semibold)).foregroundStyle(DesignStyle.secondary)
             Image(icon).resizable().scaledToFit().frame(width: 24, height: 24).frame(width: 48).accessibilityHidden(true)
         }
     }
