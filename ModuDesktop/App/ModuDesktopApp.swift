@@ -50,7 +50,8 @@ struct ModuDesktopApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
         Window(model.t("Set Up Workspace", "设置工作区"), id: "setup") {
-            SetupView(model: model).onAppear { delegate.model = model }.frame(width: 720, height: 520 - setupChromeHeight)
+            SetupView(model: model).id(model.workspace.record?.root)
+                .onAppear { delegate.model = model }.frame(width: 720, height: 520 - setupChromeHeight)
                 .background(WindowChromeHeight(height: $setupChromeHeight))
                 .background(WindowCloseHandler(shouldQuit: { !model.hasSavedWorkspace }))
         }

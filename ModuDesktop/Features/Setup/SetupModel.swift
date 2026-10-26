@@ -19,6 +19,8 @@ final class SetupModel {
 
     func check() async {
         guard !working else { return }
+        candidate = nil; candidateRequiresExistingRecord = false
+        error = nil; skillConflict = false
         working = true; cliActivity = .checking
         defer { cliActivity = nil; working = false }
         let check = await model.installer.checkCLI()
