@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import ModuCore
 
 // Expansion state belongs inside the AppKit-hosted sidebar so root-view updates preserve its animation history.
@@ -90,7 +91,7 @@ struct WorkspaceSidebar: View {
             Button { expanded.wrappedValue.toggle() } label: {
                 HStack(spacing: 6) {
                     DesignIcon(name: "Disclosure").rotationEffect(.degrees(expanded.wrappedValue ? 0 : -90))
-                    DesignIcon(name: "FolderOpen")
+                    SidebarFolderIcon(expanded: expanded.wrappedValue)
                     Text(title).font(.system(size: 13, weight: .medium))
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
@@ -118,7 +119,8 @@ struct WorkspaceSidebar: View {
             }
             Button { workspace.selectSidebarRow(resource); sidebarFocused = true } label: {
                 HStack(spacing: 6) {
-                    DesignIcon(name: resource.kind == .group ? "FolderGroup" : "FolderGit")
+                    if resource.kind == .group { SidebarFolderIcon(expanded: workspace.expandedGroups.contains(title)) }
+                    else { DesignIcon(name: "FolderGit") }
                     Text(title).font(.system(size: 13, weight: resource.kind == .group ? .medium : .regular)).lineLimit(1)
                     Spacer(minLength: 4)
                     if workspace.states[resource.id]?.available == false {
@@ -146,4 +148,19 @@ struct WorkspaceSidebar: View {
         workspace.selection = resources[min(resources.count - 1, max(0, current + offset))]
         return .handled
     }
+}
+
+private struct SidebarFolderIcon: View {
+    let expanded: Bool
+
+    var body: some View {
+        Image(nsImage: expanded ? Self.expandedImage : Self.collapsedImage).renderingMode(.original).resizable().scaledToFit()
+            .frame(width: 16, height: 16).scaleEffect(0.92).accessibilityHidden(true)
+    }
+
+    private static let collapsedImage = NSWorkspace.shared.icon(for: .folder)
+    // AppKit has no named open-folder image; keep the generic folder if the system resource is unavailable.
+    private static let expandedImage = Bundle(path: "/System/Library/CoreServices/CoreTypes.bundle")?
+        .url(forResource: "OpenFolderIcon", withExtension: "icns")
+        .flatMap { NSImage(contentsOf: $0) } ?? collapsedImage
 }
