@@ -51,8 +51,14 @@ public struct InstallationService: Sendable {
     public func checkCLIPath() async -> CLIInstallation {
         do {
             try checkBoundary()
-            let found = try await loginShell("command -v modu-cli")
-            guard found.status == 0, found.text.hasPrefix("/"), PathSafety.canonical(URL(fileURLWithPath: found.text)) == PathSafety.canonical(executable) else { throw ModuError("cli-path-unavailable", "Add ~/.local/bin to your login shell’s PATH and remove any conflicting modu-cli command, then retry. The command must resolve to \(executable.path). Shell configuration is not changed by Modu.") }
+            // A missing command still needs a complete probe, unlike a shell startup failure.
+            let found = try await loginShell("command -v modu-cli || /usr/bin/true")
+            guard !found.text.isEmpty else {
+                throw ModuError("cli-path-unavailable", "The login shell could not find modu-cli. Add ~/.local/bin to its PATH, then retry. Shell configuration is not changed by Modu.")
+            }
+            guard found.text.hasPrefix("/"), PathSafety.canonical(URL(fileURLWithPath: found.text)) == PathSafety.canonical(executable) else {
+                throw ModuError("cli-path-unavailable", "modu-cli resolves to a different command. Adjust your PATH order or resolve the conflicting command, then retry.\nCurrent: \(found.text)\nExpected: \(executable.path)")
+            }
             return .init(available: true, message: "Installed")
         } catch { return .init(available: false, message: ModuError.wrap(error).message) }
     }
@@ -156,10 +162,9 @@ public struct InstallationService: Sendable {
         let marker = Data("\0\(token)\0".utf8)
         let delimiter = "/usr/bin/printf '\\000\(token)\\000'"
         let output = try await runner.run(shell, shellArguments + ["\(delimiter); \(command) && \(delimiter)"], timeout: 10)
-        guard output.status == 0 else { return .init(status: output.status, stdout: Data(), stderr: output.stderr) }
-        guard let start = output.stdout.range(of: marker),
+        guard output.status == 0, let start = output.stdout.range(of: marker),
               let end = output.stdout.range(of: marker, in: start.upperBound..<output.stdout.endIndex) else {
-            throw ModuError("cli-path-unavailable", "The login shell did not return a complete result. Check its startup configuration and retry.")
+            throw ModuError("cli-path-unavailable", "The login shell could not complete the CLI check. Check its startup configuration and retry.")
         }
         return .init(status: output.status, stdout: output.stdout.subdata(in: start.upperBound..<end.lowerBound), stderr: output.stderr)
     }
