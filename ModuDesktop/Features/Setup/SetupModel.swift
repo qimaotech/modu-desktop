@@ -69,13 +69,14 @@ final class SetupModel {
             var outcome = opened.result
             defer { settingUp = false; working = false }
             if outcome.status != .success {
-                error = (outcome.message.map { [$0] } ?? []) .joined(separator: "\n") + outcome.items.map { ($0.message ?? "") + "\n" + $0.effects.map { "\($0.action): \($0.target)" }.joined(separator: "\n") }.joined(separator: "\n")
+                let text = model.presentation.text
+                error = (outcome.message.map { [text.message($0)] } ?? []) .joined(separator: "\n") + outcome.items.map { text.message($0.message ?? "") + "\n" + text.effectSummaries($0, workspace: outcome.workspace).joined(separator: "\n") }.joined(separator: "\n")
                 return outcome
             }
             if Task.isCancelled { outcome.status = .cancelled; return outcome }
             if !skillConflict {
                 if let error = opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", "Bundled skill is unavailable.") : nil) {
-                    self.error = error.localizedDescription; skillConflict = true; return outcome
+                    self.error = model.presentation.text.message(error.localizedDescription); skillConflict = true; return outcome
                 }
             }
             guard !model.presentation.quitPending else { return outcome }

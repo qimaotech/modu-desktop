@@ -58,7 +58,7 @@ struct ResultView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(DialogTypography.path) }
-                    if let message = result.message { Text(message) }
+                    if let message = result.message { Text(text.message(message)) }
                     if result.command == "repo.update", !items.isEmpty {
                         RepositoryUpdateResultsView(text: text, result: result)
                     } else {
@@ -99,7 +99,7 @@ struct ResultView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if let errorDetails { Text(errorDetails) }
                         ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
-                            Text("\(effect.action): \(effect.target) [\(effect.state)]")
+                            Text("\(text.statusText(effect.action)): \(effect.target) [\(text.statusText(effect.state))]")
                         }
                     }.font(DialogTypography.path).frame(maxWidth: .infinity, alignment: .leading)
                 }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)

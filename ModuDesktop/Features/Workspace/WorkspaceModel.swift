@@ -174,11 +174,11 @@ final class WorkspaceModel {
         guard !Task.isCancelled else { return nil }
         guard opened.result.status == .success, let record = opened.record else {
             let code = opened.result.reasonCode ?? opened.result.items.first?.reasonCode ?? "workspace-unavailable"
-            let message = ([opened.result.message].compactMap { $0 } + opened.result.items.compactMap(\.message)).joined(separator: "\n")
+            let message = ([opened.result.message].compactMap { $0 } + opened.result.items.compactMap(\.message)).map(presentation.text.message).joined(separator: "\n")
             throw ModuError(code, message)
         }
         notice = (opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", "Bundled skill is unavailable.") : nil)).map {
-            t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + $0.localizedDescription
+            t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + presentation.text.message($0.localizedDescription)
         }
         return record
     }

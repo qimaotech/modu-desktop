@@ -37,7 +37,7 @@ struct ManagementView: View {
                         case .delete: deletionForm
                         }
                         if let error = error ?? management.formError {
-                            FormErrorView(message: error,
+                            FormErrorView(message: presentation.text.message(error),
                                           title: sheet == .add && management.formErrorDetails != nil ? presentation.text.t("Can’t add repository", "无法添加仓库") : nil,
                                           details: management.formErrorDetails,
                                           detailsTitle: presentation.text.t("Details", "详细信息"))
@@ -65,7 +65,7 @@ struct ManagementView: View {
                     .accessibilityLabel(presentation.text.t("Repository URL", "仓库 URL")).onChange(of: url) { fieldError = nil; management.formError = nil }
                     .multilineTextAlignment(.trailing)
             }.padding(.horizontal, 16).frame(height: 36)
-            if let fieldError { FormErrorView(message: fieldError).padding(.horizontal, 16).padding(.bottom, 8) }
+            if let fieldError { FormErrorView(message: presentation.text.message(fieldError)).padding(.horizontal, 16).padding(.bottom, 8) }
             Divider().padding(.leading, 16)
             HStack(spacing: 16) {
                 Text(presentation.text.t("Display Name", "显示名称")).fixedSize()
@@ -87,7 +87,7 @@ struct ManagementView: View {
                             .accessibilityLabel(presentation.text.t("Group Name", "分组名称")).onChange(of: group) { fieldError = nil }
                     }
                 }.padding(.horizontal, 12).frame(height: 36).formPlate()
-                if let fieldError { FormErrorView(message: fieldError) }
+                if let fieldError { FormErrorView(message: presentation.text.message(fieldError)) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack {

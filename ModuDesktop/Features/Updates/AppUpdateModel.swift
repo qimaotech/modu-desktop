@@ -183,7 +183,7 @@ final class AppUpdateModel {
         case "update-location-unwritable": t("Modu can’t update in this location. Move it to a writable Applications folder and try again.", "无法在当前位置更新 Modu，请将应用移至可写入的 Applications 文件夹后重试。")
         case "update-system-unsupported": t("This update requires a newer version of macOS.", "此更新需要更高版本的 macOS。")
         case "update-exit-timeout": t("Modu did not exit in time. The update was not installed. Please try again.", "Modu 未能及时退出，尚未安装更新，请重试。")
-        default: t("Couldn’t complete the update. ", "无法完成更新。") + error.localizedDescription
+        default: t("Couldn’t complete the update. ", "无法完成更新。") + InterfaceText(language: preferences.language).message(error.localizedDescription)
         }
     }
 }

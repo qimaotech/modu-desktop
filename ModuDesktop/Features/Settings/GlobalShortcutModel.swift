@@ -11,6 +11,7 @@ final class GlobalShortcutModel {
     private(set) var isRecording = false
     var error: String?
     var shortcut: GlobalShortcut? { preferences.globalShortcut }
+    var shortcutLabel: String? { shortcut?.displayValue.replacingOccurrences(of: "Space", with: t("Space", "空格")) }
 
     init(preferences: AppPreferences) {
         self.preferences = preferences

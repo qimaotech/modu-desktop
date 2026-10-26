@@ -54,7 +54,7 @@ struct RepositoryUpdateResultRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(fullPath)
                     ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
-                        Text("\(effect.action): \(effect.target) [\(effect.state)]")
+                        Text("\(text.statusText(effect.action)): \(effect.target) [\(text.statusText(effect.state))]")
                     }
                     if let head = item.data?["actual-head"] { Text("HEAD: \(head)") }
                     if let workingTree = item.data?["working-tree"] {

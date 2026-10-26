@@ -125,7 +125,7 @@ struct WorkspaceSidebar: View {
                     Spacer(minLength: 4)
                     if workspace.states[resource.id]?.available == false {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary).frame(width: 24)
-                            .help(workspace.states[resource.id]?.reason ?? "Unavailable").accessibilityLabel(preferences.t("Unavailable", "不可用"))
+                            .help(InterfaceText(language: preferences.language).message(workspace.states[resource.id]?.reason ?? "Unavailable")).accessibilityLabel(preferences.t("Unavailable", "不可用"))
                     } else if workspace.states[resource.id]?.dirty == true {
                         DesignIcon(name: "Unset", size: 20).frame(width: 24).accessibilityHidden(false)
                             .accessibilityLabel(preferences.t("Working tree has changes", "工作树有更改"))

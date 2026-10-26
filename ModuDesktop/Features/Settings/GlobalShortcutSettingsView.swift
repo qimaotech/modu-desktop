@@ -26,14 +26,14 @@ struct GlobalShortcutSettingsView: View {
                         .accessibilityIdentifier("cancelGlobalShortcutRecording")
                 } else {
                     Button { model.beginRecording() } label: {
-                        Text(model.shortcut?.displayValue ?? model.t("Unassigned", "未设置"))
+                        Text(model.shortcutLabel ?? model.t("Unassigned", "未设置"))
                             .foregroundStyle(model.shortcut == nil ? DesignStyle.secondary : Color.primary)
                             .frame(minWidth: 48).padding(.horizontal, 12).frame(height: controlHeight)
                             .background(Color.primary.opacity(0.04), in: controlShape)
                             .contentShape(controlShape)
                     }.buttonStyle(HoverPlainButtonStyle(shape: controlShape))
                         .accessibilityLabel(model.t("Edit global shortcut", "修改全局快捷键"))
-                        .accessibilityValue(model.shortcut?.displayValue ?? model.t("Unassigned", "未设置"))
+                        .accessibilityValue(model.shortcutLabel ?? model.t("Unassigned", "未设置"))
                         .accessibilityIdentifier("globalShortcut")
                     // Icon hit areas include padding; a smaller gap keeps the visible spacing balanced.
                     HStack(spacing: 4) {

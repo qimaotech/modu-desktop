@@ -48,11 +48,11 @@ struct SetupView: View {
                     }.padding(.horizontal, 20).frame(height: 68)
                 }.formPlate()
                 VStack(alignment: .leading, spacing: 8) {
-                    if !setup.cliMessage.isEmpty && !setup.cliReady && setup.cliMessage != "Install modu-cli to continue." { Text(setup.cliMessage).textSelection(.enabled) }
+                    if !setup.cliMessage.isEmpty && !setup.cliReady && setup.cliMessage != "Install modu-cli to continue." { Text(model.presentation.text.message(setup.cliMessage)).textSelection(.enabled) }
                     if setup.skillConflict {
                         Label(model.t("Workflow skill: Unavailable", "工作流技能：不可用"), systemImage: "exclamationmark.circle")
                     }
-                    if let error = setup.error { ScrollView { Text(error).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 90) }
+                    if let error = setup.error { ScrollView { Text(model.presentation.text.message(error)).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 90) }
                     if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
                 }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 Spacer(minLength: 0)

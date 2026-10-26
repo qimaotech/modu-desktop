@@ -49,7 +49,7 @@ struct RepositoryDetailView: View {
                         HStack(spacing: 6) {
                             DesignIcon(name: "BaseBranch", size: 16)
                             Text(preferences.t("Base branch", "基准分支")).foregroundStyle(DesignStyle.secondary)
-                            Text(summary.base ?? preferences.t("Unavailable", "不可用")).fontWeight(.medium).help(summary.baseError ?? "")
+                            Text(summary.base ?? preferences.t("Unavailable", "不可用")).fontWeight(.medium).help(InterfaceText(language: preferences.language).message(summary.baseError ?? ""))
                         }.fixedSize()
                         Rectangle().fill(DesignStyle.border).frame(width: 1, height: 20)
                     }
@@ -59,7 +59,7 @@ struct RepositoryDetailView: View {
                         Text(summary.head).fontWeight(.medium).lineLimit(1).truncationMode(.middle).help(summary.head)
                     }
                 }.font(.system(size: 13)).frame(height: 28)
-            } else if let error = workspace.detail.summaryError { Text(error).foregroundStyle(.secondary).textSelection(.enabled) }
+            } else if let error = workspace.detail.summaryError { Text(InterfaceText(language: preferences.language).message(error)).foregroundStyle(.secondary).textSelection(.enabled) }
             else { Color.clear.frame(height: 28).accessibilityElement()
                 .accessibilityLabel(preferences.t("Loading summary…", "正在加载摘要…")) }
         }.padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading).detailCard()
@@ -143,7 +143,7 @@ struct RepositoryDetailView: View {
             }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
     }
-    private func unavailable(_ reason: String) -> some View { VStack(alignment: .leading) { Label(preferences.t("Unavailable", "不可用"), systemImage: "exclamationmark.circle"); Text(reason).foregroundStyle(.secondary).textSelection(.enabled) } }
+    private func unavailable(_ reason: String) -> some View { VStack(alignment: .leading) { Label(preferences.t("Unavailable", "不可用"), systemImage: "exclamationmark.circle"); Text(InterfaceText(language: preferences.language).message(reason)).foregroundStyle(.secondary).textSelection(.enabled) } }
     @ViewBuilder private func status(_ value: String, conflict: Bool, staged: Bool) -> some View {
         let name = FileChange.label(value)
         if name != "—" {

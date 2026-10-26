@@ -39,7 +39,7 @@ struct ContentView: View {
                 ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet).id(sheet)
             }
         }
-        .alert(model.presentation.messageTitle ?? model.t("Operation failed", "操作失败"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.message ?? "") }
+        .alert(model.presentation.messageTitle ?? model.t("Operation failed", "操作失败"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.text.message(model.presentation.message ?? "")) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if startupCompleted { Task { await model.activate() } }
         }
@@ -58,7 +58,7 @@ struct ContentView: View {
         if let blocked = model.workspace.blocked {
             ContentUnavailableView {
                 Label(model.t("Workspace data couldn’t be loaded", "无法加载工作区数据"), systemImage: "exclamationmark.triangle")
-            } description: { Text(blocked).textSelection(.enabled) } actions: {
+            } description: { Text(model.presentation.text.message(blocked)).textSelection(.enabled) } actions: {
                 Button(model.t("Reload", "重新加载")) { Task { await model.workspace.reload() } }
                 Button(model.t("Set Up Workspace", "设置工作区")) { openWindow(id: "setup") }
                 Button(model.t("Quit", "退出")) { NSApp.terminate(nil) }

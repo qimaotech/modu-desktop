@@ -79,7 +79,7 @@ final class AppModel {
         tools = await toolService.available()
         await operation?.value
         if let result = presentation.result {
-            workspace.blocked = ([result.message].compactMap { $0 } + result.items.compactMap(\.message)).joined(separator: "\n")
+            workspace.blocked = ([result.message].compactMap { $0 } + result.items.compactMap(\.message)).map(presentation.text.message).joined(separator: "\n")
             presentation.resultHost = .main
         }
         guard !Task.isCancelled else { return false }
@@ -120,7 +120,7 @@ final class AppModel {
                 do {
                     try await switchTo(root, loaded: record)
                     if let error = opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", "Bundled skill is unavailable.") : nil) {
-                        workspace.notice = t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + error.localizedDescription
+                        workspace.notice = t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + presentation.text.message(error.localizedDescription)
                     }
                 } catch {
                     let failure = error is CancellationError ? ModuError("cancelled", t("Workspace change cancelled.", "已取消切换工作区。")) : ModuError.wrap(error)

@@ -61,12 +61,14 @@ struct InterfaceText {
         let labels: [String: (String, String)] = [
             "success": ("Completed", "已完成"), "partial-success": ("Partially completed", "部分完成"),
             "failed": ("Failed", "失败"), "skipped": ("Skipped", "已跳过"), "cancelled": ("Cancelled", "已取消"),
+            "confirmation-required": ("Confirmation required", "需要确认"),
             "completed-with-warnings": ("Completed with warnings", "已完成，有提示"),
             "not-processed": ("Not processed", "未处理"),
             "added": ("Added", "已添加"), "already-exists": ("Already exists", "已存在"), "updated": ("Updated", "已更新"),
             "Clean": ("Clean", "无更改"), "Dirty": ("Dirty", "有更改"), "Other": ("Other", "不可用"), "Unset": ("Unset", "未加入"),
             "Added": ("Added", "新增"), "Moved": ("Moved", "移动"), "Modified": ("Modified", "修改"), "Deleted": ("Deleted", "删除"), "Untracked": ("Untracked", "未跟踪"), "Conflict": ("Conflict", "冲突"),
             "Checking repository…": ("Checking repository…", "正在检查仓库…"), "Cloning…": ("Cloning…", "正在克隆…"),
+            "Opening workspace…": ("Opening workspace…", "正在打开工作区…"),
             "Updating repositories…": ("Updating repositories…", "正在更新仓库…"),
             "Scanning local repositories…": ("Scanning local repositories…", "正在扫描本地仓库…"),
             "Creating…": ("Creating…", "正在创建…"), "Creating workspace worktree…": ("Creating workspace worktree…", "正在创建工作区工作树…"),
@@ -74,13 +76,15 @@ struct InterfaceText {
             "Importing repositories…": ("Importing repositories…", "正在导入仓库…"), "Created": ("Created", "已创建"),
             "update-ignore": ("Updated .gitignore", "已更新 .gitignore"), "git-init": ("Initialized Git", "已初始化 Git"),
             "install-skill": ("Installed workflow skill", "已安装工作流技能"), "commit-workspace-files": ("Committed workspace files", "已提交工作区文件"),
+            "install-cli": ("Installed CLI", "已安装 CLI"),
             "stash-workspace": ("Stashed workspace changes", "已暂存工作区改动至 stash"), "restore-workspace": ("Restored workspace changes", "已恢复工作区改动"),
             "discard-workspace-file-changes": ("Discarded managed file changes", "已丢弃受管文件改动"),
             "create-directory": ("Created directory", "已创建目录"), "save-configuration": ("Saved configuration", "已保存配置"),
             "clone": ("Clone", "克隆"), "create-worktree": ("Create worktree", "创建工作树"), "create-branch": ("Create branch", "创建分支"),
             "remove-worktree": ("Remove worktree", "移除工作树"), "remove-declaration": ("Remove declaration", "移除记录"), "delete-branch": ("Delete branch", "删除分支"),
             "move-to-trash": ("Move to Trash", "移入废纸篓"), "update-refs": ("Update refs", "更新引用"), "fast-forward": ("Fast-forward", "快进"),
-            "applied": ("Applied", "已生效"), "reverted": ("Cleaned up", "已清理"), "unknown": ("Unconfirmed", "无法确认")
+            "applied": ("Applied", "已生效"), "reverted": ("Cleaned up", "已清理"), "unknown": ("Unconfirmed", "无法确认"),
+            "Agent": ("Agent", "Agent"), "Git GUI": ("Git GUI", "Git 图形工具"), "Editor": ("Editor", "编辑器"), "Terminal": ("Terminal", "终端")
         ]
         guard let label = labels[value] else { return value }
         return t(label.0, label.1)
@@ -103,10 +107,10 @@ struct InterfaceText {
                 return t("Reused branch '\(branch)' is \(count) \(count == "1" ? "commit" : "commits") behind '\(base)'. Its commits were kept.", "已复用分支“\(branch)”，比“\(base)”落后 \(count) 个提交。分支提交已保留。")
             }
             if item.data?["warning-code"] == "branch-comparison-unavailable" {
-                return t("Reused branch '\(branch)', but its comparison with '\(base)' is unavailable.", "已复用分支“\(branch)”，无法判断它是否落后于“\(base)”。") + " " + (item.data?["comparison-error"] ?? "")
+                return t("Reused branch '\(branch)', but its comparison with '\(base)' is unavailable.", "已复用分支“\(branch)”，无法判断它是否落后于“\(base)”。") + " " + self.message(item.data?["comparison-error"] ?? "")
             }
         }
-        return message
+        return self.message(message)
     }
     func repositoryAdditionMessage(reasonCode: String?, message: String, added: Bool = false) -> String {
         switch reasonCode {
@@ -126,13 +130,13 @@ struct InterfaceText {
         case "remote-head-unavailable":
             return t("The repository has no valid default branch. Check its default branch and try again.", "仓库没有有效的默认分支，请检查默认分支后重试。")
         case "ignore-unavailable", "ignore-write-failed":
-            guard added else { return message }
+            guard added else { return self.message(message) }
             return t("The repository was added, but .gitignore couldn’t be updated. Check the file’s permissions and type.", "仓库已添加，但无法更新 .gitignore，请检查文件权限和类型。")
         case "workspace-commit-failed":
             return t("Workspace files couldn’t be committed automatically. Saved resources and file changes were kept. Check your Git configuration and see Details for the error, then retry.", "无法自动提交工作区文件。已保存的资源和文件变化已保留，请检查 Git 配置并展开详细信息查看错误后重试。")
         case "cleanup-failed":
             return t("The repository couldn’t be added, and cleanup failed. See Details for the remaining files.", "仓库添加失败，且未能完成清理，请展开详细信息查看残留文件。")
-        default: return message
+        default: return self.message(message)
         }
     }
     func effectSummaries(_ item: ItemResult, workspace: String?) -> [String] {
