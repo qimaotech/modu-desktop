@@ -92,7 +92,7 @@ struct SettingsView: View {
         choosingWorkspace = true
         Task {
             defer { choosingWorkspace = false }
-            guard let url = await FilePanels.directory(at: model.workspace.record?.rootURL, prompt: model.t("Open", "打开")), !model.busy else { return }
+            guard let url = await FilePanels.directory(at: model.workspace.record?.rootURL.deletingLastPathComponent(), prompt: model.t("Open", "打开")), !model.busy else { return }
             model.changeWorkspace(url)
         }
     }
