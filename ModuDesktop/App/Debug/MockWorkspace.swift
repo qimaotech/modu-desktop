@@ -16,11 +16,11 @@ final class MockWorkspace {
         self.fixture = fixture
         suite = "ModuMock.\(fixture.identifier)"
         guard let defaults = UserDefaults(suiteName: suite) else {
-            throw ModuError("mock-unavailable", "Could not create mock preferences.")
+            throw ModuError("mock-unavailable", .couldNotCreateMockPreferences)
         }
         self.defaults = defaults
         defaults.set(fixture.root.path, forKey: "workspace")
-        defaults.set("en", forKey: "language")
+        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
         for tool in ExternalTool.builtIn where ["codex", "fork", "vscode", "terminal"].contains(tool.id) { defaults.set(tool.id, forKey: "tool.\(tool.category)") }
     }
 

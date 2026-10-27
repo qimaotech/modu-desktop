@@ -11,7 +11,9 @@ final class GlobalShortcutModel {
     private(set) var isRecording = false
     var error: String?
     var shortcut: GlobalShortcut? { preferences.globalShortcut }
-    var shortcutLabel: String? { shortcut?.displayValue.replacingOccurrences(of: "Space", with: t("Space", "空格")) }
+    var shortcutLabel: String? { shortcut?.displayValue.replacingOccurrences(of: "Space", with: text.string(.uiSpace)) }
+
+    var text: InterfaceText { preferences.text }
 
     init(preferences: AppPreferences) {
         self.preferences = preferences
@@ -65,8 +67,6 @@ final class GlobalShortcutModel {
         error = nil
     }
 
-    func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
-
     private func restoreShortcut() {
         guard started, let shortcut else { return }
         do { try register(shortcut) }
@@ -81,6 +81,6 @@ final class GlobalShortcutModel {
     }
 
     private func reportRegistrationError() {
-        error = t("This shortcut is unavailable. Choose a different combination.", "此快捷键无法使用，请选择其他组合。")
+        error = text.string(.uiShortcutIsUnavailableChooseDifferentCombination)
     }
 }

@@ -18,12 +18,12 @@ public struct Git: Sendable {
         let output: CommandOutput
         do { output = try await runner.run("/usr/bin/git", arguments, at: url, timeout: timeout, cancellable: cancellable) }
         catch let error as ModuError {
-            throw ModuError(error.code, "Git \(arguments.first ?? "command"): \(error.message)")
+            throw ModuError(error.code, .git(arguments.first ?? "command", error.userMessage))
         }
         if output.status != 0 && !allowFailure {
             let raw = String(decoding: output.stderr, as: UTF8.self)
             let auth = raw.localizedCaseInsensitiveContains("authentication") || raw.contains("Permission denied") || raw.contains("Host key verification")
-            throw ModuError(auth ? "authentication-failed" : "git-failed", "Git \(arguments.first ?? "command") failed (\(output.status)). \(Self.sanitize(raw))")
+            throw ModuError(auth ? "authentication-failed" : "git-failed", .gitFailed(arguments.first ?? "command", Int(output.status), .diagnostic(Self.sanitize(raw))))
         }
         return output
     }

@@ -61,7 +61,7 @@ import Testing
 
     @Test func setupCLIAndPreferencesStayInTheTemporaryEnvironment() async throws {
         let savedWorkspace = UserDefaults.standard.string(forKey: "workspace")
-        let savedLanguage = UserDefaults.standard.string(forKey: "language")
+        let savedLanguage = UserDefaults.standard.string(forKey: "appLanguage")
         let mock = try await makeMock()
         defer { mock.remove() }
         let model = mock.makeModel()
@@ -74,10 +74,10 @@ import Testing
         #expect(!PathSafety.exists(model.installer.support.appending(path: "versions")))
         let link = mock.directory.appending(path: "home/.local/bin/modu-cli")
         #expect(PathSafety.canonical(link) == PathSafety.canonical(model.installer.executable))
-        model.language = "zh"
-        #expect(mock.defaults.string(forKey: "language") == "zh")
+        model.appLanguage = .simplifiedChinese
+        #expect(mock.defaults.string(forKey: "appLanguage") == "zh_CN")
         #expect(UserDefaults.standard.string(forKey: "workspace") == savedWorkspace)
-        #expect(UserDefaults.standard.string(forKey: "language") == savedLanguage)
+        #expect(UserDefaults.standard.string(forKey: "appLanguage") == savedLanguage)
         mock.remove()
         #expect(!PathSafety.exists(mock.directory) && mock.defaults.string(forKey: "workspace") == nil)
     }

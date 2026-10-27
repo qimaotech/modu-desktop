@@ -67,8 +67,6 @@ final class ManagementModel {
         deleteRequest = nil; pendingEdit = nil; deletion = []
     }
 
-    private func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
-
     func run(_ body: @escaping @Sendable (WorkspaceService, URL, ProgressHandler) async -> OperationResult, select: Resource? = nil) {
         guard let root = session.record?.rootURL, !busy else { return }
         let previousEdit = editPreviewTask
@@ -95,12 +93,8 @@ final class ManagementModel {
             let isWorktreeOperation = ["worktree.create", "worktree.update", "worktree.remove"].contains(outcome.command)
             let noEffects = outcome.items.allSatisfy { $0.effects.isEmpty }
             if outcome.status == .failed, noEffects, sheet != nil, sheet != .delete, !presentation.quitPending {
-                formError = outcome.message ?? outcome.items.compactMap(\.message).joined(separator: "\n")
-                if outcome.command == "repo.add", let raw = formError {
-                    let reason = outcome.reasonCode ?? outcome.items.first?.reasonCode
-                    formError = text.repositoryAdditionMessage(reasonCode: reason, message: raw)
-                    if formError != raw { formErrorDetails = Git.sanitize(raw) }
-                }
+                formError = outcome.message == nil ? outcome.items.filter { $0.message != nil }.map(text.message).joined(separator: "\n") : text.message(outcome)
+                formErrorDetails = Git.sanitize(([outcome.message].compactMap { $0 } + outcome.items.compactMap(\.message)).joined(separator: "\n"))
                 progressPresentation = nil
                 operations.finish(operationID)
                 importFileName = nil
@@ -119,7 +113,7 @@ final class ManagementModel {
             } else if outcome.status == .success && !presentation.quitPending {
                 presentation.result = outcome.hasWarnings ? outcome : nil
                 if presentation.result == nil, presentation.resultHost == .main, !isWorktreeOperation {
-                    presentation.completionMessage = t("Completed", "已完成")
+                    presentation.completionMessage = text.string(.uiCompleted)
                     Task { try? await Task.sleep(for: .seconds(3)); if operationGeneration == operationToken { presentation.completionMessage = nil } }
                 }
             } else if outcome.status == .cancelled, noEffects, !presentation.quitPending { presentation.result = nil }
@@ -160,7 +154,7 @@ final class ManagementModel {
                 deletion = preview.plan ?? []; deleteRequest = nil
                 pendingEdit = (group, members); sheet = .delete
             }
-            else if preview.status == .failed { formError = preview.message }
+            else if preview.status == .failed { formError = text.message(preview); formErrorDetails = preview.message.map(Git.sanitize) }
             else { run({ service, root, progress in await service.editGroup(group, repositories: members, at: root, progress: progress) }) }
         }
     }
@@ -181,7 +175,7 @@ final class ManagementModel {
             guard !Task.isCancelled, deletePreviewGeneration == context, session.record?.rootURL == root, sheet == .delete, !busy else { return }
             switch preview {
             case .success(let targets): deletion = targets
-            case .failure(let error): formError = error.localizedDescription
+            case .failure(let error): presentError(error)
             }
             deletionLoading = false; deletePreviewTask = nil
         }
@@ -207,10 +201,10 @@ final class ManagementModel {
         do {
             var seen = Set<String>()
             let urls = try WorkspaceService.repositoryURLs(in: text).filter { seen.insert($0).inserted }
-            guard !urls.isEmpty else { throw ModuError("invalid-input", "No complete, supported Git repository URLs were found in this YAML file.") }
+            guard !urls.isEmpty else { throw ModuError("invalid-input", .noCompleteSupportedGitRepositoryURLsWereFound) }
             repositoryImport = .init(root: root, filename: filename, urls: urls, selectedURLs: Set(urls))
             sheet = .importRepositories
-        } catch { formError = error.localizedDescription }
+        } catch { presentError(error) }
     }
     func prepareLocalRepositoryImport(_ directories: [URL]) {
         guard let root = session.record?.rootURL, sheet == .add, !directories.isEmpty,
@@ -232,13 +226,13 @@ final class ManagementModel {
             switch outcome {
             case .success(let scan):
                 if scan.urls.isEmpty {
-                    formError = t("No repositories with an accessible remote and a valid default branch were found. Check the remote URLs, default branches, network connection, and access permissions.", "未找到可从远端克隆的仓库，请检查远端地址、默认分支、网络连接和访问权限。")
+                    formError = text.string(.uiNoRepositoriesWithAccessibleRemoteAndValidDefault)
                 } else {
-                    repositoryImport = .init(root: root, filename: t("Local repositories", "本地仓库"), urls: scan.urls, selectedURLs: Set(scan.urls))
+                    repositoryImport = .init(root: root, filename: text.string(.uiLocalRepositories), urls: scan.urls, selectedURLs: Set(scan.urls))
                     sheet = .importRepositories
                 }
             case .failure(let error):
-                if ModuError.wrap(error).code != "cancelled" { formError = error.localizedDescription }
+                if ModuError.wrap(error).code != "cancelled" { presentError(error) }
             }
         }
         operations.attach(task, to: operationID)
@@ -255,6 +249,11 @@ final class ManagementModel {
     }
     func importWorkspace(_ text: String, filename: String) { importFileName = filename; run { service, root, progress in await service.importWorkspaceYAML(text, at: root, progress: progress) } }
     func update() { run { service, root, progress in await service.updateRepositories(at: root, progress: progress) } }
+
+    func presentError(_ error: Error) {
+        formError = text.message(error)
+        formErrorDetails = Git.sanitize(error.localizedDescription)
+    }
 
     private func cancelDeletePreview() {
         deletePreviewTask?.cancel(); deletePreviewGeneration += 1; deletionLoading = false

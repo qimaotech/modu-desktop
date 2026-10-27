@@ -24,8 +24,8 @@ struct ContentView: View {
                         Button { model.cancel() } label: { DesignIcon(name: "Cancel", size: 20) }
                             .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
                             .disabled(!model.operations.canCancel)
-                            .help(model.openingWorkspace ? model.t("Cancel Reload", "取消重新加载") : model.t("Cancel Update", "取消更新"))
-                            .accessibilityLabel(model.openingWorkspace ? model.t("Cancel Reload", "取消重新加载") : model.t("Cancel Update", "取消更新"))
+                            .help(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
+                            .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
                     }
                 } else if let completion = model.presentation.completionMessage {
                     Label(completion, systemImage: "checkmark.circle")
@@ -39,7 +39,7 @@ struct ContentView: View {
                 ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet).id(sheet)
             }
         }
-        .alert(model.presentation.messageTitle ?? model.t("Operation failed", "操作失败"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.text.message(model.presentation.message ?? "")) }
+        .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if startupCompleted { Task { await model.activate() } }
         }
@@ -57,34 +57,34 @@ struct ContentView: View {
     @ViewBuilder private var detail: some View {
         if let blocked = model.workspace.blocked {
             ContentUnavailableView {
-                Label(model.t("Workspace data couldn’t be loaded", "无法加载工作区数据"), systemImage: "exclamationmark.triangle")
-            } description: { Text(model.presentation.text.message(blocked)).textSelection(.enabled) } actions: {
-                Button(model.t("Reload", "重新加载")) { Task { await model.workspace.reload() } }
-                Button(model.t("Set Up Workspace", "设置工作区")) { openWindow(id: "setup") }
-                Button(model.t("Quit", "退出")) { NSApp.terminate(nil) }
+                Label(model.text.string(.uiWorkspaceDataCouldnTBeLoaded), systemImage: "exclamationmark.triangle")
+            } description: { IssueDescriptionView(message: blocked, details: model.workspace.blockedDetails, text: model.text) } actions: {
+                Button(model.text.string(.uiReload)) { Task { await model.workspace.reload() } }
+                Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") }
+                Button(model.text.string(.uiQuit)) { NSApp.terminate(nil) }
             }
         } else if model.workspace.record == nil, model.hasSavedWorkspace {
             if model.workspace.waiting {
                 ContentUnavailableView {
-                    Label(model.t("Workspace is busy", "工作区正忙"), systemImage: "clock")
+                    Label(model.text.string(.uiWorkspaceIsBusy), systemImage: "clock")
                 } description: {
-                    Text(model.t("Workspace is in use. Reload shortly.", "工作区正被其他操作使用，请稍后重新加载。"))
+                    Text(model.text.string(.uiWorkspaceIsInUseReloadShortly))
                 } actions: {
-                    Button(model.t("Reload", "重新加载")) { model.requestReload() }
+                    Button(model.text.string(.uiReload)) { model.requestReload() }
                 }
             } else {
                 Color.clear.accessibilityElement()
-                    .accessibilityLabel(model.t("Loading workspace…", "正在加载工作区…"))
+                    .accessibilityLabel(model.text.string(.uiLoadingWorkspace))
             }
         } else if model.workspace.record == nil {
-            ContentUnavailableView { Label(model.t("No workspace selected", "尚未选择工作区"), systemImage: "folder") } actions: { Button(model.t("Set Up Workspace", "设置工作区")) { openWindow(id: "setup") } }
+            ContentUnavailableView { Label(model.text.string(.uiNoWorkspaceSelected), systemImage: "folder") } actions: { Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") } }
         } else if model.workspace.selection == nil {
             VStack(spacing: 24) {
-                Text(model.t("Let’s start", "开始使用")).font(DesignStyle.welcomeTitle).frame(height: 32)
+                Text(model.text.string(.uiLetSStart)).font(DesignStyle.welcomeTitle).frame(height: 32)
                 HStack(spacing: 12) {
-                    Button(model.t("Add Repository", "添加仓库")) { model.management.sheet = .add }
-                    Button(model.t("Create Group", "创建分组")) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)
-                }.buttonStyle(StartButtonStyle(width: model.language == "zh" ? 112 : 136)).disabled(model.busy)
+                    Button(model.text.string(.uiAddRepository2)) { model.management.sheet = .add }
+                    Button(model.text.string(.uiCreateGroup)) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)
+                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 112 : 136)).disabled(model.busy)
                 HStack(spacing: 12) {
                     ForEach(["Agent", "Editor"], id: \.self) { category in
                         if model.tools.contains(where: { $0.category == category }) {

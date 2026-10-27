@@ -6,7 +6,7 @@ struct FormErrorView: View {
     let message: String
     var title: String? = nil
     var details: String? = nil
-    var detailsTitle = "Details"
+    var detailsTitle = String(localized: .uiDetails)
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let title { Text(title).font(DialogTypography.auxiliary.weight(.semibold)).foregroundStyle(.red) }

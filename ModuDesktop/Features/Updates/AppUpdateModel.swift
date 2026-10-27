@@ -18,6 +18,7 @@ final class AppUpdateModel {
     private(set) var restartPending = false
     private(set) var checked = false
     private(set) var error: String?
+    private(set) var errorDetails: String?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
     @ObservationIgnored private var handoffTask: Task<Void, Never>?
@@ -26,6 +27,8 @@ final class AppUpdateModel {
     private var prepared: PreparedAppUpdate?
     var working: Bool { checking || downloading || installing || restartPending }
     var needsTerminationPreparation: Bool { task != nil || cleanupTask != nil || restartPending }
+
+    var text: InterfaceText { preferences.text }
 
     init(preferences: AppPreferences, service: AppUpdateService = .init(), installer: AppUpdateInstaller = .init(),
          application: URL = Bundle.main.bundleURL, helper: URL? = Bundle.main.url(forResource: "modu-cli", withExtension: nil),
@@ -40,7 +43,7 @@ final class AppUpdateModel {
 
     func check() {
         guard !working else { return }
-        update = nil; installerURL = nil; error = nil; checked = false; checking = true
+        update = nil; installerURL = nil; error = nil; errorDetails = nil; checked = false; checking = true
         let id = UUID()
         requestID = id
         task = Task {
@@ -51,7 +54,7 @@ final class AppUpdateModel {
                 update = result; checked = true
             } catch {
                 guard !Task.isCancelled, requestID == id else { return }
-                self.error = errorText(error)
+                self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
             }
         }
     }
@@ -59,13 +62,13 @@ final class AppUpdateModel {
     func installAndRestart() {
         guard !working, let update else { return }
         guard let helper else {
-            error = t("The bundled update installer is missing. Reinstall Modu and try again.", "内置更新程序缺失，请重新安装 Modu 后重试。")
+            error = text.string(.uiBundledUpdateInstallerIsMissingReinstallModuAnd)
             return
         }
         guard !NSWorkspace.shared.runningApplications.contains(where: {
             $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && $0.bundleURL?.resolvingSymlinksInPath() == application.resolvingSymlinksInPath()
         }) else {
-            error = t("Quit other instances of Modu before installing the update.", "请先退出其他正在运行的 Modu 实例，再安装更新。")
+            error = text.string(.uiQuitOtherInstancesOfModuBeforeInstallingUpdate)
             return
         }
         runInstallation { [self] id in
@@ -91,7 +94,7 @@ final class AppUpdateModel {
 
     func runInstallation(_ operation: @escaping @MainActor (UUID) async throws -> Void) {
         guard !working else { return }
-        error = nil; installing = true
+        error = nil; errorDetails = nil; installing = true
         let id = UUID()
         requestID = id
         // Cancellation can append this installation to cleanupTask, so capture only earlier cleanup.
@@ -106,7 +109,7 @@ final class AppUpdateModel {
             } catch {
                 guard !Task.isCancelled, requestID == id else { return }
                 if (error as? ModuError)?.code == "update-integrity-failed" { installerURL = nil }
-                self.error = errorText(error)
+                self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
             }
         }
     }
@@ -169,21 +172,19 @@ final class AppUpdateModel {
         installer.cancelHandoff(prepared)
         handoffTask?.cancel(); handoffTask = nil
         self.prepared = nil; restartPending = false
-        self.error = errorText(error)
+        self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
         onRestartFailure?()
     }
 
-    func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
-
     private func errorText(_ error: Error) -> String {
         switch (error as? ModuError)?.code {
-        case "update-asset-unavailable": t("The latest release has no compatible installer yet. Check the release page or try again later.", "最新版本尚未提供兼容的安装包，请查看发布页面或稍后重试。")
-        case "update-integrity-failed": t("Installer verification failed. Please download it again.", "安装包校验失败，请重新下载。")
-        case "update-version-invalid": t("The release version could not be compared. Please check the release page.", "无法比较发布版本，请查看发布页面。")
-        case "update-location-unwritable": t("Modu can’t update in this location. Move it to a writable Applications folder and try again.", "无法在当前位置更新 Modu，请将应用移至可写入的 Applications 文件夹后重试。")
-        case "update-system-unsupported": t("This update requires a newer version of macOS.", "此更新需要更高版本的 macOS。")
-        case "update-exit-timeout": t("Modu did not exit in time. The update was not installed. Please try again.", "Modu 未能及时退出，尚未安装更新，请重试。")
-        default: t("Couldn’t complete the update. ", "无法完成更新。") + InterfaceText(language: preferences.language).message(error.localizedDescription)
+        case "update-asset-unavailable": text.string(.uiLatestReleaseHasNoCompatibleInstallerYetCheck)
+        case "update-integrity-failed": text.string(.uiInstallerVerificationFailedPleaseDownloadAgain)
+        case "update-version-invalid": text.string(.uiReleaseVersionCouldNotBeComparedPleaseCheck)
+        case "update-location-unwritable": text.string(.uiModuCanTUpdateInLocationMoveWritable)
+        case "update-system-unsupported": text.string(.uiUpdateRequiresNewerVersionOfMacOS)
+        case "update-exit-timeout": text.string(.uiModuDidNotExitInTimeUpdateWas)
+        default: text.string(.uiCouldnTCompleteUpdate2(text.message(error)))
         }
     }
 }

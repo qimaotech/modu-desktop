@@ -44,7 +44,7 @@ public final class ExternalTools {
     public func open(_ tool: ExternalTool, directory: URL) async throws {
         try PathSafety.directory(directory)
         if tool.category == "Git GUI" { try await git.checkRepository(directory) }
-        guard let id = tool.bundleID, let application = applicationURL(id) else { throw ModuError("tool-unavailable", "\(tool.name) is not installed.") }
+        guard let id = tool.bundleID, let application = applicationURL(id) else { throw ModuError("tool-unavailable", .isNotInstalled("\(tool.name)")) }
         var target = directory
         if tool.id == "xcode" { target = try xcodeTarget(directory) }
         else if tool.id == "claude" {
@@ -53,7 +53,7 @@ public final class ExternalTools {
             link.queryItems = [URLQueryItem(name: "folder", value: directory.path)]
             // Desktop uses form-style query decoding, where a literal + becomes a space.
             link.percentEncodedQuery = link.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-            guard let url = link.url else { throw ModuError("tool-launch-failed", "Could not create the Claude Code desktop link.") }
+            guard let url = link.url else { throw ModuError("tool-launch-failed", .couldNotCreateClaudeCodeDesktopLink) }
             target = url
         }
         try await openURL(target, application)

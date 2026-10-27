@@ -22,28 +22,28 @@ extension WorkspaceService {
             progress(.init(name, .checkingRepository))
             do { try await git.checkRepository(record.rootURL, main: true) }
             catch let error as ModuError where error.code == "cancelled" { throw error }
-            catch { throw ModuError("workspace-unavailable", "Workspace repository is unavailable: \(ModuError.wrap(error).message)") }
+            catch { throw ModuError("workspace-unavailable", .workspaceRepositoryIsUnavailable(ModuError.wrap(error).userMessage)) }
             let target = try PathSafety.child("repositories/\(name)", of: record.rootURL)
             if let existing = record.repositories.first(where: { $0.id.lowercased() == name.lowercased() }) {
-                guard existing.url == repository.url, repository.name == nil || existing.name == repository.name else { throw ModuError("repository-conflict", "Repository name is already registered: \(name)") }
+                guard existing.url == repository.url, repository.name == nil || existing.name == repository.name else { throw ModuError("repository-conflict", .repositoryNameIsAlreadyRegistered(name)) }
                 _ = try await checked(.repository(existing.id), in: record)
                 item.data = ["disposition": "already-exists"]
                 progress(.init(name, .saving, cancellable: false))
                 try await finishRepositoryIgnore(name, at: record.rootURL, commit: commitIgnore, item: &item)
                 return item
             }
-            guard !PathSafety.exists(target) else { throw ModuError("path-conflict", "Repository target already exists: \(target.path)") }
+            guard !PathSafety.exists(target) else { throw ModuError("path-conflict", .repositoryTargetAlreadyExists(target.path)) }
             let branch = try await remoteDefault(repository.url, at: record.rootURL)
             let temp = record.rootURL.appending(path: "repositories/.modu-clone-\(UUID().uuidString)")
             newDirectory = temp
             progress(.init(name, .cloning))
             _ = try await git.run(["clone", "--no-recurse-submodules", "--no-checkout", "--origin", "origin", "--", repository.url, temp.path], at: record.rootURL, timeout: 1800)
-            guard try await git.oid("refs/remotes/origin/\(branch)", at: temp) != nil else { throw ModuError("remote-head-unavailable", "Remote default branch does not identify a commit.") }
+            guard try await git.oid("refs/remotes/origin/\(branch)", at: temp) != nil else { throw ModuError("remote-head-unavailable", .remoteDefaultBranchDoesNotIdentifyCommit) }
             _ = try await git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/\(branch)"], at: temp)
             _ = try await git.run(["checkout", "-B", branch, "refs/remotes/origin/\(branch)", "--"], at: temp)
             _ = try await git.run(["branch", "--set-upstream-to=origin/\(branch)", "--", branch], at: temp)
             try checkCancellation()
-            guard !PathSafety.exists(target) else { throw ModuError("path-conflict", "Repository target is occupied.") }
+            guard !PathSafety.exists(target) else { throw ModuError("path-conflict", .repositoryTargetIsOccupied) }
             try FileManager.default.moveItem(at: temp, to: target); newDirectory = target
             progress(.init(name, .saving, cancellable: false))
             var candidate = record; candidate.repositories.append(repository)
@@ -60,7 +60,7 @@ extension WorkspaceService {
                 else {
                     progress(.init(item.resource.path, .cleaningUp, cancellable: false))
                     do { let trash = try trashDirectory(directory); item.trashPath = trash.path; item.effects.append(.init("clone", directory.path, state: "reverted")) }
-                    catch { item.causeCode = item.reasonCode; item.reasonCode = "cleanup-failed"; item.status = .failed; item.message = "\(item.message ?? "") Cleanup failed: \(error.localizedDescription)"; item.effects.append(.init("clone", directory.path, state: "unknown")) }
+                    catch { item.causeCode = item.reasonCode; item.reasonCode = "cleanup-failed"; item.status = .failed; item.userMessage = .joined([item.userMessage, .cleanupFailed(ModuError.wrap(error).userMessage)].compactMap { $0 }, separator: " "); item.message = "\(item.message ?? "") Cleanup failed: \(error.localizedDescription)"; item.effects.append(.init("clone", directory.path, state: "unknown")) }
                 }
             }
         }
@@ -73,9 +73,9 @@ extension WorkspaceService {
     func remoteDefault(_ url: String, at root: URL) async throws -> String {
         try await checkRemoteBoundary(url, at: root)
         let output = try await git.run(["ls-remote", "--symref", "--", url, "HEAD"], at: root)
-        guard let line = output.text.split(separator: "\n").first(where: { $0.hasPrefix("ref: refs/heads/") && $0.hasSuffix("\tHEAD") }) else { throw ModuError("remote-head-unavailable", "Remote has no valid default branch.") }
+        guard let line = output.text.split(separator: "\n").first(where: { $0.hasPrefix("ref: refs/heads/") && $0.hasSuffix("\tHEAD") }) else { throw ModuError("remote-head-unavailable", .remoteHasNoValidDefaultBranch) }
         let branch = String(line.dropFirst(16).dropLast(5))
-        guard try await git.run(["check-ref-format", "refs/heads/\(branch)"], at: root, allowFailure: true).status == 0 else { throw ModuError("remote-head-unavailable", "Remote default branch is invalid.") }
+        guard try await git.run(["check-ref-format", "refs/heads/\(branch)"], at: root, allowFailure: true).status == 0 else { throw ModuError("remote-head-unavailable", .remoteDefaultBranchIsInvalid) }
         return branch
     }
 
@@ -83,7 +83,7 @@ extension WorkspaceService {
         guard let boundary = store.directoryBoundary else { return }
         let resolved = try await git.run(["ls-remote", "--get-url", "--", url], at: root).text
         guard let remote = URL(string: resolved), remote.isFileURL else {
-            throw ModuError("unsafe-path", "Repository remote must resolve to a local path inside the temporary directory: \(boundary.path)")
+            throw ModuError("unsafe-path", .repositoryRemoteMustResolveLocalPathInsideTemporary(boundary.path))
         }
         try PathSafety.confined(remote, to: boundary)
     }
@@ -127,34 +127,34 @@ extension WorkspaceService {
             try checkCancellation()
             let path = try PathSafety.child(item.resource.path, of: record.rootURL)
             guard PathSafety.exists(path) else {
-                return ItemResult(item.resource, status: .skipped, error: ModuError("resource-missing", "Repository directory is missing."))
+                return ItemResult(item.resource, status: .skipped, error: ModuError("resource-missing", .repositoryDirectoryIsMissing))
             }
             try await git.checkRepository(path, origin: repository.url, main: true)
             let status = try await git.run(["status", "--porcelain=v1", "-z", "--untracked-files=normal"], at: path)
             guard status.stdout.isEmpty else {
-                return ItemResult(item.resource, status: .skipped, error: ModuError("working-tree-dirty", "Working tree has changes."))
+                return ItemResult(item.resource, status: .skipped, error: ModuError("working-tree-dirty", .workingTreeHasChanges))
             }
             let branch = try await git.run(["symbolic-ref", "--quiet", "HEAD"], at: path, allowFailure: true)
             if branch.status == 1 {
-                return ItemResult(item.resource, status: .skipped, error: ModuError("detached-head", "Detached HEAD."))
+                return ItemResult(item.resource, status: .skipped, error: ModuError("detached-head", .detachedHEAD))
             }
-            guard branch.status == 0 else { throw ModuError("git-failed", "Could not read the current branch.") }
+            guard branch.status == 0 else { throw ModuError("git-failed", .couldNotReadCurrentBranch) }
             let base = try await git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
             guard base.status == 0, base.text.hasPrefix("refs/remotes/origin/"),
                   try await git.oid(base.text, at: path) != nil else {
-                throw ModuError("base-unavailable", "Base branch is unavailable. Fix origin/HEAD in an external Git tool and retry.")
+                throw ModuError("base-unavailable", .baseBranchIsUnavailableFixOriginHEADIn)
             }
             let remoteBranch = "refs/heads/" + base.text.dropFirst("refs/remotes/origin/".count)
             guard branch.text == remoteBranch else {
-                return ItemResult(item.resource, status: .skipped, error: ModuError("not-default-branch", "Current branch is not the Base branch."))
+                return ItemResult(item.resource, status: .skipped, error: ModuError("not-default-branch", .currentBranchIsNotBaseBranch))
             }
-            guard let before = try await git.oid("HEAD", at: path) else { throw ModuError("resource-unavailable", "HEAD is unavailable.") }
+            guard let before = try await git.oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headIsUnavailable) }
             try checkCancellation()
             try await checkRemoteBoundary(repository.url, at: path)
             item.effects.append(.init("update-refs", path.path, state: "unknown"))
             _ = try await git.run(["fetch", "--no-recurse-submodules", "origin", "+\(remoteBranch):\(base.text)"], at: path)
             item.effects[item.effects.count - 1].state = "applied"
-            guard let oid = try await git.oid("FETCH_HEAD", at: path) else { throw ModuError("base-unavailable", "Fetched Base branch is unavailable.") }
+            guard let oid = try await git.oid("FETCH_HEAD", at: path) else { throw ModuError("base-unavailable", .fetchedBaseBranchIsUnavailable) }
             item.effects.append(.init("fast-forward", path.path, state: "unknown"))
             _ = try await git.run(["merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", oid], at: path)
             item.effects[item.effects.count - 1].state = "applied"

@@ -24,7 +24,7 @@ extension WorkspaceService {
     public func importRepositories(_ urls: [String], at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
         var result = OperationResult(command: "repo.import-yaml", workspace: root.path)
         do {
-            guard !urls.isEmpty else { throw ModuError("invalid-input", "No complete, supported Git repository URLs were found in this YAML file.") }
+            guard !urls.isEmpty else { throw ModuError("invalid-input", .noCompleteSupportedGitRepositoryURLsWereFound) }
             let identities = try Dictionary(grouping: Set(urls), by: { try RepositoryIdentity($0).name.lowercased() })
             let lease = try store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
@@ -34,8 +34,8 @@ extension WorkspaceService {
                 let repo = Repository(url: url)
                 var item = ItemResult(.repository(repo.id))
                 if stopped || Task.isCancelled { item = .notProcessed(item.resource); stopped = true }
-                else if !seen.insert(url).inserted { item.status = .skipped; item.reasonCode = "duplicate-url"; item.message = "Duplicate URL." }
-                else if identities[repo.id.lowercased()]!.count > 1 { item.status = .failed; item.reasonCode = "repository-conflict"; item.message = "Different URLs derive the same repository name: \(repo.id)" }
+                else if !seen.insert(url).inserted { item.status = .skipped; item.reasonCode = "duplicate-url"; item.message = "Duplicate URL."; item.userMessage = .duplicateURL }
+                else if identities[repo.id.lowercased()]!.count > 1 { item.status = .failed; item.reasonCode = "repository-conflict"; item.message = "Different URLs derive the same repository name: \(repo.id)"; item.userMessage = .repositoryNameCollision(repo.id) }
                 else {
                     progress(.init(repo.id, .importingRepositories, completed: index, total: urls.count))
                     let counts = importCounts(result.items)
@@ -70,7 +70,7 @@ extension WorkspaceService {
         var visiting = Set<String>()
         func visit(_ node: Node) throws {
             if case .alias(let alias) = node {
-                guard let target = anchors[alias.anchor.rawValue], visiting.insert(alias.anchor.rawValue).inserted else { throw ModuError("invalid-input", "YAML contains an unresolved or recursive alias.") }
+                guard let target = anchors[alias.anchor.rawValue], visiting.insert(alias.anchor.rawValue).inserted else { throw ModuError("invalid-input", .yamlContainsUnresolvedOrRecursiveAlias) }
                 defer { visiting.remove(alias.anchor.rawValue) }
                 try visit(target); return
             }
@@ -79,7 +79,7 @@ extension WorkspaceService {
             else if let value = node.string {
                 let raw = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 if (try? RepositoryIdentity(raw)) != nil { result.append(raw) }
-                else if raw.hasPrefix("https://") || raw.hasPrefix("ssh://"), let c = URLComponents(string: raw), c.password != nil || (c.scheme == "https" && c.user != nil) || (c.query?.lowercased().contains("token") == true) { throw ModuError("invalid-input", "YAML contains a repository URL with embedded credentials. Remove credentials and retry.") }
+                else if raw.hasPrefix("https://") || raw.hasPrefix("ssh://"), let c = URLComponents(string: raw), c.password != nil || (c.scheme == "https" && c.user != nil) || (c.query?.lowercased().contains("token") == true) { throw ModuError("invalid-input", .yamlContainsRepositoryURLWithEmbeddedCredentialsRemove) }
             }
         }
         try visit(node)
@@ -95,7 +95,7 @@ extension WorkspaceService {
             try store.validate(desired)
             let lease = try store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
-            guard record.repositories.isEmpty && record.groups.isEmpty else { throw ModuError("workspace-not-empty", "Import requires an empty workspace. Choose another workspace in Settings. Existing files and configuration were not changed.") }
+            guard record.repositories.isEmpty && record.groups.isEmpty else { throw ModuError("workspace-not-empty", .importRequiresEmptyWorkspaceChooseAnotherWorkspaceIn) }
             try PathSafety.emptyResourceDirectories(root)
             try await git.checkRepository(root, main: true)
             for group in desired.groups.keys.sorted() {

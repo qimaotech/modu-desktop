@@ -6,7 +6,7 @@ extension Git {
         _ = try PathSafety.child((path as NSString).deletingLastPathComponent, of: root)
         if PathSafety.exists(file) {
             guard try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else {
-                throw ModuError("unsafe-path", "Workspace change discard requires a regular file: \(path)")
+                throw ModuError("unsafe-path", .workspaceChangeDiscardRequiresRegularFile(path))
             }
         }
         let literal = ":(literal)\(path)"
@@ -40,15 +40,15 @@ extension Git {
             }
             return stash
         } catch {
-            var recovery = ""
+            var recovery: UserMessage = .joined([], separator: "")
             if let stash = try? await oid("refs/stash", at: root, cancellable: false), stash != previous {
                 let subject = try? await run(["show", "--no-patch", "--format=%s", stash], at: root, cancellable: false).text
                 if subject?.hasSuffix(marker) == true {
-                    do { try await restoreWorkspaceChanges(stash, at: root); recovery = " Workspace changes were restored." }
-                    catch { recovery = " " + ModuError.wrap(error).message }
+                    do { try await restoreWorkspaceChanges(stash, at: root); recovery = .joined([.joined([], separator: ""), .workspaceChangesWereRestored], separator: " ") }
+                    catch { recovery = .joined([.joined([], separator: ""), ModuError.wrap(error).userMessage], separator: " ") }
                 }
             }
-            throw ModuError("workspace-stash-failed", "Could not stash workspace changes before updating the workflow skill; the bundled skill was not installed.\(recovery) \(ModuError.wrap(error).message)")
+            throw ModuError("workspace-stash-failed", .couldNotStashWorkspaceChangesBeforeUpdatingWorkflow(recovery, ModuError.wrap(error).userMessage))
         }
     }
 
@@ -64,14 +64,14 @@ extension Git {
             guard let entry = entries.first(where: { $0.hasPrefix(stash + " ") }),
                   let ref = entry.split(separator: " ").last,
                   try await oid(String(ref), at: root, cancellable: false) == stash else {
-                throw ModuError("git-failed", "Changes were restored, but the temporary stash could not be located for cleanup.")
+                throw ModuError("git-failed", .changesWereRestoredButTemporaryStashCouldNot)
             }
             _ = try await run(["stash", "drop", String(ref)], at: root, cancellable: false)
         } catch {
             if restored {
-                throw ModuError("workspace-stash-restore-failed", "Workspace changes and their index state were restored, but stash \(stash) could not be removed. Do not apply it again. \(ModuError.wrap(error).message)")
+                throw ModuError("workspace-stash-restore-failed", .workspaceChangesAndIndexStateWereRestoredBut(stash, ModuError.wrap(error).userMessage))
             }
-            throw ModuError("workspace-stash-restore-failed", "Could not finish restoring workspace changes. Stash \(stash) was kept; completed workspace commits were kept. Check the working tree and index for conflicts before restoring it manually with git stash apply --index \(stash). \(ModuError.wrap(error).message)")
+            throw ModuError("workspace-stash-restore-failed", .couldNotFinishRestoringWorkspaceChangesStashWas(stash, stash, ModuError.wrap(error).userMessage))
         }
     }
 
@@ -81,7 +81,7 @@ extension Git {
                 let file = root.appending(path: path)
                 if path.contains("/") { _ = try PathSafety.child((path as NSString).deletingLastPathComponent, of: root, allowMissing: false) }
                 else { try PathSafety.directory(root) }
-                guard try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else { throw ModuError("git-failed", "Workspace commit requires a regular file: \(path)") }
+                guard try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else { throw ModuError("git-failed", .workspaceCommitRequiresRegularFile(path)) }
             }
             // Check only the managed files without waiting for a repository-wide fsmonitor refresh.
             if try await run(["-c", "core.fsmonitor=false", "ls-files", "--error-unmatch", "--"] + paths, at: root, allowFailure: true, cancellable: false).status == 0,
@@ -89,13 +89,13 @@ extension Git {
             _ = try await run(["add", "--force", "--"] + paths, at: root, cancellable: false)
             let diff = try await run(["diff", "--cached", "--quiet", "--"] + paths, at: root, allowFailure: true, cancellable: false)
             if diff.status == 0 { return nil }
-            guard diff.status == 1 else { throw ModuError("git-failed", "Could not check workspace file changes.") }
+            guard diff.status == 1 else { throw ModuError("git-failed", .couldNotCheckWorkspaceFileChanges) }
             let commitMessage = "\(message)\n\nAuto-committed-by: Modu"
             // --only preserves unrelated staged files; hooks cannot expand this automatic commit's scope.
             _ = try await run(["-c", "core.hooksPath=/dev/null", "commit", "--only", "-m", commitMessage, "--"] + paths, at: root, cancellable: false)
             return try await run(["rev-parse", "--verify", "HEAD"], at: root, cancellable: false).text
         } catch {
-            throw ModuError("workspace-commit-failed", "Could not automatically commit workspace files. Saved resources and file changes were kept; the specified files may be staged. Check your Git identity, signing configuration and repository state, then retry. \(ModuError.wrap(error).message)")
+            throw ModuError("workspace-commit-failed", .couldNotAutomaticallyCommitWorkspaceFilesSavedResources(ModuError.wrap(error).userMessage))
         }
     }
 }

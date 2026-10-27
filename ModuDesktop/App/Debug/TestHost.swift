@@ -18,7 +18,7 @@ enum TestHost {
         let directory = try PathSafety.child("hosts", of: URL(fileURLWithPath: path), allowMissing: false)
         let application = NSRunningApplication.current
         guard let launchedAt = application.launchDate, let executable = application.executableURL else {
-            throw ModuError("test-host-unavailable", "Could not identify the test host for cleanup.")
+            throw ModuError("test-host-unavailable", .couldNotIdentifyTestHostForCleanup)
         }
         let identity: [String: Any] = ["pid": application.processIdentifier, "launched-at": launchedAt.timeIntervalSince1970,
                                        "executable": PathSafety.canonical(executable).path]

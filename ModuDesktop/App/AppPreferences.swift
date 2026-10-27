@@ -4,7 +4,11 @@ import Observation
 @MainActor @Observable
 final class AppPreferences {
     let defaults: UserDefaults
-    var language: String { didSet { defaults.set(language, forKey: "language") } }
+    var appLanguage: AppLanguage { didSet { defaults.set(appLanguage.rawValue, forKey: "appLanguage") } }
+    let activeLocale: AppLocale
+    private let preferredLanguages: [String]
+    var text: InterfaceText { InterfaceText(locale: activeLocale) }
+    var languageChangeRequiresRestart: Bool { appLanguage.resolve(preferredLanguages: preferredLanguages) != activeLocale }
     var globalShortcut: GlobalShortcut? {
         didSet {
             if let globalShortcut, let data = try? JSONEncoder().encode(globalShortcut) { defaults.set(data, forKey: "globalShortcut") }
@@ -13,13 +17,15 @@ final class AppPreferences {
         }
     }
 
-    init(defaults: UserDefaults) {
+    init(defaults: UserDefaults, preferredLanguages: [String] = AppLocalization.systemPreferredLanguages) {
         self.defaults = defaults
-        language = defaults.string(forKey: "language") ?? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh" : "en")
+        self.preferredLanguages = preferredLanguages
+        let appLanguage = AppLanguage(rawValue: defaults.string(forKey: "appLanguage") ?? "") ?? .system
+        self.appLanguage = appLanguage
+        activeLocale = appLanguage.resolve(preferredLanguages: preferredLanguages)
         if defaults.object(forKey: "globalShortcut") == nil { globalShortcut = .default }
         else if let data = defaults.data(forKey: "globalShortcut"), let shortcut = try? JSONDecoder().decode(GlobalShortcut.self, from: data), shortcut.isValid { globalShortcut = shortcut }
         else { globalShortcut = nil }
     }
 
-    func t(_ english: String, _ chinese: String) -> String { language == "zh" ? chinese : english }
 }

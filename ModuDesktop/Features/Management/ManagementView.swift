@@ -37,10 +37,10 @@ struct ManagementView: View {
                         case .delete: deletionForm
                         }
                         if let error = error ?? management.formError {
-                            FormErrorView(message: presentation.text.message(error),
-                                          title: sheet == .add && management.formErrorDetails != nil ? presentation.text.t("Can’t add repository", "无法添加仓库") : nil,
+                            FormErrorView(message: error,
+                                          title: sheet == .add && management.formErrorDetails != nil ? presentation.text.string(.uiCanTAddRepository) : nil,
                                           details: management.formErrorDetails,
-                                          detailsTitle: presentation.text.t("Details", "详细信息"))
+                                          detailsTitle: presentation.text.string(.uiDetails))
                         }
                     }.padding(.horizontal, 24).padding(.top, sheet == .importRepositories ? 0 : 20).padding(.bottom, 24)
                     if sheet != .importRepositories { Divider() }
@@ -60,17 +60,17 @@ struct ManagementView: View {
     private var addForm: some View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
-                Text(presentation.text.t("Repository URL", "仓库 URL")).fixedSize()
-                TextField("https://github.com/user/project", text: $url).focused($focused).accessibilityIdentifier("repositoryURL")
-                    .accessibilityLabel(presentation.text.t("Repository URL", "仓库 URL")).onChange(of: url) { fieldError = nil; management.formError = nil }
+                Text(presentation.text.string(.uiRepositoryURL)).fixedSize()
+                TextField(String("https://github.com/user/project"), text: $url).focused($focused).accessibilityIdentifier("repositoryURL")
+                    .accessibilityLabel(presentation.text.string(.uiRepositoryURL)).onChange(of: url) { fieldError = nil; management.formError = nil }
                     .multilineTextAlignment(.trailing)
             }.padding(.horizontal, 16).frame(height: 36)
-            if let fieldError { FormErrorView(message: presentation.text.message(fieldError)).padding(.horizontal, 16).padding(.bottom, 8) }
+            if let fieldError { FormErrorView(message: fieldError).padding(.horizontal, 16).padding(.bottom, 8) }
             Divider().padding(.leading, 16)
             HStack(spacing: 16) {
-                Text(presentation.text.t("Display Name", "显示名称")).fixedSize()
-                TextField(presentation.text.t("Optional", "可选"), text: $displayName).multilineTextAlignment(.trailing)
-                    .accessibilityLabel(presentation.text.t("Display Name", "显示名称"))
+                Text(presentation.text.string(.uiDisplayName)).fixedSize()
+                TextField(presentation.text.string(.uiOptional), text: $displayName).multilineTextAlignment(.trailing)
+                    .accessibilityLabel(presentation.text.string(.uiDisplayName))
             }.padding(.horizontal, 16).frame(height: 36)
         }.textFieldStyle(.plain).formPlate()
     }
@@ -79,31 +79,31 @@ struct ManagementView: View {
         let repositories = matchingRepositories
         return VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(presentation.text.t("Group Name", "分组名称")).frame(height: 18)
+                Text(presentation.text.string(.uiGroupName)).frame(height: 18)
                 Group {
                     if sheet == .edit { Text(group).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).foregroundStyle(DesignStyle.secondary) }
                     else {
-                        TextField("feature-name", text: $group).textFieldStyle(.plain).focused($focused).accessibilityIdentifier("groupName")
-                            .accessibilityLabel(presentation.text.t("Group Name", "分组名称")).onChange(of: group) { fieldError = nil }
+                        TextField(String("feature-name"), text: $group).textFieldStyle(.plain).focused($focused).accessibilityIdentifier("groupName")
+                            .accessibilityLabel(presentation.text.string(.uiGroupName)).onChange(of: group) { fieldError = nil }
                     }
                 }.padding(.horizontal, 12).frame(height: 36).formPlate()
-                if let fieldError { FormErrorView(message: presentation.text.message(fieldError)) }
+                if let fieldError { FormErrorView(message: fieldError) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(presentation.text.t("Repositories", "仓库"))
+                    Text(presentation.text.string(.uiRepositories))
                     Spacer()
                     if !repositorySearch.isEmpty {
-                        Text(presentation.text.t("\(repositories.count) matches", "匹配 \(repositories.count) 个")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                        Text(presentation.text.string(.uiMatches(Int(repositories.count)))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             .accessibilityIdentifier("repositoryMatches")
                     }
-                    Text("\(selected.count) / \(workspace.sortedRepositories.count) " + presentation.text.t("selected", "已选择")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                    Text(presentation.text.string(.uiOfSelected2(selected.count, workspace.sortedRepositories.count))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                         .accessibilityIdentifier("repositorySelectionCount")
                 }.frame(height: 18)
-                RepositorySearchField(text: $repositorySearch, focused: $repositorySearchFocused, placeholder: presentation.text.t("Search repositories", "搜索仓库"))
+                RepositorySearchField(text: $repositorySearch, focused: $repositorySearchFocused, placeholder: presentation.text.string(.uiSearchRepositories))
                     .frame(height: 22)
                     .background {
-                        Button(presentation.text.t("Search repositories", "搜索仓库")) { focused = false; repositorySearchFocused = true }
+                        Button(presentation.text.string(.uiSearchRepositories)) { focused = false; repositorySearchFocused = true }
                             .keyboardShortcut("f").hidden().accessibilityHidden(true)
                     }
                 ScrollView {
@@ -121,8 +121,8 @@ struct ManagementView: View {
                 }.frame(maxWidth: .infinity).overlay {
                     if repositories.isEmpty {
                         HStack(spacing: 8) {
-                            Text(presentation.text.t("No matching repositories", "没有匹配的仓库")).foregroundStyle(DesignStyle.secondary)
-                            Button(presentation.text.t("Clear Search", "清除搜索")) { repositorySearch = "" }.buttonStyle(.link)
+                            Text(presentation.text.string(.uiNoMatchingRepositories)).foregroundStyle(DesignStyle.secondary)
+                            Button(presentation.text.string(.uiClearSearch)) { repositorySearch = "" }.buttonStyle(.link)
                                 .accessibilityIdentifier("clearRepositorySearch")
                         }.font(DialogTypography.auxiliary)
                     }
@@ -142,7 +142,7 @@ struct ManagementView: View {
 
     private var deletionForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if management.deletionPresentation.editingGroup { Text(presentation.text.t("The group workspace worktree will be kept.", "将保留分组根工作树。")).font(DialogTypography.auxiliary) }
+            if management.deletionPresentation.editingGroup { Text(presentation.text.string(.uiGroupWorkspaceWorktreeWillBeKept)).font(DialogTypography.auxiliary) }
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(deletionDisplayResources) { resource in deletionRow(resource) }
@@ -153,9 +153,11 @@ struct ManagementView: View {
 
     func deletionRow(_ resource: Resource) -> some View {
         let target = management.deletionPresentation.targets.first { $0.resource == resource }
+        let risks = target?.riskMessages.map(presentation.text.message).joined(separator: "\n") ?? ""
         return HStack(spacing: 12) {
             Text(resource.path).font(DialogTypography.path).lineLimit(1).truncationMode(.middle)
-                .help(target?.path ?? workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path)
+                .help([target?.path ?? workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path, risks].filter { !$0.isEmpty }.joined(separator: "\n"))
+                .accessibilityHint(risks)
             Spacer(minLength: 0)
             WorkingTreeStatus(text: presentation.text, status: "Clean").hidden().overlay(alignment: .trailing) {
                 if !management.deletionPresentation.loading, let target { WorkingTreeStatus(text: presentation.text, status: deletionStatus(target)) }
@@ -173,18 +175,18 @@ struct ManagementView: View {
             if sheet == .add {
                 Menu {
                     Button { Task { await chooseLocalRepositories() } } label: {
-                        Label(presentation.text.t("Local Repositories…", "本地仓库…"), systemImage: "folder")
+                        Label(presentation.text.string(.uiLocalRepositories2), systemImage: "folder")
                     }
                     Button { Task { await chooseRepositoryYAML() } } label: {
-                        Label(presentation.text.t("YAML File…", "YAML 文件…"), systemImage: "doc")
+                        Label(presentation.text.string(.uiYamlFile), systemImage: "doc")
                     }
-                } label: { Text(presentation.text.t("Import", "导入")).padding(.horizontal, 4) }
+                } label: { Text(presentation.text.string(.uiImport)).padding(.horizontal, 4) }
                 .fixedSize()
             }
-            if sheet == .importRepositories { Button(presentation.text.t("Back", "返回")) { management.sheet = .add } }
-            if sheet == .delete && management.deletionPresentation.editingGroup { Button(presentation.text.t("Back to Edit", "返回编辑")) { management.sheet = .edit } }
+            if sheet == .importRepositories { Button(presentation.text.string(.uiBack)) { management.sheet = .add } }
+            if sheet == .delete && management.deletionPresentation.editingGroup { Button(presentation.text.string(.uiBackEdit)) { management.sheet = .edit } }
             Spacer()
-            Button(role: .cancel) { management.sheet = nil } label: { Text(presentation.text.t("Cancel", "取消")).padding(.horizontal, 4) }.keyboardShortcut(.cancelAction)
+            Button(role: .cancel) { management.sheet = nil } label: { Text(presentation.text.string(.uiCancel)).padding(.horizontal, 4) }.keyboardShortcut(.cancelAction)
             if sheet == .importRepositories { submitButton.buttonStyle(.borderedProminent) }
             else { submitButton }
         }.controlSize(.regular)
@@ -197,40 +199,40 @@ struct ManagementView: View {
 
     private var title: String {
         switch sheet {
-        case .add: presentation.text.t("Add Repository", "添加仓库")
-        case .importRepositories: presentation.text.t("Import Repositories", "导入仓库")
-        case .create: presentation.text.t("Create Worktree Group", "创建工作树分组")
-        case .edit: presentation.text.t("Edit Worktree Group", "编辑工作树分组")
+        case .add: presentation.text.string(.uiAddRepository2)
+        case .importRepositories: presentation.text.string(.uiImportRepositories)
+        case .create: presentation.text.string(.uiCreateWorktreeGroup2)
+        case .edit: presentation.text.string(.uiEditWorktreeGroup2)
         case .delete:
             switch management.deletionPresentation.request {
-            case .repository: presentation.text.t("Delete Repository?", "删除仓库？")
-            case .group: presentation.text.t("Delete Worktree Group?", "删除工作树分组？")
-            default: presentation.text.t("Delete Linked Worktree?", "删除关联工作树？")
+            case .repository: presentation.text.string(.uiDeleteRepository)
+            case .group: presentation.text.string(.uiDeleteWorktreeGroup)
+            default: presentation.text.string(.uiDeleteLinkedWorktree)
             }
         }
     }
 
     private var subtitle: String? {
-        if sheet == .importRepositories { return presentation.text.t("Choose repositories to clone into this workspace.", "选择要克隆到此工作区的仓库。") }
+        if sheet == .importRepositories { return presentation.text.string(.uiChooseRepositoriesCloneIntoWorkspace) }
         if sheet == .delete {
             switch management.deletionPresentation.request {
-            case .group: return presentation.text.t("The group workspace worktree, its members, and their current local branches (including unmerged commits) will be permanently deleted.", "将永久删除分组根工作树、成员工作树及它们当前的本地分支（包括未合并提交）。")
-            case .repository: return presentation.text.t("The repository will move to Trash. Its linked worktrees and their current local branches (including unmerged commits) will be permanently deleted.", "仓库将移入废纸篓；关联工作树及其当前本地分支（包括未合并提交）将永久删除。")
-            default: return presentation.text.t("The linked worktree and its current local branch (including unmerged commits) will be permanently deleted.", "将永久删除关联工作树及其当前本地分支（包括未合并提交）。")
+            case .group: return presentation.text.string(.uiGroupWorkspaceWorktreeMembersAndCurrentLocalBranches)
+            case .repository: return presentation.text.string(.uiRepositoryWillMoveTrashLinkedWorktreesAndCurrent)
+            default: return presentation.text.string(.uiLinkedWorktreeAndCurrentLocalBranchIncludingUnmerged)
             }
         }
         return nil
     }
 
     private var progressTitle: String {
-        if management.progressPresentation?.scanningRepositories == true { return presentation.text.t("Scanning local repositories…", "正在扫描本地仓库…") }
-        if management.progressPresentation?.importFileName != nil { return presentation.text.t("Importing repositories…", "正在导入仓库…") }
+        if management.progressPresentation?.scanningRepositories == true { return presentation.text.string(.uiScanningLocalRepositories) }
+        if management.progressPresentation?.importFileName != nil { return presentation.text.string(.uiImportingRepositories) }
         switch sheet {
-        case .add: return presentation.text.t("Adding repository…", "正在添加仓库…")
-        case .importRepositories: return presentation.text.t("Importing repositories…", "正在导入仓库…")
-        case .create: return presentation.text.t("Creating worktree group…", "正在创建工作树分组…")
-        case .edit: return presentation.text.t("Updating worktree group…", "正在更新工作树分组…")
-        case .delete: return presentation.text.t("Deleting…", "正在删除…")
+        case .add: return presentation.text.string(.uiAddingRepository)
+        case .importRepositories: return presentation.text.string(.uiImportingRepositories)
+        case .create: return presentation.text.string(.uiCreatingWorktreeGroup)
+        case .edit: return presentation.text.string(.uiUpdatingWorktreeGroup)
+        case .delete: return presentation.text.string(.uiDeleting)
         }
     }
 
@@ -238,7 +240,7 @@ struct ManagementView: View {
         guard target.exists, let dirty = target.dirty else { return "Other" }
         return dirty ? "Dirty" : "Clean"
     }
-    private var actionTitle: String { switch sheet { case .add: presentation.text.t("Add", "添加"); case .importRepositories: presentation.text.t("Import", "导入"); case .create: presentation.text.t("Create", "创建"); case .edit: presentation.text.t("Save Changes", "保存更改"); case .delete: management.deletionPresentation.editingGroup ? presentation.text.t("Save Changes", "保存更改") : presentation.text.t("Delete", "删除") } }
+    private var actionTitle: String { switch sheet { case .add: presentation.text.string(.uiAdd); case .importRepositories: presentation.text.string(.uiImport); case .create: presentation.text.string(.uiCreate); case .edit: presentation.text.string(.uiSaveChanges); case .delete: management.deletionPresentation.editingGroup ? presentation.text.string(.uiSaveChanges) : presentation.text.string(.uiDelete2) } }
     private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .importRepositories: !management.canConfirmRepositoryImport; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositories ?? []); case .delete: !management.canConfirmDelete } }
     private func memberStatus(_ repo: String) -> String {
         guard workspace.record?.groups[group]?.repositories.contains(repo) == true else { return "Unset" }
@@ -251,10 +253,10 @@ struct ManagementView: View {
         let members = selectedMembers
         switch sheet {
         case .add:
-            do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, name: displayName) } catch { fieldError = error.localizedDescription }
+            do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, name: displayName) } catch { fieldError = presentation.text.message(error) }
         case .importRepositories: management.confirmRepositoryImport()
         case .create:
-            do { try PathSafety.groupName(group); management.create(group, members: members) } catch { fieldError = error.localizedDescription }
+            do { try PathSafety.groupName(group); management.create(group, members: members) } catch { fieldError = presentation.text.message(error) }
         case .edit: management.edit(group, members: members)
         case .delete: management.confirmDelete()
         }
@@ -264,12 +266,12 @@ struct ManagementView: View {
         let root = workspace.record?.rootURL
         error = nil; fieldError = nil; management.formError = nil
         do {
-            guard let file = try await FilePanels.readYAML(prompt: presentation.text.t("Import", "导入")),
+            guard let file = try await FilePanels.readYAML(prompt: presentation.text.string(.uiImport)),
                   management.sheet == .add, workspace.record?.rootURL == root else { return }
             management.prepareRepositoryImport(file.text, filename: file.name)
         } catch {
             guard management.sheet == .add, workspace.record?.rootURL == root else { return }
-            self.error = error.localizedDescription
+            management.presentError(error)
         }
     }
 
@@ -277,8 +279,8 @@ struct ManagementView: View {
         let root = workspace.record?.rootURL
         error = nil; fieldError = nil; management.formError = nil
         guard let directories = await FilePanels.repositoryDirectories(
-            prompt: presentation.text.t("Scan", "扫描"),
-            message: presentation.text.t("Select one or more folders to find Git repositories. Their remote URLs will be used to clone into this workspace.", "选择一个或多个文件夹以查找 Git 仓库，随后可选择要从远端克隆到此工作区的仓库。")),
+            prompt: presentation.text.string(.uiScan),
+            message: presentation.text.string(.uiSelectOneOrMoreFoldersFindGitRepositories)),
               management.sheet == .add, workspace.record?.rootURL == root else { return }
         management.prepareLocalRepositoryImport(directories)
     }

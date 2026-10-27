@@ -68,7 +68,7 @@ final class RepositoryDetailModel {
                 commitCache[key] = page; detail.commits = page.commits; detail.canLoadMore = page.canLoadMore; detail.commitsError = nil
             } catch {
                 guard !Task.isCancelled, self.generation == token, self.workspace?.root == root else { return }
-                detail.commitsError = error.localizedDescription
+                detail.commitsError = .wrap(error)
             }
         }
     }
@@ -120,7 +120,7 @@ final class RepositoryDetailModel {
             }
         } catch {
             guard !Task.isCancelled else { return nil }
-            return RepositoryDetailState(summaryError: error.localizedDescription, changesError: error.localizedDescription, commitsError: error.localizedDescription)
+            return RepositoryDetailState(summaryError: .wrap(error), changesError: .wrap(error), commitsError: .wrap(error))
         }
         guard !Task.isCancelled else { return nil }
         loaded = RepositoryDetailState(snapshot: snapshot, cached: cached)
@@ -138,36 +138,36 @@ final class RepositoryDetailModel {
                         guard !Task.isCancelled else { return nil }
                         let page = CommitPage(commits: values, canLoadMore: values.count == 30)
                         commitCache[key] = page; loaded.commits = page.commits; loaded.canLoadMore = page.canLoadMore; loaded.commitsError = nil
-                    } catch { loaded.commitsError = error.localizedDescription }
+                    } catch { loaded.commitsError = .wrap(error) }
                 }
-            } else { loaded.commits = value.hasRemotes ? nil : []; loaded.canLoadMore = false; loaded.commitsError = value.baseError }
+            } else { loaded.commits = value.hasRemotes ? nil : []; loaded.canLoadMore = false; loaded.commitsError = value.baseError.map { ModuError("base-unavailable", $0, userMessage: value.baseMessage) } }
         } else {
-            loaded.commits = nil; loaded.canLoadMore = false; loaded.commitsError = snapshot.summaryError?.message
+            loaded.commits = nil; loaded.canLoadMore = false; loaded.commitsError = snapshot.summaryError
         }
         return Task.isCancelled ? nil : loaded
     }
 
     private func updateState(_ resource: Resource, from detail: RepositoryDetailState) {
-        states[resource.id] = ResourceState(resource: resource, available: detail.changesError == nil, dirty: detail.changes.map { !$0.isEmpty }, reason: detail.changesError)
+        states[resource.id] = ResourceState(resource: resource, available: detail.changesError == nil, dirty: detail.changes.map { !$0.isEmpty }, reason: detail.changesError?.message, reasonMessage: detail.changesError?.userMessage)
     }
 }
 
 struct RepositoryDetailState: Sendable {
     var summary: GitSummary?
-    var summaryError: String?
+    var summaryError: ModuError?
     var changes: [FileChange]?
-    var changesError: String?
+    var changesError: ModuError?
     var commits: [GitCommit]?
-    var commitsError: String?
+    var commitsError: ModuError?
     var canLoadMore = false
 }
 
 extension RepositoryDetailState {
     init(snapshot: ResourceSnapshot, cached: RepositoryDetailState? = nil) {
         self = cached ?? .init()
-        changes = snapshot.changes; changesError = snapshot.changesError?.message
+        changes = snapshot.changes; changesError = snapshot.changesError
         if snapshot.summary != nil || snapshot.summaryError != nil {
-            summary = snapshot.summary; summaryError = snapshot.summaryError?.message
+            summary = snapshot.summary; summaryError = snapshot.summaryError
         }
     }
 }

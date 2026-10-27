@@ -23,8 +23,10 @@ final class WorkspaceModel {
         }
     }
     var blocked: String?
+    var blockedDetails: String?
     var waiting = false
     var notice: String?
+    var noticeDetails: String?
     var selection: Resource? {
         didSet {
             if oldValue != selection { onContextChange?(false); refreshDetail() }
@@ -56,6 +58,8 @@ final class WorkspaceModel {
         return record.rootURL
     }
 
+    var text: InterfaceText { preferences.text }
+
     init(service: WorkspaceService, installer: InstallationService, preferences: AppPreferences, operations: OperationLifecycle, presentation: OperationPresentation) {
         self.service = service
         self.installer = installer
@@ -67,7 +71,6 @@ final class WorkspaceModel {
     }
 
     func sidebarPreferenceKey(_ name: String) -> String { "sidebar.\(record?.root ?? defaults.string(forKey: "workspace") ?? "").\(name)" }
-    private func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
 
     var visibleResources: [Resource] {
         sortedRepositories.map { .repository($0.id) } + sortedGroups.flatMap { group in
@@ -138,14 +141,14 @@ final class WorkspaceModel {
             var states = self.states.filter { resourceIDs.contains($0.key) }
             for item in inspection.items {
                 if item.resource == selection, detail.changes != nil || detail.changesError != nil { continue }
-                states[item.resource.id] = ResourceState(resource: item.resource, available: item.status == .success, dirty: item.data?["working-tree"].map { $0 == "dirty" }, reason: item.message)
+                states[item.resource.id] = ResourceState(resource: item.resource, available: item.status == .success, dirty: item.data?["working-tree"].map { $0 == "dirty" }, reason: item.message, reasonMessage: item.userMessage)
             }
             self.states = states
         } catch {
             guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
             if (error as? ModuError)?.code == "workspace-busy" { waiting = true; blocked = nil; return }
             invalidateDetailCache()
-            record = nil; selection = nil; blocked = error.localizedDescription
+            record = nil; selection = nil; blocked = text.message(error); blockedDetails = Git.sanitize(error.localizedDescription)
         }
     }
     private func initializeForReload(_ root: URL, generation: Int, showProgress: Bool) async throws -> WorkspaceRecord? {
@@ -174,11 +177,14 @@ final class WorkspaceModel {
         guard !Task.isCancelled else { return nil }
         guard opened.result.status == .success, let record = opened.record else {
             let code = opened.result.reasonCode ?? opened.result.items.first?.reasonCode ?? "workspace-unavailable"
-            let message = ([opened.result.message].compactMap { $0 } + opened.result.items.compactMap(\.message)).map(presentation.text.message).joined(separator: "\n")
-            throw ModuError(code, message)
+            let overall = opened.result.userMessage.map { [$0] } ?? opened.result.message.map { [UserMessage.diagnostic($0)] } ?? []
+            let items = opened.result.items.compactMap { item in item.userMessage ?? item.message.map(UserMessage.diagnostic) }
+            throw ModuError(code, .joined(overall + items, separator: "\n"))
         }
-        notice = (opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", "Bundled skill is unavailable.") : nil)).map {
-            t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + presentation.text.message($0.localizedDescription)
+        let skillFailure = opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", .bundledSkillIsUnavailable) : nil)
+        noticeDetails = skillFailure.map { Git.sanitize($0.message) }
+        notice = skillFailure.map {
+            text.string(.uiWorkflowSkillWasnTEnabled2(presentation.text.message($0)))
         }
         return record
     }

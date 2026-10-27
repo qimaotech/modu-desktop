@@ -93,8 +93,8 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
+        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
         let model = AppModel(defaults: defaults, service: service)
-        model.language = "en"
         model.workspace.record = try store.load(fixture.root)
         if kind == "workspace" {
             model.management.importWorkspace(workspaceYAML(fixture, other: finalItem ? nil : other), filename: "workspace.yaml")
@@ -157,8 +157,8 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
+        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
         let model = AppModel(defaults: defaults, service: fixture.service)
-        model.language = "en"
         model.workspace.record = try fixture.service.store.load(fixture.root)
         let yaml = workspaceYAML(fixture, other: nil, group: true)
         model.management.run { service, root, progress in

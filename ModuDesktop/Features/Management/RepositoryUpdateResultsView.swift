@@ -11,8 +11,8 @@ struct RepositoryUpdateResultsView: View {
         let items = text.resultDisplayItems(result)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Text(text.t("Repository", "仓库")).frame(maxWidth: .infinity, alignment: .leading)
-                Text(text.t("Result", "结果")).frame(width: Self.resultColumnWidth)
+                Text(text.string(.uiRepository)).frame(maxWidth: .infinity, alignment: .leading)
+                Text(text.string(.uiResult)).frame(width: Self.resultColumnWidth)
             }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).padding(.bottom, 6)
             Divider()
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
@@ -50,21 +50,22 @@ struct RepositoryUpdateResultRow: View {
                 Text(message).foregroundStyle(DesignStyle.secondary)
             }
             ForEach(visibleEffects, id: \.self) { Text($0).font(DialogTypography.auxiliary) }
-            DisclosureGroup(text.t("Details", "详细信息")) {
+            DisclosureGroup(text.string(.uiDetails)) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(fullPath)
+                    if let raw = item.message { Text(Git.sanitize(raw)) }
                     ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
                         Text("\(text.statusText(effect.action)): \(effect.target) [\(text.statusText(effect.state))]")
                     }
                     if let head = item.data?["actual-head"] { Text("HEAD: \(head)") }
                     if let workingTree = item.data?["working-tree"] {
-                        Text(text.t("Working tree: ", "工作树：") + text.statusText(workingTree == "clean" ? "Clean" : "Dirty"))
+                        Text(text.string(.uiWorkingTree2(text.statusText(workingTree == "clean" ? "Clean" : "Dirty"))))
                     }
                 }.font(DialogTypography.path).frame(maxWidth: .infinity, alignment: .leading)
             }
             .disclosureGroupStyle(RepositoryResultDetailsStyle(
                 identifier: "repo-update-details-\(item.resource.id)",
-                expandedLabel: text.t("Expanded", "已展开"), collapsedLabel: text.t("Collapsed", "已折叠")))
+                expandedLabel: text.string(.uiExpanded), collapsedLabel: text.string(.uiCollapsed)))
             .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
         }.padding(.vertical, 4)
     }

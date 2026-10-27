@@ -13,7 +13,7 @@ public struct MockWorkspaceFixture: Sendable {
         let bases = [FileManager.default.temporaryDirectory, URL(fileURLWithPath: "/tmp")].map(PathSafety.canonical)
         guard root.lastPathComponent == "example-workspace", directory.lastPathComponent.hasPrefix("modu-mock-"),
               bases.contains(where: { directory.path.hasPrefix($0.path + "/") }) else {
-            throw ModuError("mock-unavailable", "Expected a prepared workspace inside an owned temporary mock directory.")
+            throw ModuError("mock-unavailable", .expectedPreparedWorkspaceInsideOwnedTemporaryMockDirectory)
         }
         try PathSafety.directory(root)
         let marker = try Self.file("mock-session.json", in: directory)
@@ -22,7 +22,7 @@ public struct MockWorkspaceFixture: Sendable {
         guard session.version == 1, session.scenario == "linked-worktree-selected", session.ready,
               UUID(uuidString: identifier) != nil, session.identifier == identifier,
               PathSafety.canonical(URL(fileURLWithPath: session.workspace)).path == root.path else {
-            throw ModuError("mock-unavailable", "Mock workspace has not been prepared successfully.")
+            throw ModuError("mock-unavailable", .mockWorkspaceHasNotBeenPreparedSuccessfully)
         }
         let config = try Self.file("gitconfig", in: directory)
         let support = try PathSafety.child("support", of: directory, allowMissing: false)
@@ -60,7 +60,7 @@ public struct MockWorkspaceFixture: Sendable {
     private static func file(_ name: String, in directory: URL) throws -> URL {
         let file = directory.appending(path: name)
         guard try FileManager.default.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else {
-            throw ModuError("mock-unavailable", "Expected a regular mock data file: \(file.path)")
+            throw ModuError("mock-unavailable", .expectedRegularMockDataFile(file.path))
         }
         return file
     }

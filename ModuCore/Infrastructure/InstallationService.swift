@@ -5,6 +5,7 @@ import CryptoKit
 public struct CLIInstallation: Sendable {
     public var available: Bool
     public var message: String
+    public var userMessage: UserMessage? = nil
 }
 
 public struct InstallationService: Sendable {
@@ -39,14 +40,14 @@ public struct InstallationService: Sendable {
     public func checkCLIInstallation() async -> CLIInstallation {
         do {
             try checkBoundary()
-            guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", "The app’s bundled CLI is missing or not executable.") }
+            guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", .appSBundledCLIIsMissingOrNot) }
             guard FileManager.default.isExecutableFile(atPath: commandLink.path), PathSafety.canonical(commandLink) == PathSafety.canonical(executable) else {
-                throw ModuError("cli-unavailable", "Reinstall modu-cli to link ~/.local/bin/modu-cli to this app’s bundled CLI.")
+                throw ModuError("cli-unavailable", .reinstallModuCliLinkLocalBinModuCli)
             }
             let run = try await runner.run(executable.path, ["--version"], timeout: 10)
-            guard run.status == 0 else { throw ModuError("cli-unavailable", "The app’s bundled CLI could not run.") }
-            return .init(available: true, message: "Installed")
-        } catch { return .init(available: false, message: ModuError.wrap(error).message) }
+            guard run.status == 0 else { throw ModuError("cli-unavailable", .appSBundledCLICouldNotRun) }
+            return .init(available: true, message: "Installed", userMessage: .installed)
+        } catch { let failure = ModuError.wrap(error); return .init(available: false, message: failure.message, userMessage: failure.userMessage) }
     }
     public func checkCLIPath() async -> CLIInstallation {
         do {
@@ -54,24 +55,24 @@ public struct InstallationService: Sendable {
             // A missing command still needs a complete probe, unlike a shell startup failure.
             let found = try await loginShell("command -v modu-cli || /usr/bin/true")
             guard !found.text.isEmpty else {
-                throw ModuError("cli-path-unavailable", "The login shell could not find modu-cli. Add ~/.local/bin to its PATH, then retry. Shell configuration is not changed by Modu.")
+                throw ModuError("cli-path-unavailable", .loginShellCouldNotFindModuCliAdd)
             }
             guard found.text.hasPrefix("/"), PathSafety.canonical(URL(fileURLWithPath: found.text)) == PathSafety.canonical(executable) else {
-                throw ModuError("cli-path-unavailable", "modu-cli resolves to a different command. Adjust your PATH order or resolve the conflicting command, then retry.\nCurrent: \(found.text)\nExpected: \(executable.path)")
+                throw ModuError("cli-path-unavailable", .moduCliResolvesDifferentCommandAdjustPATHOrder(found.text, executable.path))
             }
-            return .init(available: true, message: "Installed")
-        } catch { return .init(available: false, message: ModuError.wrap(error).message) }
+            return .init(available: true, message: "Installed", userMessage: .installed)
+        } catch { let failure = ModuError.wrap(error); return .init(available: false, message: failure.message, userMessage: failure.userMessage) }
     }
     public func installCLI() async throws -> CLIInstallation {
         try checkBoundary()
-        guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", "The app’s bundled CLI is missing or not executable.") }
+        guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw ModuError("cli-unavailable", .appSBundledCLIIsMissingOrNot) }
         let installDirectory = try PathSafety.child(".local/bin", of: home)
         for directory in [installDirectory.deletingLastPathComponent(), installDirectory] {
             if !PathSafety.exists(directory) { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false) }
-            guard eligible(directory) else { throw ModuError("cli-install-conflict", "Check ~/.local/bin ownership and permissions. Modu requires user-owned directories without group or world write access.") }
+            guard eligible(directory) else { throw ModuError("cli-install-conflict", .checkLocalBinOwnershipAndPermissionsModuRequires) }
         }
         let link = installDirectory.appending(path: "modu-cli")
-        guard try canLink(link, to: executable) else { throw ModuError("cli-install-conflict", "The existing non-Modu ~/.local/bin/modu-cli was kept. Move it before retrying.") }
+        guard try canLink(link, to: executable) else { throw ModuError("cli-install-conflict", .existingNonModuLocalBinModuCliWas) }
         if PathSafety.exists(link) { try FileManager.default.removeItem(at: link) }
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable)
         let path = try await loginShell("/usr/bin/printf '%s' \"$PATH\"")
@@ -127,13 +128,13 @@ public struct InstallationService: Sendable {
                 if path.contains("/") { _ = try PathSafety.child((path as NSString).deletingLastPathComponent, of: directory) }
                 guard PathSafety.exists(target) else { current = false; continue }
                 guard try FileManager.default.attributesOfItem(atPath: target.path)[.type] as? FileAttributeType == .typeRegular else {
-                    throw ModuError("skill-conflict", "The existing non-regular workflow skill file was kept: \(target.path)")
+                    throw ModuError("skill-conflict", .existingNonRegularWorkflowSkillFileWasKept(target.path))
                 }
                 if try SHA256.hash(data: Data(contentsOf: target)) != SHA256.hash(data: content[path]!) { current = false }
             }
             return current ? .current : .outdated
         }
-        guard try canLink(directory) else { throw ModuError("skill-conflict", "The existing non-directory modu-workflow, non-regular SKILL.md, or third-party link was kept.") }
+        guard try canLink(directory) else { throw ModuError("skill-conflict", .existingNonDirectoryModuWorkflowNonRegularSKILL) }
         return .managedLink
     }
     private func canLink(_ url: URL, to executable: URL? = nil) throws -> Bool {
@@ -164,7 +165,7 @@ public struct InstallationService: Sendable {
         let output = try await runner.run(shell, shellArguments + ["\(delimiter); \(command) && \(delimiter)"], timeout: 10)
         guard output.status == 0, let start = output.stdout.range(of: marker),
               let end = output.stdout.range(of: marker, in: start.upperBound..<output.stdout.endIndex) else {
-            throw ModuError("cli-path-unavailable", "The login shell could not complete the CLI check. Check its startup configuration and retry.")
+            throw ModuError("cli-path-unavailable", .loginShellCouldNotCompleteCLICheckCheck)
         }
         return .init(status: output.status, stdout: output.stdout.subdata(in: start.upperBound..<end.lowerBound), stderr: output.stderr)
     }

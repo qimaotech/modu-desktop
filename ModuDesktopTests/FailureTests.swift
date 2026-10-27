@@ -252,7 +252,7 @@ struct FailureTests {
         let missingPATH = try await InstallationService(support: support, executable: source, runner: .init(environment: environment), home: directory, shell: shell.path).installCLI()
         #expect(!missingPATH.available && missingPATH.message.contains("~/.local/bin"))
         #expect(missingPATH.message.contains("could not find modu-cli") && !missingPATH.message.contains("conflict"))
-        let missingMessage = await InterfaceText(language: "zh").message(missingPATH.message)
+        let missingMessage = await InterfaceText(locale: .simplifiedChinese).message(try #require(missingPATH.userMessage))
         #expect(missingMessage.contains("PATH") && !missingMessage.contains("冲突"))
         #expect(PathSafety.exists(bin.appending(path: "modu-cli")))
         #expect(!PathSafety.exists(other.appending(path: "modu-cli")))
@@ -364,7 +364,7 @@ struct FailureTests {
             #expect(installed.message.contains("could not find modu-cli") && !installed.message.contains("conflict"))
         } else if conflictingCommand {
             let resolved = output == "alias" ? "/usr/bin/true" : oldLink.path
-            let message = await InterfaceText(language: "zh").message(installed.message)
+            let message = await InterfaceText(locale: .simplifiedChinese).message(try #require(installed.userMessage))
             #expect(message.contains("当前：") && message.contains(resolved))
             #expect(message.contains("预期：") && message.contains(source.path))
         }
@@ -395,7 +395,7 @@ struct FailureTests {
         #expect(await installer.checkCLIInstallation().available)
         let check = await installer.checkCLIPath()
         #expect(!check.available && check.message.contains("could not complete the CLI check"))
-        let message = await InterfaceText(language: "zh").message(check.message)
+        let message = await InterfaceText(locale: .simplifiedChinese).message(try #require(check.userMessage))
         #expect(message.contains("启动配置") && !message.contains("PATH") && !message.contains("冲突"))
     }
 

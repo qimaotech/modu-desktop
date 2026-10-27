@@ -46,7 +46,7 @@ struct ToolBarView: View {
             }.buttonStyle(HoverPlainButtonStyle(shape: Rectangle()))
             Rectangle().fill(DesignStyle.border).frame(width: ToolBarLayout.dividerWidth, height: 36)
             ToolMenuButton(tools: tools.filter { $0.category == tool.category }, width: width,
-                           label: text.t("Choose tool", "选择工具") + " " + text.statusText(tool.category),
+                           label: text.string(.uiChooseTool) + " " + text.statusText(tool.category),
                            open: { open($0) })
                 .frame(width: ToolBarLayout.menuButtonWidth, height: 36)
                 .modifier(ButtonHoverBackground(shape: Rectangle()))

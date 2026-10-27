@@ -47,19 +47,19 @@ extension WorkspaceService {
     }
     func verifyAuthorization(_ expected: [DeletionTarget], actual: [DeletionTarget]) throws {
         guard expected.count == actual.count, zip(expected, actual).allSatisfy({ a, b in a.resource == b.resource && a.path == b.path && a.branch == b.branch && a.detached == b.detached }) else {
-            throw ModuError("confirmation-changed", "Deletion targets or checked-out branches changed. Nothing has been deleted. Review a new confirmation.")
+            throw ModuError("confirmation-changed", .deletionTargetsOrCheckedOutBranchesChangedNothing)
         }
     }
     public func deleteResources(_ request: DeleteRequest, record: WorkspaceRecord) throws -> [Resource] {
         switch request {
         case .repository(let name):
-            guard record.repositories.contains(where: { $0.id == name }) else { throw ModuError("target-not-configured", "Repository is not configured.") }
+            guard record.repositories.contains(where: { $0.id == name }) else { throw ModuError("target-not-configured", .repositoryIsNotConfigured) }
             return record.groups.keys.sorted().filter { record.groups[$0]!.repositories.contains(name) }.map { .member($0, name) } + [.repository(name)]
         case .group(let name):
-            guard let group = record.groups[name] else { throw ModuError("target-not-configured", "Group is not configured.") }
+            guard let group = record.groups[name] else { throw ModuError("target-not-configured", .groupIsNotConfigured) }
             return group.repositories.map { .member(name, $0) } + [.group(name)]
         case .member(let group, let repo):
-            guard record.groups[group]?.repositories.contains(repo) == true else { throw ModuError("target-not-configured", "Member is not configured.") }
+            guard record.groups[group]?.repositories.contains(repo) == true else { throw ModuError("target-not-configured", .memberIsNotConfigured) }
             return [.member(group, repo)]
         }
     }
@@ -84,42 +84,42 @@ extension WorkspaceService {
         let exists = PathSafety.exists(path)
         if resource.kind == .repository {
             if exists { _ = try await checked(resource, in: record) }
-            else if record.groups.values.contains(where: { $0.repositories.contains(resource.repo!) }) { throw ModuError("resource-unavailable", "Missing repository still has configured members.") }
-            var risks = exists ? ["Main repository will be moved to Trash."] : ["Only the repository declaration will be removed."]
+            else if record.groups.values.contains(where: { $0.repositories.contains(resource.repo!) }) { throw ModuError("resource-unavailable", .missingRepositoryStillHasConfiguredMembers) }
+            var risks: [UserMessage] = exists ? [.mainRepositoryWillBeMovedTrash] : [.onlyRepositoryDeclarationWillBeRemoved]
             var dirty: Bool?
             if exists && readRisks {
                 let changes = try await git.changes(at: path)
                 dirty = !changes.isEmpty
-                risks.append(changes.isEmpty ? "Working tree is clean." : "\(changes.count) changed paths will be moved to Trash.")
+                risks.append(changes.isEmpty ? .workingTreeIsClean : .changedPathsWillBeMovedTrash(changes.count))
             }
-            return .init(resource: resource, path: path.path, branch: nil, detached: false, registered: exists, exists: exists, risks: risks, dirty: dirty)
+            return .init(resource: resource, path: path.path, branch: nil, detached: false, registered: exists, exists: exists, risks: risks.map(\.englishDescription), riskMessages: risks, dirty: dirty)
         }
         let repository = resource.repo.map { record.repositoryURL($0) } ?? record.rootURL
         try await git.checkRepository(repository, origin: resource.repo.flatMap { name in record.repositories.first { $0.id == name }?.url }, main: true)
         let registrations = try await git.registrations(at: repository)
         let entry = registrations.first { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }
-        guard !exists || entry != nil else { throw ModuError("resource-unavailable", "Existing directory has no matching Git registration: \(path.path)") }
-        guard entry?.locked != true else { throw ModuError("worktree-locked", "Worktree is locked: \(path.path)") }
+        guard !exists || entry != nil else { throw ModuError("resource-unavailable", .existingDirectoryHasNoMatchingGitRegistration(path.path)) }
+        guard entry?.locked != true else { throw ModuError("worktree-locked", .worktreeIsLocked(path.path)) }
         if let entry, let branch = entry.branch { try await git.checkBranchNotInUse(branch, registrations: registrations, at: repository, excluding: entry.path) }
-        if let entry { guard entry.oid.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil, !entry.oid.allSatisfy({ $0 == "0" }), try await git.oid(entry.oid, at: repository) != nil else { throw ModuError("resource-unavailable", "Registered worktree HEAD is unreadable: \(path.path)") } }
-        var risks: [String] = []
+        if let entry { guard entry.oid.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil, !entry.oid.allSatisfy({ $0 == "0" }), try await git.oid(entry.oid, at: repository) != nil else { throw ModuError("resource-unavailable", .registeredWorktreeHEADIsUnreadable(path.path)) } }
+        var risks: [UserMessage] = []
         var dirty: Bool?
         if exists { _ = try await checked(resource, in: record) }
         if exists && readRisks {
             let changes = try await git.changes(at: path)
             dirty = !changes.isEmpty
-            risks.append(changes.isEmpty ? "Working tree is clean." : "\(changes.count) changed paths will be permanently deleted.")
+            risks.append(changes.isEmpty ? .workingTreeIsClean : .changedPathsWillBePermanentlyDeleted(changes.count))
             let ignored = try await git.run(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "--no-empty-directory", "-z"], at: path)
-            if !ignored.stdout.isEmpty { risks.append("Ignored files will be permanently deleted.") }
+            if !ignored.stdout.isEmpty { risks.append(.ignoredFilesWillBePermanentlyDeleted) }
         }
         if let entry, readRisks {
             let local = try await git.run(["rev-list", "--count", entry.oid, "--not", "--remotes", "--"], at: repository).text
-            if local != "0" { risks.append("\(local) commits are not reachable from locally known remote-tracking refs.") }
-            if entry.branch == nil { risks.append("Detached HEAD — no branch to delete.") }
-            else { risks.append("Current local branch '\(entry.branch!)' will be permanently deleted, including unmerged commits.") }
-        } else if entry == nil && readRisks { risks.append("Directory and registration are missing; only the declaration will be removed. No branch will be deleted.") }
+            if local != "0" { risks.append(.commitsAreNotReachableFromLocallyKnownRemote(Int(local) ?? 0)) }
+            if entry.branch == nil { risks.append(.detachedHEADNoBranchDelete) }
+            else { risks.append(.currentLocalBranchWillBePermanentlyDeletedIncluding(entry.branch!)) }
+        } else if entry == nil && readRisks { risks.append(.directoryAndRegistrationAreMissingOnlyDeclarationWill) }
         if resource.kind == .group && exists { try await checkNestedRepositories(path, group: resource.group!, record: record) }
-        return .init(resource: resource, path: path.path, branch: entry?.branch, detached: entry != nil && entry?.branch == nil, registered: entry != nil, exists: exists, risks: risks, dirty: dirty)
+        return .init(resource: resource, path: path.path, branch: entry?.branch, detached: entry != nil && entry?.branch == nil, registered: entry != nil, exists: exists, risks: risks.map(\.englishDescription), riskMessages: risks, dirty: dirty)
     }
     func checkUnmanagedWorktrees(_ repo: String, record: WorkspaceRecord) async throws {
         let main = try PathSafety.child("repositories/\(repo)", of: record.rootURL)
@@ -127,23 +127,23 @@ extension WorkspaceService {
         _ = try await checked(.repository(repo), in: record)
         let allowed = Set([PathSafety.identity(main)] + record.groups.keys.filter { record.groups[$0]!.repositories.contains(repo) }.map { PathSafety.identity(record.memberURL($0, repo)) })
         let others = try await git.registrations(at: main).filter { !allowed.contains(PathSafety.identity(URL(fileURLWithPath: $0.path))) }
-        guard others.isEmpty else { throw ModuError("unmanaged-worktree", "Repository is still used by worktrees outside Modu’s configuration. Resolve them outside Modu first. No resources were changed.\n" + others.map(\.path).joined(separator: "\n")) }
+        guard others.isEmpty else { throw ModuError("unmanaged-worktree", .unmanagedWorktrees(others.map(\.path))) }
     }
     private func checkNestedRepositories(_ path: URL, group: String, record: WorkspaceRecord) async throws {
         let members = Set((record.groups[group]?.repositories ?? []).map { PathSafety.identity(path.appending(path: $0)) })
         var scanError: Error?
-        guard let enumerator = FileManager.default.enumerator(at: path, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], errorHandler: { _, error in scanError = error; return false }) else { throw ModuError("resource-unavailable", "Could not inspect group directory.") }
+        guard let enumerator = FileManager.default.enumerator(at: path, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], errorHandler: { _, error in scanError = error; return false }) else { throw ModuError("resource-unavailable", .couldNotInspectGroupDirectory) }
         while let url = enumerator.nextObject() as? URL {
             try checkCancellation()
             if members.contains(PathSafety.identity(url)) { enumerator.skipDescendants(); continue }
             if url.lastPathComponent == ".git" {
-                if PathSafety.identity(url.deletingLastPathComponent()) != PathSafety.identity(path) { throw ModuError("unmanaged-worktree", "Group contains an unmanaged Git repository: \(url.deletingLastPathComponent().path)") }
+                if PathSafety.identity(url.deletingLastPathComponent()) != PathSafety.identity(path) { throw ModuError("unmanaged-worktree", .groupContainsUnmanagedGitRepository(url.deletingLastPathComponent().path)) }
                 enumerator.skipDescendants()
             }
             if try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true { enumerator.skipDescendants(); continue }
             if PathSafety.exists(url.appending(path: "HEAD")), PathSafety.exists(url.appending(path: "objects")) {
                 let bare = try await git.run(["rev-parse", "--is-bare-repository"], at: url, allowFailure: true)
-                if bare.status == 0 && bare.text == "true" { throw ModuError("unmanaged-worktree", "Group contains an unmanaged bare Git repository: \(url.path)") }
+                if bare.status == 0 && bare.text == "true" { throw ModuError("unmanaged-worktree", .groupContainsUnmanagedBareGitRepository(url.path)) }
             }
         }
         if let scanError { throw scanError }
@@ -156,9 +156,9 @@ extension WorkspaceService {
             let path = try PathSafety.child(resource.path, of: record.rootURL)
             if resource.kind == .repository {
                 try await checkUnmanagedWorktrees(resource.repo!, record: record)
-                guard !record.groups.values.contains(where: { $0.repositories.contains(resource.repo!) }) else { throw ModuError("resource-unavailable", "Repository members must be removed first.") }
+                guard !record.groups.values.contains(where: { $0.repositories.contains(resource.repo!) }) else { throw ModuError("resource-unavailable", .repositoryMembersMustBeRemovedFirst) }
             } else if resource.kind == .group {
-                guard record.groups[resource.group!]?.repositories.isEmpty == true else { throw ModuError("resource-unavailable", "Group still has members.") }
+                guard record.groups[resource.group!]?.repositories.isEmpty == true else { throw ModuError("resource-unavailable", .groupStillHasMembers) }
                 if PathSafety.exists(path) { try await checkNestedRepositories(path, group: resource.group!, record: record) }
             }
             try checkCancellation()
@@ -184,13 +184,13 @@ extension WorkspaceService {
                 if let branch = target.branch {
                     let present = try await git.run(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], at: repository, allowFailure: true, cancellable: false)
                     if present.status == 0 { _ = try await git.run(["branch", "-D", "--", branch], at: repository, cancellable: false); item.effects.append(.init("delete-branch", branch)) }
-                    else if present.status != 1 { throw ModuError("git-failed", "Could not verify branch deletion: \(branch)") }
+                    else if present.status != 1 { throw ModuError("git-failed", .couldNotVerifyBranchDeletion(branch)) }
                 }
             }
             progress(.init(resource.path, .deleted, snapshot: record))
         } catch {
             fail(&item, error)
-            if let branch = target.branch { item.message = "\(item.message ?? "") Branch target: \(branch). Completed effects are retained." }
+            if let branch = target.branch { item.userMessage = .joined([item.userMessage, .branchTargetCompletedEffectsAreRetained(branch)].compactMap { $0 }, separator: " "); item.message = "\(item.message ?? "") Branch target: \(branch). Completed effects are retained." }
         }
         return item
     }

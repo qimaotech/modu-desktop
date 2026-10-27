@@ -65,7 +65,7 @@ struct WorkspaceSidebar: View {
                     .background {
                         Button { workspace.selection = nil; sidebarFocused = true } label: {
                             Color.clear.contentShape(Rectangle())
-                        }.accessibilityLabel(preferences.t("Show Workspace", "显示工作区"))
+                        }.accessibilityLabel(preferences.text.string(.uiShowWorkspace))
                     }
                 }
                 .onChange(of: workspace.selection) { _, selection in if let selection { proxy.scrollTo(selection.id) } }
@@ -95,17 +95,17 @@ struct WorkspaceSidebar: View {
                     Text(title).font(.system(size: 13, weight: .medium))
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
-            }.accessibilityLabel(title).accessibilityValue(expanded.wrappedValue ? preferences.t("Expanded", "已展开") : preferences.t("Collapsed", "已折叠"))
+            }.accessibilityLabel(title).accessibilityValue(expanded.wrappedValue ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed))
             if add == .add {
                 Button { management.update() } label: { DesignIcon(name: "Update").frame(width: 24, height: 24) }
                     .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
-                    .help(preferences.t("Update Repositories", "更新仓库")).accessibilityLabel(preferences.t("Update Repositories", "更新仓库"))
+                    .help(preferences.text.string(.uiUpdateRepositories)).accessibilityLabel(preferences.text.string(.uiUpdateRepositories))
                     .disabled(operations.busy || workspace.sortedRepositories.isEmpty)
             }
             Button { management.sheet = add } label: { DesignIcon(name: "Plus").frame(width: 24, height: 24) }
                 .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
-                .help(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树分组"))
-                .accessibilityLabel(add == .add ? preferences.t("Add Repository", "添加仓库") : preferences.t("Create Worktree Group", "创建工作树分组"))
+                .help(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
+                .accessibilityLabel(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
                 .disabled(operations.busy || workspace.record == nil || (add == .create && workspace.sortedRepositories.isEmpty))
         }.frame(height: 32)
     }
@@ -115,7 +115,7 @@ struct WorkspaceSidebar: View {
             if resource.kind == .group {
                 Button { workspace.toggleGroup(title); sidebarFocused = true } label: {
                     DesignIcon(name: "Disclosure").rotationEffect(.degrees(workspace.expandedGroups.contains(title) ? 0 : -90))
-                }.accessibilityLabel(preferences.t("Expand or collapse", "展开或折叠") + " " + title)
+                }.accessibilityLabel(preferences.text.string(.uiExpandOrCollapse) + " " + title)
             }
             Button { workspace.selectSidebarRow(resource); sidebarFocused = true } label: {
                 HStack(spacing: 6) {
@@ -125,20 +125,20 @@ struct WorkspaceSidebar: View {
                     Spacer(minLength: 4)
                     if workspace.states[resource.id]?.available == false {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary).frame(width: 24)
-                            .help(InterfaceText(language: preferences.language).message(workspace.states[resource.id]?.reason ?? "Unavailable")).accessibilityLabel(preferences.t("Unavailable", "不可用"))
+                            .help(workspace.states[resource.id]?.reasonMessage.map(preferences.text.message) ?? preferences.text.string(.uiUnavailable)).accessibilityLabel(preferences.text.string(.uiUnavailable))
                     } else if workspace.states[resource.id]?.dirty == true {
                         DesignIcon(name: "Unset", size: 20).frame(width: 24).accessibilityHidden(false)
-                            .accessibilityLabel(preferences.t("Working tree has changes", "工作树有更改"))
+                            .accessibilityLabel(preferences.text.string(.uiWorkingTreeHasChanges))
                     }
                 }.frame(height: 28).contentShape(Rectangle())
             }.accessibilityLabel(title).accessibilityAddTraits(workspace.selection == resource ? [.isSelected] : [])
-                .accessibilityValue(resource.kind == .group ? (workspace.expandedGroups.contains(title) ? preferences.t("Expanded", "已展开") : preferences.t("Collapsed", "已折叠")) : "")
+                .accessibilityValue(resource.kind == .group ? (workspace.expandedGroups.contains(title) ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed)) : "")
         }
         .padding(.leading, resource.kind == .group ? 16 : resource.kind == .member ? 38 : 22)
         .frame(height: 28)
         .modifier(SidebarRowBackground(selected: workspace.selection == resource))
         .id(resource.id).help(workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path)
-        .contextMenu { ResourceActions(workspace: workspace, management: management, operations: operations, text: InterfaceText(language: preferences.language), resource: resource) }
+        .contextMenu { ResourceActions(workspace: workspace, management: management, operations: operations, text: preferences.text, resource: resource) }
     }
 
     private func moveSelection(_ offset: Int) -> KeyPress.Result {

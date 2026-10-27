@@ -3,7 +3,7 @@ import Foundation
 public struct RepositoryIdentity: Sendable {
     public let name: String
     public init(_ raw: String) throws {
-        let fail = ModuError("invalid-input", "Use an HTTPS, SSH, or SCP-style Git URL without embedded credentials.")
+        let fail = ModuError("invalid-input", .useHTTPSSSHOrSCPStyleGitURL)
         guard raw == raw.trimmingCharacters(in: .whitespacesAndNewlines), !raw.contains(where: { $0.isWhitespace || $0.isNewline || $0.asciiValue == 0 }) else { throw fail }
         let path: String
         if raw.contains("://") {

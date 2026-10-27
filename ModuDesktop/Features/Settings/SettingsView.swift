@@ -15,52 +15,58 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(model.t("General", "通用")).font(.system(size: 13, weight: .semibold))
+                    Text(model.text.string(.uiGeneral)).font(.system(size: 13, weight: .semibold))
                     HStack {
-                        Text(model.t("Language", "语言"))
+                        Text(model.text.string(.uiLanguage))
                         Spacer()
-                        Picker("", selection: $model.language) { Text("English").tag("en"); Text("中文").tag("zh") }
-                            .labelsHidden().frame(width: 120)
+                        Picker(model.text.string(.uiLanguage), selection: $model.appLanguage) {
+                            Text(model.text.string(.uiFollowSystem)).tag(AppLanguage.system)
+                            Text(verbatim: "简体中文").tag(AppLanguage.simplifiedChinese)
+                            Text(verbatim: "English").tag(AppLanguage.english)
+                        }.labelsHidden().frame(width: 150)
                     }.padding(.horizontal, 16).frame(height: 60).formPlate()
+                    if model.preferences.languageChangeRequiresRestart {
+                        Text(model.text.string(.uiRestartModuApplyLanguageChange)).font(DialogTypography.auxiliary).foregroundStyle(.secondary)
+                    }
                 }
                 GlobalShortcutSettingsView(model: model.globalShortcut)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(model.t("Workspace", "工作区")).font(.system(size: 13, weight: .semibold))
+                    Text(model.text.string(.uiWorkspace)).font(.system(size: 13, weight: .semibold))
                     VStack(spacing: 0) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(model.workspace.record?.rootURL.lastPathComponent ?? model.t("No workspace selected", "尚未选择工作区")).fontWeight(.medium)
+                                Text(model.workspace.record?.rootURL.lastPathComponent ?? model.text.string(.uiNoWorkspaceSelected)).fontWeight(.medium)
                                 if let path = model.workspace.record?.root {
                                     Text((path as NSString).abbreviatingWithTildeInPath).font(.system(size: 11, design: .monospaced)).foregroundStyle(DesignStyle.secondary)
                                         .lineLimit(1).truncationMode(.middle).help(path).accessibilityValue(path)
                                 }
                             }
                             Spacer(minLength: 16)
-                            Button(model.workspace.record == nil ? model.t("Choose…", "选择…") : model.t("Change…", "更改…")) { chooseWorkspace() }
+                            Button(model.workspace.record == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { chooseWorkspace() }
                                 .accessibilityIdentifier("changeWorkspace").disabled(model.busy || presentingOperation || choosingWorkspace)
-                                .accessibilityValue(model.openingWorkspace ? model.t("Opening workspace…", "正在打开工作区…") : "")
+                                .accessibilityValue(model.openingWorkspace ? model.text.string(.uiOpeningWorkspace) : "")
                         }.frame(height: 64)
                         Divider()
                         HStack(spacing: 8) {
-                            Text(model.t("Configuration", "配置"))
+                            Text(model.text.string(.uiConfiguration))
                             Spacer()
-                            Button(model.t("Import YAML…", "导入 YAML…")) { importYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
-                            Button(model.t("Export YAML…", "导出 YAML…")) { exportYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
+                            Button(model.text.string(.uiImportYAML)) { importYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
+                            Button(model.text.string(.uiExportYAML)) { exportYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
                         }.frame(height: 48)
-                            .help(model.t("Only saves repository and group structure, not files, history, or current branch state.", "仅保存仓库与分组结构，不备份文件、历史或当前分支状态。"))
+                            .help(model.text.string(.uiOnlySavesRepositoryAndGroupStructureNotFiles))
                     }.padding(.horizontal, 16).formPlate()
                 }
                 if let notice = model.workspace.notice {
                     HStack(alignment: .top) {
-                        ScrollView { Text(notice).font(.system(size: 11)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 80)
+                        ScrollView { IssueDescriptionView(message: notice, details: model.workspace.noticeDetails, text: model.text).font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 80)
                         Button { model.workspace.notice = nil } label: { Image(systemName: "xmark") }
-                            .buttonStyle(HoverPlainButtonStyle(shape: Circle())).accessibilityLabel(model.t("Dismiss", "关闭提示")).help(model.t("Dismiss", "关闭提示"))
+                            .buttonStyle(HoverPlainButtonStyle(shape: Circle())).accessibilityLabel(model.text.string(.uiDismiss)).help(model.text.string(.uiDismiss))
                     }.foregroundStyle(DesignStyle.secondary)
                 }
             }.font(.system(size: 13)).padding(.horizontal, 32).padding(.top, 36).padding(.bottom, 40)
         }.background(DesignStyle.background)
-        .navigationTitle(model.t("Settings", "设置"))
-        .alert(model.presentation.messageTitle ?? model.t("Configuration error", "配置文件错误"), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.presentation.message = nil } })) { Button(model.t("OK", "好")) {} } message: { Text(model.presentation.text.message(model.presentation.message ?? "")) }
+        .navigationTitle(model.text.string(.uiSettings))
+        .alert(model.presentation.messageTitle ?? model.text.string(.uiConfigurationError), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .sheet(isPresented: operationSheetPresentation, onDismiss: {
             if closingAfterWorkspaceChange {
                 closingAfterWorkspaceChange = false
@@ -75,19 +81,19 @@ struct SettingsView: View {
     }
     @ViewBuilder var operationSheetContents: some View {
         if let url = openingWorkspaceURL {
-            WorkspaceOpeningProgressView(title: model.t("Opening workspace…", "正在打开工作区…"), url: url)
+            WorkspaceOpeningProgressView(title: model.text.string(.uiOpeningWorkspace), url: url)
                 .task { await openWorkspace(url) }
         } else if let result = model.presentation.result {
             ResultView(text: model.presentation.text, result: result, retry: result.command == "workspace.open" && !model.presentation.quitPending ? { choosingAgain = true; model.presentation.dismissResult() } : nil) { model.presentation.dismissResult() }
         } else if model.busy && !model.openingWorkspace {
-            OperationProgressView(operations: model.operations, operationPresentation: model.presentation, title: model.t("Importing workspace…", "正在导入工作区…"), context: model.management.importFileName)
+            OperationProgressView(operations: model.operations, operationPresentation: model.presentation, title: model.text.string(.uiImportingWorkspace), context: model.management.importFileName)
         }
     }
     private func chooseWorkspace() {
         choosingWorkspace = true
         Task {
             defer { choosingWorkspace = false }
-            guard let url = await FilePanels.directory(at: model.workspace.record?.rootURL.deletingLastPathComponent(), prompt: model.t("Open", "打开")), !model.busy else { return }
+            guard let url = await FilePanels.directory(at: model.workspace.record?.rootURL.deletingLastPathComponent(), prompt: model.text.string(.uiOpen)), !model.busy else { return }
             openingWorkspaceURL = PathSafety.canonical(url)
         }
     }
@@ -100,8 +106,8 @@ struct SettingsView: View {
     }
     private func importYAML() {
         Task {
-            do { if let file = try await FilePanels.readYAML(prompt: model.t("Import", "导入")) { model.presentation.resultHost = .settings; model.management.importWorkspace(file.text, filename: file.name) } }
-            catch { model.presentation.presentMessage(error.localizedDescription, title: model.t("Can’t read configuration file", "无法读取配置文件"), host: .settings) }
+            do { if let file = try await FilePanels.readYAML(prompt: model.text.string(.uiImport)) { model.presentation.resultHost = .settings; model.management.importWorkspace(file.text, filename: file.name) } }
+            catch { model.presentation.presentMessage(error, title: model.text.string(.uiCanTReadConfigurationFile), host: .settings) }
         }
     }
     private func exportYAML() {
@@ -110,7 +116,7 @@ struct SettingsView: View {
             do {
                 guard let destination = await FilePanels.yamlDestination(name: root.lastPathComponent, directory: model.service.store.directoryBoundary) else { return }
                 try await model.service.exportYAML(at: root, to: destination)
-            } catch { model.presentation.presentMessage(error.localizedDescription, title: model.t("Can’t export configuration", "无法导出配置"), host: .settings) }
+            } catch { model.presentation.presentMessage(error, title: model.text.string(.uiCanTExportConfiguration), host: .settings) }
         }
     }
 }

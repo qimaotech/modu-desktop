@@ -19,7 +19,7 @@ extension Git {
                 else if field == "locked" || field.hasPrefix("locked ") { values[values.count - 1].locked = true }
             }
         }
-        guard !values.isEmpty else { throw ModuError("git-failed", "Git returned no worktree registrations.") }
+        guard !values.isEmpty else { throw ModuError("git-failed", .gitReturnedNoWorktreeRegistrations) }
         return values
     }
     func checkBranchNotInUse(_ branch: String, registrations: [WorktreeRegistration], at repository: URL, excluding worktreePath: String? = nil) async throws {
@@ -30,22 +30,22 @@ extension Git {
         // Differently cased branch names can share one loose ref on case-insensitive volumes.
         let identity = PathSafety.identity(heads.appending(path: branch))
         guard !occupied.contains(where: { PathSafety.identity(heads.appending(path: $0)) == identity }) else {
-            throw ModuError("branch-in-use", "Branch is already checked out: \(branch)")
+            throw ModuError("branch-in-use", .branchIsAlreadyCheckedOut(branch))
         }
     }
     public func checkRepository(_ path: URL, origin: String? = nil, main: Bool = false) async throws {
         try PathSafety.directory(path)
         let top = try await run(["rev-parse", "--show-toplevel"], at: path).text
-        guard PathSafety.identity(URL(fileURLWithPath: top)) == PathSafety.identity(path) else { throw ModuError("resource-unavailable", "Not a repository root: \(path.path)") }
+        guard PathSafety.identity(URL(fileURLWithPath: top)) == PathSafety.identity(path) else { throw ModuError("resource-unavailable", .notRepositoryRoot2(path.path)) }
         if main { try PathSafety.directory(path.appending(path: ".git")) }
         if let origin {
             let actual = try await run(["config", "--get", "remote.origin.url"], at: path).text
-            guard actual == origin else { throw ModuError("origin-mismatch", "Repository origin does not match the workspace record: \(path.path)") }
+            guard actual == origin else { throw ModuError("origin-mismatch", .repositoryOriginDoesNotMatchWorkspaceRecord(path.path)) }
         }
     }
     public func validateRef(_ group: String, at root: URL) async throws {
         try PathSafety.groupName(group)
-        guard try await run(["check-ref-format", "refs/heads/\(group)"], at: root, allowFailure: true).status == 0 else { throw ModuError("invalid-input", "Invalid group branch name: \(group)") }
+        guard try await run(["check-ref-format", "refs/heads/\(group)"], at: root, allowFailure: true).status == 0 else { throw ModuError("invalid-input", .invalidGroupBranchName(group)) }
     }
     public func oid(_ ref: String, at root: URL, cancellable: Bool = true) async throws -> String? {
         let output = try await run(["rev-parse", "--verify", "--end-of-options", "\(ref)^{commit}"], at: root, allowFailure: true, cancellable: cancellable)
@@ -60,12 +60,12 @@ extension Git {
         var index = 0, result: [FileChange] = []
         while index < fields.count {
             let bytes = Array(fields[index]); index += 1
-            guard bytes.count >= 4, bytes[2] == 32 else { throw ModuError("git-output-invalid", "Invalid Git status record.") }
+            guard bytes.count >= 4, bytes[2] == 32 else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
             let x = String(UnicodeScalar(bytes[0])), y = String(UnicodeScalar(bytes[1]))
             let path = String(decoding: bytes.dropFirst(3), as: UTF8.self)
             var original: String?
             if x == "R" || x == "C" || y == "R" || y == "C" {
-                guard index < fields.count else { throw ModuError("git-output-invalid", "Missing rename source path.") }
+                guard index < fields.count else { throw ModuError("git-output-invalid", .missingRenameSourcePath) }
                 original = String(decoding: fields[index], as: UTF8.self); index += 1
             }
             result.append(.init(path: path, originalPath: original, index: x == "?" ? " " : x, workingTree: y))
@@ -73,7 +73,7 @@ extension Git {
         return result.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
     public func summary(at path: URL, origin: String? = nil, fetchMissingBase: (@Sendable () async throws -> Void)? = nil) async throws -> GitSummary {
-        guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", "HEAD does not identify a commit.") }
+        guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
         let branch = try await run(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path, allowFailure: true)
         var summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
         do {
@@ -85,13 +85,13 @@ extension Git {
                 try await fetchMissingBase()
                 ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
             }
-            guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref.text, at: path) else { throw ModuError("base-unavailable", "origin/HEAD does not identify a commit.") }
+            guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref.text, at: path) else { throw ModuError("base-unavailable", .originHEADDoesNotIdentifyCommit) }
             summary.base = String(ref.text.dropFirst(13)); summary.baseOID = oid
-        } catch { summary.baseError = ModuError.wrap(error).message }
+        } catch { let failure = ModuError.wrap(error); summary.baseError = failure.message; summary.baseMessage = failure.userMessage }
         return summary
     }
     public func commits(at path: URL, head: String, base: String, skip: Int = 0) async throws -> [GitCommit] {
-        guard [head, base].allSatisfy({ $0.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil }) else { throw ModuError("invalid-input", "Invalid commit object ID.") }
+        guard [head, base].allSatisfy({ $0.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil }) else { throw ModuError("invalid-input", .invalidCommitObjectID) }
         let output = try await run(["log", "-z", "--format=%H%x00%s%x00%an%x00%aI", "--max-count=30", "--skip=\(max(0, skip))", "\(base)..\(head)", "--"], at: path)
         let fields = output.stdout.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
         var result: [GitCommit] = []
@@ -111,20 +111,20 @@ extension Git {
         for name in names {
             let output = try await run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--quiet", "--", "\(name)/"], at: temp, allowFailure: true, cancellable: cancellable)
             if output.status == 1 { missing.append(name) }
-            else if output.status != 0 { throw ModuError("git-failed", "Could not check .gitignore rules.") }
+            else if output.status != 0 { throw ModuError("git-failed", .couldNotCheckGitignoreRules) }
         }
         return missing
     }
     func ensureIgnore(_ names: [String], at root: URL, cancellable: Bool = true) async throws -> Bool {
         do { return try await updateIgnore(names, at: root, cancellable: cancellable) }
         catch let error as ModuError where ["cancelled", "ignore-write-failed", "ignore-unavailable"].contains(error.code) { throw error }
-        catch { throw ModuError("ignore-unavailable", "Could not check .gitignore: \(ModuError.wrap(error).message)") }
+        catch { throw ModuError("ignore-unavailable", .couldNotCheckGitignore(ModuError.wrap(error).userMessage)) }
     }
     private func updateIgnore(_ names: [String], at root: URL, cancellable: Bool) async throws -> Bool {
         let file = root.appending(path: ".gitignore")
         if PathSafety.exists(file) {
             let attrs = try FileManager.default.attributesOfItem(atPath: file.path)
-            guard attrs[.type] as? FileAttributeType == .typeRegular, FileManager.default.isReadableFile(atPath: file.path), FileManager.default.isWritableFile(atPath: file.path) else { throw ModuError("ignore-unavailable", ".gitignore must be a readable, writable regular file.") }
+            guard attrs[.type] as? FileAttributeType == .typeRegular, FileManager.default.isReadableFile(atPath: file.path), FileManager.default.isWritableFile(atPath: file.path) else { throw ModuError("ignore-unavailable", .gitignoreMustBeReadableWritableRegularFile) }
         }
         var data = PathSafety.exists(file) ? try Data(contentsOf: file) : Data((Self.defaultWorkspaceIgnoreRules + "\n\n").utf8)
         let missing = try await ignored(names, contents: data, cancellable: cancellable)
@@ -143,18 +143,18 @@ extension Git {
         if data.last != 10 { data.append(10) }
         data.append(Data(missing.map { "/\($0)/\n" }.joined().utf8))
         do { try data.write(to: file, options: .atomic) }
-        catch { throw ModuError("ignore-write-failed", "Could not update .gitignore: \(error.localizedDescription)") }
+        catch { throw ModuError("ignore-write-failed", .couldNotUpdateGitignore(ModuError.wrap(error).userMessage)) }
         return true
     }
     func checkRootCommit(_ oid: String, members: [String], at root: URL) async throws {
         let paths = ["repositories", "worktrees"] + members
         let tracked = try await run(["ls-tree", "-r", "--name-only", "-z", oid, "--"] + paths, at: root)
-        guard tracked.stdout.isEmpty else { throw ModuError("path-conflict", "The group commit tracks a reserved resource path.") }
+        guard tracked.stdout.isEmpty else { throw ModuError("path-conflict", .groupCommitTracksReservedResourcePath) }
         let entry = try await run(["ls-tree", oid, "--", ".gitignore"], at: root).text
-        guard entry.hasPrefix("100644 ") || entry.hasPrefix("100755 ") else { throw ModuError("workspace-ignore-required", "Commit a regular workspace .gitignore before creating this group.") }
+        guard entry.hasPrefix("100644 ") || entry.hasPrefix("100755 ") else { throw ModuError("workspace-ignore-required", .commitRegularWorkspaceGitignoreBeforeCreatingGroup) }
         let contents = try await run(["show", "\(oid):.gitignore"], at: root).stdout
         let missing = try await ignored(paths, contents: contents)
-        guard missing.isEmpty else { throw ModuError("workspace-ignore-required", "Commit the workspace .gitignore before creating this group. Missing: \(missing.map { "/\($0)/" }.joined(separator: ", "))") }
+        guard missing.isEmpty else { throw ModuError("workspace-ignore-required", .commitWorkspaceGitignoreBeforeCreatingGroupMissing(missing.map { "/\($0)/" }.joined(separator: ", "))) }
     }
 
     private static let defaultWorkspaceIgnoreRules = """

@@ -19,7 +19,7 @@ public struct PreparedAppUpdate: Codable, Sendable {
         guard PathSafety.canonical(update.directory).path == PathSafety.canonical(directory).path,
               PathSafety.canonical(directory.deletingLastPathComponent()).path == PathSafety.canonical(update.application.deletingLastPathComponent()).path,
               directory.lastPathComponent.hasPrefix(".Modu-Update-") else {
-            throw ModuError("update-plan-invalid", "The update installation plan is invalid.")
+            throw ModuError("update-plan-invalid", .updateInstallationPlanIsInvalid)
         }
         return update
     }
@@ -37,7 +37,7 @@ public struct AppUpdateInstaller: Sendable {
 
     public func prepare(installer: URL, update: AppUpdate, application: URL, helper: URL) async throws -> PreparedAppUpdate {
         // Automatic replacement requires a checksum even for releases that support manual downloads without one.
-        guard update.asset.digest != nil else { throw ModuError("update-integrity-failed", "The release has no installer checksum.") }
+        guard update.asset.digest != nil else { throw ModuError("update-integrity-failed", .releaseHasNoInstallerChecksum) }
         try AppUpdateService().verifyDownload(at: installer, asset: update.asset)
         let application = application.resolvingSymlinksInPath()
         try validateApplication(application)
@@ -45,7 +45,7 @@ public struct AppUpdateInstaller: Sendable {
         let directory = application.deletingLastPathComponent().appending(path: ".Modu-Update-\(UUID().uuidString)")
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-        } catch { throw ModuError("update-location-unwritable", "Modu cannot update in this location. Install it in a writable Applications folder and try again.") }
+        } catch { throw ModuError("update-location-unwritable", .moduCannotUpdateInLocationInstallInWritable) }
         let mount = directory.appending(path: "mount")
         do {
             try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: false)
@@ -80,11 +80,11 @@ public struct AppUpdateInstaller: Sendable {
         let log = update.directory.appending(path: "installer.log")
         let result = try await runner.run("/bin/sh", ["-c", "/usr/bin/nohup \"$1\" --internal-install-update \"$2\" \"$3\" </dev/null >>\"$4\" 2>&1 &",
                                                      "modu-update", update.directory.appending(path: "modu-update").path, update.directory.path, String(parentPID), log.path], cancellable: false)
-        guard result.status == 0 else { throw ModuError("update-helper-failed", "Could not start the update installer.") }
+        guard result.status == 0 else { throw ModuError("update-helper-failed", .couldNotStartUpdateInstaller) }
         do {
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
             while !FileManager.default.fileExists(atPath: update.ready.path) {
-                guard ContinuousClock.now < deadline else { throw ModuError("update-helper-failed", "The update installer did not become ready. Please try again.") }
+                guard ContinuousClock.now < deadline else { throw ModuError("update-helper-failed", .updateInstallerDidNotBecomeReadyPleaseTry) }
                 try await Task.sleep(for: .milliseconds(50))
             }
         } catch {
@@ -104,7 +104,7 @@ public struct AppUpdateInstaller: Sendable {
     public func run(directory: URL, parentPID: Int32) async throws {
         let update = try PreparedAppUpdate.read(from: directory)
         guard parentPID > 1, parentPID != getpid() else {
-            throw ModuError("update-plan-invalid", "The update installation plan is invalid.")
+            throw ModuError("update-plan-invalid", .updateInstallationPlanIsInvalid)
         }
         do {
             try await waitForExit(parentPID, update: update)
@@ -126,7 +126,7 @@ public struct AppUpdateInstaller: Sendable {
     private func install(_ update: PreparedAppUpdate) async throws {
         guard try UpdateFileIdentity(update.application) == update.originalIdentity,
               try UpdateFileIdentity(update.candidate) == update.candidateIdentity else {
-            throw ModuError("update-application-changed", "The installed application or prepared update changed. Please check for updates again.")
+            throw ModuError("update-application-changed", .installedApplicationOrPreparedUpdateChangedPleaseCheck)
         }
         try await verifyApplication(update.candidate, version: update.version)
         try Task.checkCancellation()
@@ -138,14 +138,14 @@ public struct AppUpdateInstaller: Sendable {
     public func waitForFailure(_ update: PreparedAppUpdate) async throws -> ModuError {
         if let failure = try failure(for: update) { return failure }
         let pid = try String(contentsOf: update.ready, encoding: .utf8)
-        guard let pid = Int32(pid), pid > 1 else { throw ModuError("update-helper-failed", "The update installer has no valid process identifier.") }
+        guard let pid = Int32(pid), pid > 1 else { throw ModuError("update-helper-failed", .updateInstallerHasNoValidProcessIdentifier) }
         let process = try AppUpdateProcessExit(pid)
         while true {
             try Task.checkCancellation()
             if let failure = try failure(for: update) { return failure }
             if try process.exited() {
                 if let failure = try failure(for: update) { return failure }
-                throw ModuError("update-helper-failed", "The update installer stopped unexpectedly. Please try again.")
+                throw ModuError("update-helper-failed", .updateInstallerStoppedUnexpectedlyPleaseTryAgain)
             }
             try await Task.sleep(for: .milliseconds(100))
         }
@@ -167,7 +167,7 @@ public struct AppUpdateInstaller: Sendable {
         try validateApplication(application, version: version)
         try await command("/usr/bin/codesign", ["--verify", "--deep", "--strict", application.path])
         guard Bundle(url: application)?.executableArchitectures?.contains(NSNumber(value: NSBundleExecutableArchitectureARM64)) == true else {
-            throw ModuError("update-application-invalid", "The installer does not contain an Apple Silicon executable.")
+            throw ModuError("update-application-invalid", .installerDoesNotContainAppleSiliconExecutable)
         }
     }
 
@@ -179,20 +179,20 @@ public struct AppUpdateInstaller: Sendable {
               values["CFBundleIdentifier"] as? String == Self.bundleID,
               values["CFBundleExecutable"] as? String == "Modu",
               version == nil || values["CFBundleShortVersionString"] as? String == version else {
-            throw ModuError("update-application-invalid", "The installer does not contain the expected version of Modu.")
+            throw ModuError("update-application-invalid", .installerDoesNotContainExpectedVersionOfModu)
         }
         for path in ["Contents/MacOS/Modu", "Contents/Resources/modu-cli"] {
             let file = application.appending(path: path)
             try PathSafety.confined(file, to: application)
             guard FileManager.default.isExecutableFile(atPath: file.path) else {
-                throw ModuError("update-application-invalid", "The installer is missing a required executable.")
+                throw ModuError("update-application-invalid", .installerIsMissingRequiredExecutable)
             }
         }
         if let minimum = values["LSMinimumSystemVersion"] as? String {
             let parts = minimum.split(separator: ".").compactMap { Int($0) }
             guard (1...3).contains(parts.count), ProcessInfo.processInfo.isOperatingSystemAtLeast(
                 .init(majorVersion: parts[0], minorVersion: parts.count > 1 ? parts[1] : 0, patchVersion: parts.count > 2 ? parts[2] : 0)) else {
-                throw ModuError("update-system-unsupported", "This update requires a newer version of macOS.")
+                throw ModuError("update-system-unsupported", .updateRequiresNewerVersionOfMacOS)
             }
         }
     }
@@ -209,7 +209,7 @@ public struct AppUpdateInstaller: Sendable {
 
     private func swap(_ first: URL, _ second: URL) throws {
         guard renamex_np(first.path, second.path, UInt32(RENAME_SWAP)) == 0 else {
-            throw ModuError("update-replacement-failed", "Could not replace Modu: \(String(cString: strerror(errno)))")
+            throw ModuError("update-replacement-failed", .couldNotReplaceModu(.diagnostic(String(cString: strerror(errno)))))
         }
     }
 
@@ -227,7 +227,7 @@ public struct AppUpdateInstaller: Sendable {
     private func command(_ executable: String, _ arguments: [String], cancellable: Bool = true) async throws {
         let output = try await runner.run(executable, arguments, timeout: 120, cancellable: cancellable)
         guard output.status == 0 else {
-            throw ModuError("update-install-failed", "\(URL(fileURLWithPath: executable).lastPathComponent): \(String(decoding: output.stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))")
+            throw ModuError("update-install-failed", .context(URL(fileURLWithPath: executable).lastPathComponent, .diagnostic(String(decoding: output.stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))))
         }
     }
 
@@ -244,7 +244,7 @@ public struct AppUpdateInstaller: Sendable {
                 if try process.exited() { return }
                 try await Task.sleep(for: .milliseconds(100))
             }
-            throw ModuError("update-exit-timeout", "Modu did not exit in time. The update was not installed. Please try again.")
+            throw ModuError("update-exit-timeout", .moduDidNotExitInTimeUpdateWas)
         } onCancel: { try? Data().write(to: update.cancelled) }
     }
 }
@@ -265,11 +265,11 @@ private final class AppUpdateProcessExit {
 
     init(_ pid: Int32) throws {
         queue = kqueue()
-        guard queue >= 0 else { throw ModuError("update-helper-failed", "Could not monitor the application exit.") }
+        guard queue >= 0 else { throw ModuError("update-helper-failed", .couldNotMonitorApplicationExit) }
         var event = kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
         guard kevent(queue, &event, 1, nil, 0, nil) == 0 else {
             close(queue)
-            throw ModuError("update-helper-failed", "Could not monitor the running application.")
+            throw ModuError("update-helper-failed", .couldNotMonitorRunningApplication)
         }
     }
 
@@ -279,7 +279,7 @@ private final class AppUpdateProcessExit {
         var event = kevent()
         var timeout = timespec(tv_sec: 0, tv_nsec: 0)
         let count = kevent(queue, nil, 0, &event, 1, &timeout)
-        if count < 0, errno != EINTR { throw ModuError("update-helper-failed", "Could not wait for the application to exit.") }
+        if count < 0, errno != EINTR { throw ModuError("update-helper-failed", .couldNotWaitForApplicationExit) }
         return count == 1
     }
 }

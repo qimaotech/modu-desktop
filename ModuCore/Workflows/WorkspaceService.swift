@@ -10,7 +10,7 @@ public struct WorkspaceService: Sendable {
         let root = PathSafety.canonical(url)
         try store.checkBoundary(root)
         let existing = PathSafety.exists(store.recordURL(root))
-        guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", "Workspace record is missing: \(store.recordURL(root).path)") }
+        guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
         let lease = try (existing ? store.lock(root) : nil)
         defer { lease?.unlock() }
         if existing { _ = try store.load(root) }
@@ -31,7 +31,7 @@ public struct WorkspaceService: Sendable {
         do {
             let lease = try store.lock(root); defer { lease.unlock() }
             let existing = PathSafety.exists(store.recordURL(root))
-            guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", "Workspace record is missing: \(store.recordURL(root).path)") }
+            guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
             var record = existing ? try store.load(root) : WorkspaceRecord(root: root.path)
             var stash: String?
             var pendingCommitPaths: [String] = []
@@ -44,7 +44,7 @@ public struct WorkspaceService: Sendable {
                     try await git.checkRepository(root, main: true)
                 }
                 let tracked = try await git.run(["-c", "core.fsmonitor=false", "ls-files", "-z", "--", "repositories", "worktrees"], at: root)
-                guard tracked.stdout.isEmpty else { throw ModuError("path-conflict", "Workspace tracks repositories/ or worktrees/. Remove those paths from Git outside Modu first.") }
+                guard tracked.stdout.isEmpty else { throw ModuError("path-conflict", .workspaceTracksRepositoriesOrWorktreesRemovePathsFrom) }
                 var updatingSkill = false
                 if let skill {
                     do { updatingSkill = try installer.skillNeedsUpdate(from: skill, workspace: root) }
@@ -100,7 +100,7 @@ public struct WorkspaceService: Sendable {
                 } catch {
                     let error = ModuError.wrap(error)
                     let prior = item.message.map { $0 + "\n" } ?? ""
-                    fail(&item, ModuError(error.code, prior + error.message))
+                    fail(&item, ModuError(error.code, prior + error.message, userMessage: .joined([item.userMessage, error.userMessage].compactMap { $0 }, separator: "\n")))
                 }
             }
             if item.status == .success { loaded = record }
@@ -137,7 +137,7 @@ public struct WorkspaceService: Sendable {
                 if let error = snapshot.changesError { throw error }
                 item.data?["working-tree"] = snapshot.changes?.isEmpty == true ? "clean" : "dirty"
                 if let error = snapshot.summaryError { throw error }
-                guard let summary = snapshot.summary else { throw ModuError("resource-unavailable", "Repository summary is unavailable.") }
+                guard let summary = snapshot.summary else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
                 item.data?["head"] = summary.head; item.data?["head-oid"] = summary.headOID
                 item.data?["base"] = summary.base; item.data?["base-oid"] = summary.baseOID
                 item.data?["base-error"] = summary.baseError
@@ -154,40 +154,40 @@ public struct WorkspaceService: Sendable {
     }
     public func checked(_ resource: Resource, in record: WorkspaceRecord) async throws -> URL {
         try store.checkBoundary(record.rootURL)
-        guard resources(record).contains(resource) else { throw ModuError("target-not-configured", "Resource is not configured.") }
+        guard resources(record).contains(resource) else { throw ModuError("target-not-configured", .resourceIsNotConfigured) }
         let path = try PathSafety.child(resource.path, of: record.rootURL, allowMissing: false)
         if let repo = resource.repo {
-            guard let repository = record.repositories.first(where: { $0.id == repo }) else { throw ModuError("target-not-configured", "Repository is not configured.") }
+            guard let repository = record.repositories.first(where: { $0.id == repo }) else { throw ModuError("target-not-configured", .repositoryIsNotConfigured) }
             let main = try PathSafety.child("repositories/\(repo)", of: record.rootURL, allowMissing: false)
             try await git.checkRepository(main, origin: repository.url, main: true)
             try await git.checkRepository(path, origin: repository.url)
             let registered = try await git.registrations(at: main)
-            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", "Worktree registration is missing: \(path.path)") }
+            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", .worktreeRegistrationIsMissing(path.path)) }
             let expected = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
             let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
-            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", "Worktree belongs to another repository.") }
+            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", .worktreeBelongsAnotherRepository) }
         } else {
             try await git.checkRepository(record.rootURL, main: true)
             let registered = try await git.registrations(at: record.rootURL)
-            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", "Group root registration is missing.") }
+            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", .groupRootRegistrationIsMissing) }
             try await git.checkRepository(path)
             let expected = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: record.rootURL).text
             let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
-            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", "Group root belongs to another repository.") }
+            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", .groupRootBelongsAnotherRepository) }
         }
-        guard try await git.oid("HEAD", at: path) != nil else { throw ModuError("resource-unavailable", "Worktree HEAD is unavailable.") }
+        guard try await git.oid("HEAD", at: path) != nil else { throw ModuError("resource-unavailable", .worktreeHEADIsUnavailable) }
         return path
     }
     private func checkCandidate(_ root: URL, hasRecord: Bool) async throws {
         try PathSafety.directory(root)
-        guard FileManager.default.isWritableFile(atPath: root.path) else { throw ModuError("workspace-unwritable", "Workspace is not writable: \(root.path)") }
+        guard FileManager.default.isWritableFile(atPath: root.path) else { throw ModuError("workspace-unwritable", .workspaceIsNotWritable(root.path)) }
         try store.checkNesting(root)
         if !hasRecord { try PathSafety.emptyResourceDirectories(root) }
         let top = try await git.run(["rev-parse", "--show-toplevel"], at: root, allowFailure: true)
         if top.status == 0 { try await git.checkRepository(root, main: true) }
         else {
             let bare = try await git.run(["rev-parse", "--is-bare-repository"], at: root, allowFailure: true)
-            guard !PathSafety.exists(root.appending(path: ".git")), bare.text != "true" else { throw ModuError("resource-unavailable", "Choose an ordinary Git main worktree or a directory outside another repository.") }
+            guard !PathSafety.exists(root.appending(path: ".git")), bare.text != "true" else { throw ModuError("resource-unavailable", .chooseOrdinaryGitMainWorktreeOrDirectoryOutside) }
         }
         for name in ["repositories", "worktrees"] { try PathSafety.directory(root.appending(path: name), allowMissing: true) }
     }
@@ -218,7 +218,7 @@ public struct WorkspaceService: Sendable {
         catch {
             let actual: WorkspaceRecord
             do { actual = try store.load(candidate.rootURL) }
-            catch { throw ModuError("save-outcome-unknown", "Configuration save and verification failed. Resources were kept; inspect the workspace record before retrying.") }
+            catch { throw ModuError("save-outcome-unknown", .configurationSaveAndVerificationFailedResourcesWereKept) }
             record = actual
             if actual != candidate { throw error }
         }
@@ -226,7 +226,7 @@ public struct WorkspaceService: Sendable {
     func fail(_ item: inout ItemResult, _ error: Error) {
         let error = ModuError.wrap(error)
         item.status = error.code == "cancelled" ? .cancelled : .failed
-        item.reasonCode = error.code; item.message = error.message
+        item.reasonCode = error.code; item.message = error.message; item.userMessage = error.userMessage
     }
-    func checkCancellation() throws { if Task.isCancelled { throw ModuError("cancelled", "Operation cancelled; completed resources were kept.") } }
+    func checkCancellation() throws { if Task.isCancelled { throw ModuError("cancelled", .operationCancelledCompletedResourcesWereKept) } }
 }

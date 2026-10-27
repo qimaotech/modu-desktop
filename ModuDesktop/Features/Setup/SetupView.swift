@@ -24,11 +24,11 @@ struct SetupView: View {
                     HStack(spacing: 16) {
                         stepGraphic("ToolIcons/Terminal")
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.t("Install modu-cli", "安装 modu-cli")).fontWeight(.semibold)
+                            Text(model.text.string(.uiInstallModuCli)).fontWeight(.semibold)
                             pathLabel(model.installer.commandLink)
                         }.frame(maxWidth: .infinity, alignment: .leading)
                         if setup.cliReady && setup.cliActivity == nil {
-                            HStack(spacing: 4) { DesignIcon(name: "Success", size: 20); Text(model.t("Installed", "已安装")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
+                            HStack(spacing: 4) { DesignIcon(name: "Success", size: 20); Text(model.text.string(.uiInstalled)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
                         } else {
                             Button { setup.install() } label: {
                                 installButtonLabel
@@ -41,30 +41,30 @@ struct SetupView: View {
                     HStack(spacing: 16) {
                         stepGraphic("DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.t("Choose Workspace", "选择工作区")).fontWeight(.semibold)
+                            Text(model.text.string(.uiChooseWorkspace)).fontWeight(.semibold)
                             if let candidate = setup.candidate {
                                 pathLabel(candidate).accessibilityIdentifier("workspaceCandidate")
                             } else {
-                                Text(model.t("No workspace selected", "尚未选择工作区")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                                Text(model.text.string(.uiNoWorkspaceSelected)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading).opacity(setup.cliReady ? 1 : 0.4)
-                        Button(setup.candidate == nil ? model.t("Choose…", "选择…") : model.t("Change…", "更改…")) { choose() }.disabled(!setup.cliReady || setup.working)
+                        Button(setup.candidate == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { choose() }.disabled(!setup.cliReady || setup.working)
                     }.padding(.horizontal, 20).frame(height: 84)
                 }.formPlate()
                 if showsStatus {
                     VStack(alignment: .leading, spacing: 8) {
-                        if showsCLIMessage { Text(model.presentation.text.message(setup.cliMessage)).textSelection(.enabled) }
+                        if showsCLIMessage { IssueDescriptionView(message: model.text.message(setup.cliUserMessage ?? .diagnostic(setup.cliMessage)), details: setup.cliMessage, text: model.text) }
                         if setup.skillConflict {
-                            Label(model.t("Workflow skill: Unavailable", "工作流技能：不可用"), systemImage: "exclamationmark.circle")
+                            Label(model.text.string(.uiWorkflowSkillUnavailable), systemImage: "exclamationmark.circle")
                         }
-                        if let error = setup.error { ScrollView { Text(model.presentation.text.message(error)).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 90) }
+                        if let error = setup.error { ScrollView { IssueDescriptionView(message: error, details: setup.errorDetails, text: model.text).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 90) }
                         if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
                     }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 }
             }.padding(.horizontal, 24).padding(.vertical, 32)
             Divider()
             HStack {
-                Button(canReturnToMainWindow() ? model.t("Cancel", "取消") : model.t("Quit", "退出")) {
+                Button(canReturnToMainWindow() ? model.text.string(.uiCancel) : model.text.string(.uiQuit)) {
                     if canReturnToMainWindow() { dismiss(); returnToMainWindow() }
                     else { NSApp.terminate(nil) }
                 }.disabled(setup.working).keyboardShortcut(.cancelAction)
@@ -88,13 +88,13 @@ struct SetupView: View {
     }
 
     private var showsCLIMessage: Bool {
-        !setup.cliMessage.isEmpty && !setup.cliReady && setup.cliMessage != "Install modu-cli to continue."
+        !setup.cliMessage.isEmpty && !setup.cliReady
     }
 
     var installButtonLabel: some View {
         ZStack {
             Text(installTitle).hidden()
-            Text(model.t("Checking…", "正在检查…")).padding(.leading, 18).hidden()
+            Text(model.text.string(.uiChecking)).padding(.leading, 18).hidden()
             Text(installingTitle).padding(.leading, 18).hidden()
             HStack(spacing: 6) {
                 if setup.cliActivity != nil {
@@ -107,24 +107,24 @@ struct SetupView: View {
 
     var installButtonTitle: String {
         switch setup.cliActivity {
-        case .checking: model.t("Checking…", "正在检查…")
+        case .checking: model.text.string(.uiChecking)
         case .installing: installingTitle
         case nil: installTitle
         }
     }
 
     private var installTitle: String {
-        setup.cliPreviouslyInstalled ? model.t("Reinstall", "重新安装") : model.t("Install", "安装")
+        setup.cliPreviouslyInstalled ? model.text.string(.uiReinstall) : model.text.string(.uiInstall)
     }
 
     private var installingTitle: String {
-        setup.cliPreviouslyInstalled ? model.t("Reinstalling…", "正在重新安装…") : model.t("Installing…", "正在安装…")
+        setup.cliPreviouslyInstalled ? model.text.string(.uiReinstalling) : model.text.string(.uiInstalling)
     }
 
     var continueButtonLabel: some View {
         ZStack {
             Text(continueTitle).hidden()
-            Text(model.t("Setting up…", "正在设置…")).padding(.leading, 18).hidden()
+            Text(model.text.string(.uiSettingUp)).padding(.leading, 18).hidden()
             HStack(spacing: 6) {
                 if setup.settingUp {
                     ProgressView().controlSize(.mini).frame(width: 12, height: 12).accessibilityHidden(true)
@@ -135,11 +135,11 @@ struct SetupView: View {
     }
 
     var continueButtonTitle: String {
-        setup.settingUp ? model.t("Setting up…", "正在设置…") : continueTitle
+        setup.settingUp ? model.text.string(.uiSettingUp) : continueTitle
     }
 
     private var continueTitle: String {
-        setup.skillConflict ? model.t("Continue Without Skill", "不安装技能并继续") : model.t("Continue", "继续")
+        setup.skillConflict ? model.text.string(.uiContinueWithoutSkill) : model.text.string(.uiContinue)
     }
 
     private func stepGraphic(_ icon: String) -> some View {

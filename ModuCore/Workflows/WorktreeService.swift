@@ -8,7 +8,7 @@ struct WorktreeCreation {
     var branch: String
     var reused: Bool
     var upstream: String?
-    var reuseWarning: (message: String, data: [String: String])?
+    var reuseWarning: (message: String, userMessage: UserMessage?, data: [String: String])?
 }
 
 extension WorkspaceService {
@@ -25,8 +25,8 @@ extension WorkspaceService {
             let lease = try store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
             try await validateMembers(name, repositories: repositories, record: record)
-            if replace && record.groups[name] == nil { throw ModuError("target-not-configured", "Group is not configured.") }
-            if !replace && repositories.isEmpty { throw ModuError("invalid-input", "Choose at least one repository.") }
+            if replace && record.groups[name] == nil { throw ModuError("target-not-configured", .groupIsNotConfigured) }
+            if !replace && repositories.isEmpty { throw ModuError("invalid-input", .chooseAtLeastOneRepository) }
             let existing = record.groups[name]?.repositories ?? []
             let removals = replace ? existing.filter { !repositories.contains($0) }.map { Resource.member(name, $0) } : []
             let deletion = try await deletionTargets(removals, record: record, readRisks: authorization == nil)
@@ -65,27 +65,27 @@ extension WorkspaceService {
     }
     func validateMembers(_ name: String, repositories: [String], record: WorkspaceRecord) async throws {
         try await git.validateRef(name, at: record.rootURL)
-        guard Set(repositories).count == repositories.count, repositories.allSatisfy({ name in record.repositories.contains { $0.id == name } }) else { throw ModuError("invalid-input", "Group members must reference distinct configured repositories.") }
-        guard !record.groups.keys.contains(where: { $0 != name && PathSafety.identity(record.groupURL($0)) == PathSafety.identity(record.groupURL(name)) }) else { throw ModuError("group-conflict", "Group name conflicts with an existing group.") }
+        guard Set(repositories).count == repositories.count, repositories.allSatisfy({ name in record.repositories.contains { $0.id == name } }) else { throw ModuError("invalid-input", .groupMembersMustReferenceDistinctConfiguredRepositories) }
+        guard !record.groups.keys.contains(where: { $0 != name && PathSafety.identity(record.groupURL($0)) == PathSafety.identity(record.groupURL(name)) }) else { throw ModuError("group-conflict", .groupNameConflictsWithExistingGroup) }
     }
     func creationPlans(_ name: String, members: [String], record: WorkspaceRecord) async throws -> [WorktreeCreation] {
         var plans: [WorktreeCreation] = []
         if record.groups[name] == nil {
             try await git.checkRepository(record.rootURL, main: true)
-            guard let head = try await git.oid("HEAD", at: record.rootURL) else { throw ModuError("workspace-commit-required", "Commit the workspace .gitignore before creating this group. The workspace has no first commit.") }
+            guard let head = try await git.oid("HEAD", at: record.rootURL) else { throw ModuError("workspace-commit-required", .commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas) }
             let plan = try await creationPlan(.group(name), repository: record.rootURL, defaultOID: head, record: record)
             try await git.checkRootCommit(plan.oid, members: members, at: record.rootURL)
             plans.append(plan)
         } else if !members.isEmpty {
             let root = try await checked(.group(name), in: record)
-            guard let oid = try await git.oid("HEAD", at: root) else { throw ModuError("resource-unavailable", "Group root HEAD is unavailable.") }
+            guard let oid = try await git.oid("HEAD", at: root) else { throw ModuError("resource-unavailable", .groupRootHEADIsUnavailable) }
             try await git.checkRootCommit(oid, members: members, at: record.rootURL)
         }
         for member in members {
             let repository = try await checked(.repository(member), in: record)
             let plan = try await creationPlan(.member(name, member), repository: repository, defaultOID: nil, record: record)
             let tree = try await git.run(["ls-tree", "-r", "-z", plan.oid], at: repository)
-            guard !tree.stdout.split(separator: 0).contains(where: { $0.starts(with: Data("160000 ".utf8)) }) else { throw ModuError("submodule-unsupported", "Linked worktrees for repositories containing submodules are not supported: \(member)") }
+            guard !tree.stdout.split(separator: 0).contains(where: { $0.starts(with: Data("160000 ".utf8)) }) else { throw ModuError("submodule-unsupported", .linkedWorktreesForRepositoriesContainingSubmodulesAreNot(member)) }
             plans.append(plan)
         }
         return plans
@@ -93,9 +93,9 @@ extension WorkspaceService {
     func creationPlan(_ resource: Resource, repository: URL, defaultOID: String?, record: WorkspaceRecord) async throws -> WorktreeCreation {
         let name = resource.group!
         let destination = try PathSafety.child(resource.path, of: record.rootURL)
-        guard !PathSafety.exists(destination) else { throw ModuError("path-conflict", "Worktree path already exists: \(destination.path)") }
+        guard !PathSafety.exists(destination) else { throw ModuError("path-conflict", .worktreePathAlreadyExists(destination.path)) }
         let registrations = try await git.registrations(at: repository)
-        guard !registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(destination) }) else { throw ModuError("path-conflict", "Worktree path is already registered.") }
+        guard !registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(destination) }) else { throw ModuError("path-conflict", .worktreePathIsAlreadyRegistered) }
         try await git.checkBranchNotInUse(name, registrations: registrations, at: repository)
         let local = try await git.oid("refs/heads/\(name)", at: repository)
         var upstream: String?
@@ -107,8 +107,8 @@ extension WorkspaceService {
                 if base.status == 0, base.text.hasPrefix("refs/remotes/origin/") { start = try await git.oid(base.text, at: repository) }
             }
         }
-        guard let start else { throw ModuError("base-unavailable", "No local starting commit. Update the main repository first: \(resource.repo ?? name)") }
-        let warning: (message: String, data: [String: String])?
+        guard let start else { throw ModuError("base-unavailable", .noLocalStartingCommitUpdateMainRepositoryFirst(resource.repo ?? name)) }
+        let warning: (message: String, userMessage: UserMessage?, data: [String: String])?
         if let local { warning = try await branchReuseWarning(name, oid: local, defaultOID: defaultOID, at: repository) }
         else { warning = nil }
         return .init(resource: resource, repository: repository, destination: destination, oid: start, branch: name, reused: local != nil, upstream: upstream, reuseWarning: warning)
@@ -142,7 +142,7 @@ extension WorkspaceService {
             try persist(candidate, into: &record)
             item.effects = [.init("create-worktree", plan.destination.path), .init("save-configuration", plan.resource.path)]
             if !plan.reused { item.effects.append(.init("create-branch", plan.branch)) }
-            item.data = plan.reuseWarning?.data; item.message = plan.reuseWarning?.message
+            item.data = plan.reuseWarning?.data; item.message = plan.reuseWarning?.message; item.userMessage = plan.reuseWarning?.userMessage
             progress(.init(plan.resource.path, .created, completed: completed + (plan.resource.kind == .member ? 1 : 0), total: total, snapshot: record))
         } catch {
             fail(&item, error)
@@ -171,7 +171,7 @@ extension WorkspaceService {
                         }
                     } catch {
                         item.causeCode = item.reasonCode; item.reasonCode = "cleanup-failed"; item.status = .failed
-                        item.message = "\(item.message ?? "") Cleanup failed: \(error.localizedDescription)"
+                        item.userMessage = .joined([item.userMessage, .cleanupFailed(ModuError.wrap(error).userMessage)].compactMap { $0 }, separator: " "); item.message = "\(item.message ?? "") Cleanup failed: \(error.localizedDescription)"
                         if worktreePending { item.effects.append(.init("create-worktree", plan.destination.path, state: "unknown")) }
                         if branchPending { item.effects.append(.init("create-branch", plan.branch, state: "unknown")) }
                     }
@@ -185,14 +185,14 @@ extension WorkspaceService {
         let ref = "refs/heads/\(plan.branch)"
         let exists = try await git.run(["show-ref", "--verify", "--quiet", ref], at: plan.repository, allowFailure: true, cancellable: false)
         if exists.status == 1 { return false }
-        guard exists.status == 0 else { throw ModuError("git-failed", "Could not verify the new branch: \(plan.branch)") }
+        guard exists.status == 0 else { throw ModuError("git-failed", .couldNotVerifyNewBranch(plan.branch)) }
         let actual = try await git.run(["rev-parse", "--verify", "--end-of-options", ref], at: plan.repository, cancellable: false)
-        guard actual.text == plan.oid else { throw ModuError("branch-changed", "The new branch changed during creation and was kept: \(plan.branch)") }
+        guard actual.text == plan.oid else { throw ModuError("branch-changed", .newBranchChangedDuringCreationAndWasKept(plan.branch)) }
         _ = try await git.run(["branch", "-D", "--", plan.branch], at: plan.repository, cancellable: false)
         return true
     }
 
-    private func branchReuseWarning(_ branch: String, oid: String, defaultOID: String?, at repository: URL) async throws -> (message: String, data: [String: String])? {
+    private func branchReuseWarning(_ branch: String, oid: String, defaultOID: String?, at repository: URL) async throws -> (message: String, userMessage: UserMessage?, data: [String: String])? {
         var data = ["reused-branch": branch, "comparison-base": defaultOID == nil ? "origin/HEAD" : "HEAD"]
         var base = defaultOID == nil ? "origin/HEAD" : "workspace HEAD"
         do {
@@ -201,20 +201,20 @@ extension WorkspaceService {
             else {
                 let ref = try await git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: repository, allowFailure: true)
                 guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await git.oid(ref.text, at: repository) else {
-                    throw ModuError("base-unavailable", "origin/HEAD does not identify a valid comparison commit.")
+                    throw ModuError("base-unavailable", .originHEADDoesNotIdentifyValidComparisonCommit)
                 }
                 baseOID = oid; base = String(ref.text.dropFirst("refs/remotes/".count)); data["comparison-base"] = base
             }
             let count = try await git.run(["rev-list", "--count", "\(oid)..\(baseOID)", "--"], at: repository).text
-            guard let behind = Int(count), behind >= 0 else { throw ModuError("git-output-invalid", "Could not read the branch comparison count.") }
+            guard let behind = Int(count), behind >= 0 else { throw ModuError("git-output-invalid", .couldNotReadBranchComparisonCount) }
             guard behind > 0 else { return nil }
             data["warning-code"] = "branch-behind-base"; data["behind-count"] = String(behind)
-            return ("Reused branch '\(branch)' is \(behind) \(behind == 1 ? "commit" : "commits") behind '\(base)'. Its commits were kept.", data)
+            return ("Reused branch '\(branch)' is \(behind) \(behind == 1 ? "commit" : "commits") behind '\(base)'. Its commits were kept.", .branchReuseBehind(branch, behind, base, isWorkspace: defaultOID != nil), data)
         } catch let error as ModuError where error.code == "cancelled" { throw error }
         catch {
             try checkCancellation()
             data["warning-code"] = "branch-comparison-unavailable"; data["comparison-error"] = ModuError.wrap(error).message
-            return ("Reused branch '\(branch)', but its comparison with '\(base)' is unavailable. \(ModuError.wrap(error).message)", data)
+            return ("Reused branch '\(branch)', but its comparison with '\(base)' is unavailable. \(ModuError.wrap(error).message)", .branchReuseComparisonUnavailable(branch, base, ModuError.wrap(error).userMessage, isWorkspace: defaultOID != nil), data)
         }
     }
 }
@@ -225,7 +225,7 @@ extension WorkspaceService {
             let lease = try store.lock(root); defer { lease.unlock() }
             let record = try store.load(root)
             try await validateMembers(name, repositories: repositories, record: record)
-            guard let group = record.groups[name] else { throw ModuError("target-not-configured", "Group is not configured.") }
+            guard let group = record.groups[name] else { throw ModuError("target-not-configured", .groupIsNotConfigured) }
             let removals = group.repositories.filter { !repositories.contains($0) }.map { Resource.member(name, $0) }
             let targets = try await deletionTargets(removals, record: record)
             var result = OperationResult(command: "worktree.update", workspace: root.path, status: targets.isEmpty ? .success : .confirmationRequired)

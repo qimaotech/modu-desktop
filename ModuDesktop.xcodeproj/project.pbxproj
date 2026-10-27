@@ -307,10 +307,11 @@
 				};
 			};
 			buildConfigurationList = C1A044E0303D25F500CF777D /* Build configuration list for PBXProject "ModuDesktop" */;
-			developmentRegion = en;
+			developmentRegion = "en-US";
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
+				"en-US",
+				"zh-Hans-CN",
 				Base,
 			);
 			mainGroup = C1A044DC303D25F500CF777D;
@@ -589,7 +590,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Modu;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Modu opens Claude Code in your terminal at the selected workspace path.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -622,7 +622,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Modu;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Modu opens Claude Code in your terminal at the selected workspace path.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

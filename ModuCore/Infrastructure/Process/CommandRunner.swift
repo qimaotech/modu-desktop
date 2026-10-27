@@ -27,10 +27,10 @@ public struct CommandRunner: Sendable {
     }
 
     private func execute(_ executable: String, _ arguments: [String], directory: URL?, timeout: TimeInterval, cancellation: CancellationFlag, cancellable: Bool) throws -> CommandOutput {
-        if cancellable && cancellation.cancelled { throw ModuError("cancelled", "Operation cancelled.") }
+        if cancellable && cancellation.cancelled { throw ModuError("cancelled", .operationCancelled) }
         var out: [Int32] = [0, 0], err: [Int32] = [0, 0]
-        guard pipe(&out) == 0 else { throw ModuError("process-failed", "Could not create output pipe.") }
-        guard pipe(&err) == 0 else { close(out[0]); close(out[1]); throw ModuError("process-failed", "Could not create error pipe.") }
+        guard pipe(&out) == 0 else { throw ModuError("process-failed", .couldNotCreateOutputPipe) }
+        guard pipe(&err) == 0 else { close(out[0]); close(out[1]); throw ModuError("process-failed", .couldNotCreateErrorPipe) }
         defer { close(out[0]); close(err[0]) }
         for fd in out + err { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
         var actions: posix_spawn_file_actions_t?
@@ -58,7 +58,7 @@ public struct CommandRunner: Sendable {
             }
         }
         close(out[1]); close(err[1])
-        guard spawnError == 0 else { throw ModuError("process-failed", "Could not launch \(URL(fileURLWithPath: executable).lastPathComponent): \(String(cString: strerror(spawnError)))") }
+        guard spawnError == 0 else { throw ModuError("process-failed", .couldNotLaunch(URL(fileURLWithPath: executable).lastPathComponent, .diagnostic(String(cString: strerror(spawnError))))) }
         for fd in [out[0], err[0]] { _ = fcntl(fd, F_SETFL, O_NONBLOCK) }
         var stdout = Data(), stderr = Data(), status: Int32 = 0
         let start = ContinuousClock.now
@@ -71,13 +71,13 @@ public struct CommandRunner: Sendable {
             if !parentExited {
                 let waited = waitpid(pid, &status, WNOHANG)
                 if waited == pid { parentExited = true }
-                if waited == -1 && errno != EINTR { failure = ModuError("process-failed", "Could not read process exit status."); break }
+                if waited == -1 && errno != EINTR { failure = ModuError("process-failed", .couldNotReadProcessExitStatus); break }
             }
             if termination == nil {
                 if parentExited { break }
-                if cancellable && cancellation.cancelled { failure = ModuError("cancelled", "Operation cancelled.") }
-                else if start.duration(to: .now) >= .seconds(timeout) { failure = ModuError("network-timeout", "Command exceeded its \(Int(timeout))-second time limit.") }
-                else if stdout.count + stderr.count > 32 * 1024 * 1024 { failure = ModuError("output-limit", "Command output exceeded 32 MiB.") }
+                if cancellable && cancellation.cancelled { failure = ModuError("cancelled", .operationCancelled) }
+                else if start.duration(to: .now) >= .seconds(timeout) { failure = ModuError("network-timeout", .commandExceededSecondTimeLimit(Int(timeout))) }
+                else if stdout.count + stderr.count > 32 * 1024 * 1024 { failure = ModuError("output-limit", .commandOutputExceeded32MiB) }
                 if failure != nil { termination = .now; kill(-pid, SIGTERM) }
             } else {
                 // Helpers can outlive the parent while remaining in its process group.

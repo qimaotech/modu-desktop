@@ -14,7 +14,7 @@ final class OperationPresentation {
     var messageHost = ResultHost.main
     var completionMessage: String?
     var quitPending = false
-    var text: InterfaceText { .init(language: preferences.language) }
+    var text: InterfaceText { preferences.text }
     private var progress: OperationProgress? { operations.progress }
     private var cancelling: Bool { operations.cancelling }
     private var openingWorkspace: Bool { operations.kind == .workspace }
@@ -34,11 +34,13 @@ final class OperationPresentation {
         messageTitle = title; messageHost = host; self.message = message
     }
 
+    func presentMessage(_ error: Error, title: String, host: ResultHost = .main) {
+        presentMessage(text.message(error) + "\n\n" + text.string(.uiDetails) + ":\n" + Git.sanitize(error.localizedDescription), title: title, host: host)
+    }
+
     func finishQuitIfPossible() {
         if quitPending, result == nil { terminate() }
     }
-
-    private func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
 
     var operationProgressPhaseText: String {
         operationProgressPhaseText(for: progress)
@@ -46,10 +48,10 @@ final class OperationPresentation {
 
     func operationProgressPhaseText(for progress: OperationProgress?) -> String {
         if cancelling {
-            if progress?.cancellable == false { return t("Finishing current item before cancellation…", "正在完成当前项，随后取消…") }
-            return t("Cancelling…", "正在取消…")
+            if progress?.cancellable == false { return text.string(.uiFinishingCurrentItemBeforeCancellation) }
+            return text.string(.uiCancelling)
         }
-        return progress.map { text.statusText($0.phase.rawValue) } ?? t("Working…", "正在处理…")
+        return progress.map { text.statusText($0.phase.rawValue) } ?? text.string(.uiWorking)
     }
 
     var operationProgressSummaryText: String? {
@@ -58,16 +60,16 @@ final class OperationPresentation {
 
     func operationProgressSummaryText(for progress: OperationProgress?) -> String? {
         guard let progress, progress.total > 0 else { return nil }
-        var parts = [t("\(progress.completed) of \(progress.total) processed", "已处理 \(progress.completed) / \(progress.total)")]
+        var parts = [text.string(.uiOfProcessed(Int(progress.completed), Int(progress.total)))]
         if let counts = progress.counts {
-            if counts.skipped > 0 { parts.append(t("Skipped \(counts.skipped)", "已跳过 \(counts.skipped)")) }
-            if counts.failed > 0 { parts.append(t("Failed \(counts.failed)", "失败 \(counts.failed)")) }
+            if counts.skipped > 0 { parts.append(text.string(.uiSkipped("\(counts.skipped)"))) }
+            if counts.failed > 0 { parts.append(text.string(.uiFailed("\(counts.failed)"))) }
         }
         return parts.joined(separator: " · ")
     }
 
     var repositoryUpdateProgressText: String {
-        let title = cancelling ? t("Cancelling…", "正在取消…") : openingWorkspace ? t("Reloading workspace", "正在重新加载工作区") : t("Updating repositories", "正在更新仓库")
+        let title = cancelling ? text.string(.uiCancelling) : openingWorkspace ? text.string(.uiReloadingWorkspace) : text.string(.uiUpdatingRepositories)
         guard let progress, progress.total > 0 else { return title }
         return "\(title) · \(progress.completed)/\(progress.total)"
     }

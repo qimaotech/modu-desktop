@@ -73,7 +73,7 @@ public struct AppUpdateService: Sendable {
               asset.browserDownloadURL.path == "/qimaotech/modu-desktop/releases/download/\(release.tagName)/\(filename)",
               release.htmlURL.scheme == "https", release.htmlURL.host == "github.com",
               release.htmlURL.path == "/qimaotech/modu-desktop/releases/tag/\(release.tagName)" else {
-            throw ModuError("update-asset-unavailable", "The latest release has no compatible Modu installer.")
+            throw ModuError("update-asset-unavailable", .latestReleaseHasNoCompatibleModuInstaller)
         }
         return AppUpdate(version: version, releaseURL: release.htmlURL, asset: asset)
     }
@@ -81,13 +81,13 @@ public struct AppUpdateService: Sendable {
     func verifyDownload(at url: URL, asset: AppUpdate.Asset) throws {
         let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber
         guard size?.int64Value == asset.size else {
-            throw ModuError("update-integrity-failed", "The downloaded installer is incomplete. Please try again.")
+            throw ModuError("update-integrity-failed", .downloadedInstallerIsIncompletePleaseTryAgain)
         }
         guard let digest = asset.digest else { return }
         let parts = digest.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 2, parts[0] == "sha256", parts[1].count == 64,
               parts[1].allSatisfy({ $0.isASCII && $0.isHexDigit }) else {
-            throw ModuError("update-integrity-failed", "The release contains an unsupported installer checksum.")
+            throw ModuError("update-integrity-failed", .releaseContainsUnsupportedInstallerChecksum)
         }
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
@@ -98,26 +98,26 @@ public struct AppUpdateService: Sendable {
         }
         let actual = hash.finalize().map { String(format: "%02x", $0) }.joined()
         guard actual == parts[1].lowercased() else {
-            throw ModuError("update-integrity-failed", "The installer checksum does not match. Please try again.")
+            throw ModuError("update-integrity-failed", .installerChecksumDoesNotMatchPleaseTryAgain)
         }
     }
 
     private func validate(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else {
-            throw ModuError("update-request-failed", "GitHub returned an invalid response.")
+            throw ModuError("update-request-failed", .githubReturnedInvalidResponse)
         }
         guard http.statusCode == 200 else {
-            throw ModuError("update-request-failed", "GitHub request failed (HTTP \(http.statusCode)). Please try again later.")
+            throw ModuError("update-request-failed", .githubRequestFailedHTTPPleaseTryAgainLater(Int(http.statusCode)))
         }
     }
 
     private func versionComponents(_ version: String) throws -> [UInt64] {
         let parts = version.split(separator: ".", omittingEmptySubsequences: false)
         guard (1...3).contains(parts.count), parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isASCII && $0.isNumber }) }) else {
-            throw ModuError("update-version-invalid", "The release version could not be compared.")
+            throw ModuError("update-version-invalid", .releaseVersionCouldNotBeCompared)
         }
         let values = parts.compactMap { UInt64($0) }
-        guard values.count == parts.count else { throw ModuError("update-version-invalid", "The release version could not be compared.") }
+        guard values.count == parts.count else { throw ModuError("update-version-invalid", .releaseVersionCouldNotBeCompared) }
         return values + Array(repeating: 0, count: 3 - values.count)
     }
 

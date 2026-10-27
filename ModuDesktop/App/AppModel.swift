@@ -21,10 +21,11 @@ final class AppModel {
     @ObservationIgnored var mockWorkspace: MockWorkspace?
     #endif
     var defaults: UserDefaults { preferences.defaults }
-    var language: String {
-        get { preferences.language }
-        set { preferences.language = newValue }
+    var appLanguage: AppLanguage {
+        get { preferences.appLanguage }
+        set { preferences.appLanguage = newValue }
     }
+    var text: InterfaceText { preferences.text }
     var busy: Bool { operations.busy }
     var openingWorkspace: Bool { operations.kind == .workspace }
     var cancelling: Bool { operations.cancelling }
@@ -59,8 +60,6 @@ final class AppModel {
         }
     }
 
-    func t(_ english: String, _ chinese: String) -> String { preferences.t(english, chinese) }
-
     @discardableResult func start(onReady: @MainActor () -> Void = {}) async -> Bool {
         guard !started else { return false }; started = true
         #if DEBUG
@@ -79,7 +78,8 @@ final class AppModel {
         tools = await toolService.available()
         await operation?.value
         if let result = presentation.result {
-            workspace.blocked = ([result.message].compactMap { $0 } + result.items.compactMap(\.message)).map(presentation.text.message).joined(separator: "\n")
+            workspace.blocked = ((result.message == nil ? [] : [presentation.text.message(result)]) + result.items.filter { $0.message != nil }.map(presentation.text.message)).joined(separator: "\n")
+            workspace.blockedDetails = Git.sanitize(([result.message].compactMap { $0 } + result.items.compactMap(\.message)).joined(separator: "\n"))
             presentation.resultHost = .main
         }
         guard !Task.isCancelled else { return false }
@@ -119,11 +119,12 @@ final class AppModel {
             if let record = opened.record, outcome.status == .success, !presentation.quitPending {
                 do {
                     try await switchTo(root, loaded: record)
-                    if let error = opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", "Bundled skill is unavailable.") : nil) {
-                        workspace.notice = t("Workflow skill wasn’t enabled. ", "工作流技能未启用。") + presentation.text.message(error.localizedDescription)
+                    if let error = opened.skillError ?? (skill == nil ? ModuError("skill-unavailable", .bundledSkillIsUnavailable) : nil) {
+                        workspace.notice = text.string(.uiWorkflowSkillWasnTEnabled2(presentation.text.message(error)))
+                        workspace.noticeDetails = Git.sanitize(error.message)
                     }
                 } catch {
-                    let failure = error is CancellationError ? ModuError("cancelled", t("Workspace change cancelled.", "已取消切换工作区。")) : ModuError.wrap(error)
+                    let failure = error is CancellationError ? ModuError("cancelled", .workspaceChangeCancelled) : ModuError.wrap(error)
                     outcome.items.append(ItemResult(.workspace(path: root.path), status: failure.code == "cancelled" ? .cancelled : .failed, error: failure))
                     outcome.summarize(cancelled: failure.code == "cancelled")
                 }
@@ -180,11 +181,11 @@ final class AppModel {
                 preferredToolIDs[tool.category] = tool.id
                 defaults.set(tool.id, forKey: "tool.\(tool.category)")
             }
-            catch { presentation.presentMessage(error.localizedDescription, title: t("Can’t open \(tool.name)", "无法打开 \(tool.name)")) }
+            catch { presentation.presentMessage(error, title: text.string(.uiCanTOpen("\(tool.name)"))) }
         }
     }
 
-    private static func launchDefaults() -> UserDefaults {
+    static func launchDefaults() -> UserDefaults {
         #if DEBUG
         if let suite = ProcessInfo.processInfo.environment["MODU_TEST_DEFAULTS"] {
             let defaults = UserDefaults(suiteName: suite)!
@@ -218,7 +219,7 @@ final class AppModel {
             workspace.record = nil; workspace.selection = nil; workspace.states = [:]; tools = []
             mock.fixture.remove()
             guard !Task.isCancelled, !presentation.quitPending else { return }
-            workspace.blocked = error.localizedDescription
+            workspace.blocked = text.message(error); workspace.blockedDetails = Git.sanitize(error.localizedDescription)
             onReady()
         }
     }

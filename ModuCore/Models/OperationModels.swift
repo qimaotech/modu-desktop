@@ -14,6 +14,7 @@ public struct ItemResult: Codable, Sendable {
     public var status: OperationStatus = .success
     public var reasonCode: String?
     public var message: String?
+    public var userMessage: UserMessage? = nil
     public var effects: [Effect] = []
     public var data: [String: String]?
     public var trashPath: String?
@@ -24,9 +25,10 @@ public struct ItemResult: Codable, Sendable {
     }
     public init(_ resource: Resource, status: OperationStatus = .success, error: ModuError? = nil) {
         self.resource = resource; self.status = status; reasonCode = error?.code; message = error?.message
+        userMessage = error?.userMessage
     }
     static func notProcessed(_ resource: Resource) -> ItemResult {
-        ItemResult(resource, status: .skipped, error: ModuError("not-processed", "Not processed because the operation stopped."))
+        ItemResult(resource, status: .skipped, error: ModuError("not-processed", .notProcessedBecauseOperationStopped))
     }
     public var hasWarning: Bool { data?["warning-code"] != nil }
     public func encode(to encoder: Encoder) throws {
@@ -45,6 +47,7 @@ public struct OperationResult: Codable, Sendable {
     public var status: OperationStatus
     public var reasonCode: String?
     public var message: String?
+    public var userMessage: UserMessage? = nil
     public var items: [ItemResult]
     public var plan: [DeletionTarget]?
     enum CodingKeys: String, CodingKey {
@@ -54,6 +57,7 @@ public struct OperationResult: Codable, Sendable {
     public init(command: String, workspace: String?, status: OperationStatus = .success, items: [ItemResult] = [], error: ModuError? = nil) {
         self.command = command; self.workspace = workspace; self.status = error?.code == "cancelled" ? .cancelled : status; self.items = items
         reasonCode = error?.code; message = error?.message
+        userMessage = error?.userMessage
     }
     public mutating func summarize(cancelled: Bool = false) {
         let success = items.contains { $0.status == .success }
@@ -88,8 +92,15 @@ public struct DeletionTarget: Codable, Equatable, Sendable, Identifiable {
     public var registered: Bool
     public var exists: Bool
     public var risks: [String]
+    public var riskMessages: [UserMessage] = []
     public var dirty: Bool? = nil
     public var id: String { resource.id }
+    enum CodingKeys: String, CodingKey { case resource, path, branch, detached, registered, exists, risks, dirty }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.resource == rhs.resource && lhs.path == rhs.path && lhs.branch == rhs.branch && lhs.detached == rhs.detached
+            && lhs.registered == rhs.registered && lhs.exists == rhs.exists && lhs.risks == rhs.risks && lhs.dirty == rhs.dirty
+    }
 }
 
 public struct OperationProgress: Sendable {

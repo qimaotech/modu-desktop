@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import ModuCore
 
-@main
 struct ModuDesktopApp: App {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
@@ -21,7 +20,7 @@ struct ModuDesktopApp: App {
                 .onAppear { delegate.model = model }
                 .frame(minWidth: 900, minHeight: 600 - chromeHeight)
                 .background(WindowChromeHeight(height: $chromeHeight, onWindow: configureMainWindow))
-                .environment(\.locale, Locale(identifier: model.language))
+                .environment(\.locale, model.preferences.activeLocale.locale)
         }
         .defaultSize(width: 1200, height: 800)
         .defaultLaunchBehavior(.suppressed)
@@ -49,8 +48,9 @@ struct ModuDesktopApp: App {
         }
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
-        Window(model.t("Set Up Workspace", "设置工作区"), id: "setup") {
+        Window(model.text.string(.uiSetUpWorkspace), id: "setup") {
             SetupView(model: model, canReturnToMainWindow: { delegate.mainWindowIsOpen }, returnToMainWindow: delegate.returnToMainWindow).id(model.workspace.record?.root)
+                .environment(\.locale, model.preferences.activeLocale.locale)
                 .onAppear { delegate.model = model }.frame(width: 560).frame(minHeight: 320 - setupChromeHeight)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(WindowChromeHeight(height: $setupChromeHeight))
@@ -60,9 +60,9 @@ struct ModuDesktopApp: App {
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
         .commandsRemoved()
-        Window(model.t("Software Update", "软件更新"), id: "updates") {
+        Window(model.text.string(.uiSoftwareUpdate), id: "updates") {
             AppUpdateView(model: model.updates)
-                .environment(\.locale, Locale(identifier: model.language))
+                .environment(\.locale, model.preferences.activeLocale.locale)
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
@@ -72,7 +72,7 @@ struct ModuDesktopApp: App {
             SettingsView(model: model).frame(width: 640, height: 480 - settingsChromeHeight)
                 .background(WindowChromeHeight(height: $settingsChromeHeight))
                 .background(SettingsWindowPlacement(size: CGSize(width: 640, height: 480), sourceWindow: { delegate.mainWindow }))
-                .environment(\.locale, Locale(identifier: model.language))
+                .environment(\.locale, model.preferences.activeLocale.locale)
         }
         .windowToolbarStyle(.unifiedCompact)
     }

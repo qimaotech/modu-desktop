@@ -8,9 +8,9 @@ struct AppUpdateView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let update = model.update {
-                Text(model.t("Modu \(update.version) is available", "Modu \(update.version) 已发布")).font(DesignStyle.windowTitle)
+                Text(model.text.string(.uiModuIsAvailable("\(update.version)"))).font(DesignStyle.windowTitle)
             }
-            Text(model.t("Installed version: \(ModuVersion.current)", "当前版本：\(ModuVersion.current)"))
+            Text(model.text.string(.uiInstalledVersion("\(ModuVersion.current)")))
                 .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
             if model.working {
                 HStack(spacing: 12) {
@@ -18,24 +18,24 @@ struct AppUpdateView: View {
                     Text(progressText)
                 }
             } else if model.update != nil {
-                Text(model.t("Install the update and automatically restart Modu. Your workspaces are preserved.", "安装更新后将自动重新启动 Modu，工作区数据会保留。"))
+                Text(model.text.string(.uiInstallUpdateAndAutomaticallyRestartModuWorkspacesAre))
             } else if model.checked {
-                Text(model.t("You’re running the latest version of Modu.", "你正在使用最新版本的 Modu。"))
+                Text(model.text.string(.uiYouReRunningLatestVersionOfModu))
             }
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if let error = model.error { IssueDescriptionView(message: error, details: model.errorDetails, text: model.text).foregroundStyle(.red) }
             HStack {
-                Link(model.t("Release Notes", "发布说明"), destination: model.update?.releaseURL ?? AppUpdateService.releasesURL)
+                Link(model.text.string(.uiReleaseNotes), destination: model.update?.releaseURL ?? AppUpdateService.releasesURL)
                 Spacer()
                 if model.restartPending {
-                    Text(model.t("Waiting for Modu to quit…", "正在等待 Modu 退出…")).foregroundStyle(DesignStyle.secondary)
+                    Text(model.text.string(.uiWaitingForModuQuit)).foregroundStyle(DesignStyle.secondary)
                 } else if model.working {
-                    Button(model.t("Cancel", "取消")) { model.cancel() }.keyboardShortcut(.cancelAction)
+                    Button(model.text.string(.uiCancel)) { model.cancel() }.keyboardShortcut(.cancelAction)
                 } else {
-                    Button(model.t("Close", "关闭")) { dismissWindow(id: "updates") }.keyboardShortcut(.cancelAction)
+                    Button(model.text.string(.uiClose)) { dismissWindow(id: "updates") }.keyboardShortcut(.cancelAction)
                     if model.update != nil {
-                        Button(model.t("Install and Restart", "安装并重启")) { model.installAndRestart() }.keyboardShortcut(.defaultAction)
+                        Button(model.text.string(.uiInstallAndRestart)) { model.installAndRestart() }.keyboardShortcut(.defaultAction)
                     } else {
-                        Button(model.t("Check Again", "重新检查")) { model.check() }.keyboardShortcut(.defaultAction)
+                        Button(model.text.string(.uiCheckAgain)) { model.check() }.keyboardShortcut(.defaultAction)
                     }
                 }
             }
@@ -47,9 +47,9 @@ struct AppUpdateView: View {
     }
 
     private var progressText: String {
-        if model.restartPending { return model.t("Ready to install. Modu will restart after quitting.", "更新已就绪，Modu 退出后将安装并重新启动。") }
-        if model.downloading { return model.t("Downloading installer…", "正在下载安装包…") }
-        if model.installing { return model.t("Preparing update…", "正在准备更新…") }
-        return model.t("Checking GitHub Releases…", "正在检查 GitHub Releases…")
+        if model.restartPending { return model.text.string(.uiReadyInstallModuWillRestartAfterQuitting) }
+        if model.downloading { return model.text.string(.uiDownloadingInstaller) }
+        if model.installing { return model.text.string(.uiPreparingUpdate) }
+        return model.text.string(.uiCheckingGitHubReleases)
     }
 }

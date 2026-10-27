@@ -4,7 +4,7 @@ import Testing
 @testable import ModuDesktop
 
 struct ResourceSnapshotTests {
-    @Test(arguments: ["fetch-failed", "base-still-missing"])
+    @Test(arguments: ["fetch-failed", "base-still-missing"]) @MainActor
     func missingBaseRecoveryFetchesOnceAndPreservesChanges(_ outcome: String) async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
@@ -30,6 +30,15 @@ struct ResourceSnapshotTests {
         #expect(snapshot.changes?.map(\.path) == ["new.txt"] && snapshot.changesError == nil)
         #expect(snapshot.summary?.headOID == head && snapshot.summaryError == nil)
         #expect(snapshot.summary?.baseOID == nil && snapshot.summary?.baseError != nil)
+        let summary = try #require(snapshot.summary)
+        let diagnostic = try #require(summary.baseError)
+        let message = try #require(summary.baseMessage)
+        for locale in [AppLocale.simplifiedChinese, .english] {
+            let text = InterfaceText(locale: locale)
+            let tooltip = text.baseBranchHelp(summary)
+            #expect(tooltip.hasPrefix(text.message(message)))
+            #expect(tooltip.contains(diagnostic))
+        }
         let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
         #expect(commands.filter { $0.contains("built-in: git fetch ") }.count == 1)
     }

@@ -7,45 +7,45 @@ struct GlobalShortcutSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.t("Global Shortcut", "全局快捷键")).font(.system(size: 13, weight: .semibold))
+            Text(model.text.string(.uiGlobalShortcut)).font(.system(size: 13, weight: .semibold))
             HStack(spacing: 12) {
-                Text(model.t("Show/Hide Modu", "显示/隐藏 Modu"))
+                Text(model.text.string(.uiShowHideModu))
                 Spacer(minLength: 16)
                 if model.isRecording {
                     ShortcutRecorder(onKey: model.record, onCancel: model.cancelRecording,
-                                     label: model.t("Press shortcut", "按下快捷键"))
+                                     label: model.text.string(.uiPressShortcut))
                         .frame(width: 148, height: 30)
                         .background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 8))
                         .overlay(alignment: .leading) {
-                            Text(model.t("Press shortcut", "按下快捷键")).padding(.horizontal, 10)
+                            Text(model.text.string(.uiPressShortcut)).padding(.horizontal, 10)
                                 .allowsHitTesting(false).accessibilityHidden(true)
                         }
                         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 1))
-                    Button(model.t("Cancel", "取消")) { model.cancelRecording() }
+                    Button(model.text.string(.uiCancel)) { model.cancelRecording() }
                         .buttonStyle(.plain).foregroundStyle(DesignStyle.secondary)
                         .accessibilityIdentifier("cancelGlobalShortcutRecording")
                 } else {
                     Button { model.beginRecording() } label: {
-                        Text(model.shortcutLabel ?? model.t("Unassigned", "未设置"))
+                        Text(model.shortcutLabel ?? model.text.string(.uiUnassigned))
                             .foregroundStyle(model.shortcut == nil ? DesignStyle.secondary : Color.primary)
                             .frame(minWidth: 48).padding(.horizontal, 12).frame(height: controlHeight)
                             .background(Color.primary.opacity(0.04), in: controlShape)
                             .contentShape(controlShape)
                     }.buttonStyle(HoverPlainButtonStyle(shape: controlShape))
-                        .accessibilityLabel(model.t("Edit global shortcut", "修改全局快捷键"))
-                        .accessibilityValue(model.shortcutLabel ?? model.t("Unassigned", "未设置"))
+                        .accessibilityLabel(model.text.string(.uiEditGlobalShortcut))
+                        .accessibilityValue(model.shortcutLabel ?? model.text.string(.uiUnassigned))
                         .accessibilityIdentifier("globalShortcut")
                     // Icon hit areas include padding; a smaller gap keeps the visible spacing balanced.
                     HStack(spacing: 4) {
                         Button { model.beginRecording() } label: {
                             DesignIcon(name: "Pencil").foregroundStyle(DesignStyle.secondary)
                                 .frame(width: controlHeight, height: controlHeight)
-                        }.accessibilityLabel(model.t("Edit global shortcut", "修改全局快捷键"))
+                        }.accessibilityLabel(model.text.string(.uiEditGlobalShortcut))
                         Button { model.clear() } label: {
                             Image(systemName: "trash").font(.system(size: 14, weight: .medium)).foregroundStyle(DesignStyle.secondary)
                                 .frame(width: controlHeight, height: controlHeight)
                         }.disabled(model.shortcut == nil)
-                            .accessibilityLabel(model.t("Delete global shortcut", "删除全局快捷键"))
+                            .accessibilityLabel(model.text.string(.uiDeleteGlobalShortcut))
                             .accessibilityIdentifier("deleteGlobalShortcut")
                     }.buttonStyle(HoverPlainButtonStyle(shape: controlShape))
                 }
@@ -53,8 +53,8 @@ struct GlobalShortcutSettingsView: View {
         }
         .onDisappear { model.cancelRecording() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in model.cancelRecording() }
-        .alert(model.t("Can’t set global shortcut", "无法设置全局快捷键"), isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
-            Button(model.t("OK", "好")) { model.error = nil }
+        .alert(model.text.string(.uiCanTSetGlobalShortcut), isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+            Button(model.text.string(.uiOk)) { model.error = nil }
         } message: { Text(model.error ?? "") }
     }
 }

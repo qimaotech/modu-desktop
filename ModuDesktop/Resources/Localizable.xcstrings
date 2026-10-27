@@ -1,0 +1,7502 @@
+{
+  "sourceLanguage": "en-US",
+  "strings": {
+    "message.appSBundledCLICouldNotRun": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app’s bundled CLI could not run."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 内置的 CLI 无法运行，请重新安装 Modu。"
+          }
+        }
+      }
+    },
+    "message.appSBundledCLIIsMissingOrNot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app’s bundled CLI is missing or not executable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 内置的 CLI 缺失或无法执行，请重新安装 Modu。"
+          }
+        }
+      }
+    },
+    "message.baseBranchIsUnavailableFixOriginHEADIn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base branch is unavailable. Fix origin/HEAD in an external Git tool and retry."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基准分支不可用，请使用外部 Git 工具修复 origin/HEAD 后重试。"
+          }
+        }
+      }
+    },
+    "message.branchIsAlreadyCheckedOut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch is already checked out: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分支已被检出：%1$@"
+          }
+        }
+      }
+    },
+    "message.branchTargetCompletedEffectsAreRetained": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch target: %1$@. Completed effects are retained."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标分支：%1$@。已完成的效果已保留。"
+          }
+        }
+      }
+    },
+    "message.bundledSkillIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bundled skill is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置工作流技能不可用。"
+          }
+        }
+      }
+    },
+    "message.changedPathsWillBeMovedTrash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld changed path will be moved to Trash."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld changed paths will be moved to Trash."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个更改路径将移入废纸篓。"
+          }
+        }
+      }
+    },
+    "message.changedPathsWillBePermanentlyDeleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld changed path will be permanently deleted."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld changed paths will be permanently deleted."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个更改路径将被永久删除。"
+          }
+        }
+      }
+    },
+    "message.changesWereRestoredButTemporaryStashCouldNot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes were restored, but the temporary stash could not be located for cleanup."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改动已恢复，但找不到用于清理的临时 stash。"
+          }
+        }
+      }
+    },
+    "message.checkLocalBinOwnershipAndPermissionsModuRequires": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check ~/.local/bin ownership and permissions. Modu requires user-owned directories without group or world write access."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查 ~/.local/bin 的所有者和权限。Modu 要求目录归当前用户所有，且用户组和其他用户没有写入权限。"
+          }
+        }
+      }
+    },
+    "message.chooseAtLeastOneRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose at least one repository."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请至少选择一个仓库。"
+          }
+        }
+      }
+    },
+    "message.chooseFolderWithEmptyRepositoriesAndWorktrees": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a folder with empty repositories/ and worktrees/: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 repositories/ 和 worktrees/ 均为空的文件夹：%1$@"
+          }
+        }
+      }
+    },
+    "message.chooseOrdinaryGitMainWorktreeOrDirectoryOutside": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an ordinary Git main worktree or a directory outside another repository."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择普通 Git 主工作树，或位于其他仓库之外的目录。"
+          }
+        }
+      }
+    },
+    "message.choosePathInsideTemporaryDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a path inside the temporary directory: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择此临时目录内的路径：%1$@"
+          }
+        }
+      }
+    },
+    "message.cleanupFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleanup failed: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理失败：%1$@"
+          }
+        }
+      }
+    },
+    "message.commandExceededSecondTimeLimit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command exceeded its %1$lld-second time limit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令执行超过 %1$lld 秒的时间限制。"
+          }
+        }
+      }
+    },
+    "message.commandOutputExceeded32MiB": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command output exceeded 32 MiB."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令输出超过 32 MiB。"
+          }
+        }
+      }
+    },
+    "message.commitRegularWorkspaceGitignoreBeforeCreatingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit a regular workspace .gitignore before creating this group."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先提交普通文件类型的工作区 .gitignore，再创建此分组。"
+          }
+        }
+      }
+    },
+    "message.commitWorkspaceGitignoreBeforeCreatingGroupMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit the workspace .gitignore before creating this group. Missing: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先提交工作区的 .gitignore，再创建此分组。缺少规则：%1$@"
+          }
+        }
+      }
+    },
+    "message.commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit the workspace .gitignore before creating this group. The workspace has no first commit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区尚无首次提交，请先提交工作区的 .gitignore，再创建此分组。"
+          }
+        }
+      }
+    },
+    "message.commitsAreNotReachableFromLocallyKnownRemote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld commit is not reachable from locally known remote-tracking refs."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld commits are not reachable from locally known remote-tracking refs."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地已知的远端跟踪引用无法到达 %1$lld 个提交。"
+          }
+        }
+      }
+    },
+    "message.configurationSaveAndVerificationFailedResourcesWereKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration save and verification failed. Resources were kept; inspect the workspace record before retrying."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置保存和校验失败，资源已保留。请检查工作区记录后重试。"
+          }
+        }
+      }
+    },
+    "message.context": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@：%2$@"
+          }
+        }
+      },
+      "comment": "A file path followed by a localized underlying error."
+    },
+    "message.couldNotAcquireWorkspaceLock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not acquire workspace lock."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法获取工作区锁。"
+          }
+        }
+      }
+    },
+    "message.couldNotAutomaticallyCommitWorkspaceFilesSavedResources": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not automatically commit workspace files. Saved resources and file changes were kept; the specified files may be staged. Check your Git identity, signing configuration and repository state, then retry. %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法自动提交工作区文件。已保存的资源和文件变化已保留，指定文件可能已暂存。请检查 Git 身份、签名配置和仓库状态后重试。%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotCheckGitignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check .gitignore: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查 .gitignore：%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotCheckGitignoreRules": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check .gitignore rules."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查 .gitignore 规则。"
+          }
+        }
+      }
+    },
+    "message.couldNotCheckWorkspaceFileChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check workspace file changes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查工作区文件改动。"
+          }
+        }
+      }
+    },
+    "message.couldNotCreateClaudeCodeDesktopLink": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create the Claude Code desktop link."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建 Claude Code 桌面链接。"
+          }
+        }
+      }
+    },
+    "message.couldNotCreateErrorPipe": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create error pipe."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建错误输出管道。"
+          }
+        }
+      }
+    },
+    "message.couldNotCreateMockPreferences": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create mock preferences."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建 mock 偏好设置。"
+          }
+        }
+      }
+    },
+    "message.couldNotCreateOutputPipe": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create output pipe."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建输出管道。"
+          }
+        }
+      }
+    },
+    "message.couldNotFinishRestoringWorkspaceChangesStashWas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not finish restoring workspace changes. Stash %1$@ was kept; completed workspace commits were kept. Check the working tree and index for conflicts before restoring it manually with git stash apply --index %2$@. %3$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成工作区改动恢复。stash %1$@ 和已完成的工作区提交均已保留。请检查工作树及暂存区冲突，再使用 git stash apply --index %2$@ 手动恢复。%3$@"
+          }
+        }
+      }
+    },
+    "message.couldNotIdentifyTestHostForCleanup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not identify the test host for cleanup."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法识别待清理的测试宿主。"
+          }
+        }
+      }
+    },
+    "message.couldNotInspectGroupDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not inspect group directory."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查分组目录。"
+          }
+        }
+      }
+    },
+    "message.couldNotLaunch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not launch %1$@: %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法启动 %1$@：%2$@"
+          }
+        }
+      }
+    },
+    "message.couldNotMonitorApplicationExit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not monitor the application exit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法监测应用退出。"
+          }
+        }
+      }
+    },
+    "message.couldNotMonitorRunningApplication": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not monitor the running application."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法监测正在运行的应用。"
+          }
+        }
+      }
+    },
+    "message.couldNotMoveTrash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not move to Trash: %1$@. %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法移入废纸篓：%1$@。%2$@"
+          }
+        }
+      }
+    },
+    "message.couldNotOpenWorkspaceLock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open workspace lock."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开工作区锁。"
+          }
+        }
+      }
+    },
+    "message.couldNotReadBranchComparisonCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the branch comparison count."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取分支比较的提交数量。"
+          }
+        }
+      }
+    },
+    "message.couldNotReadCurrentBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the current branch."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取当前分支。"
+          }
+        }
+      }
+    },
+    "message.couldNotReadProcessExitStatus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read process exit status."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取进程退出状态。"
+          }
+        }
+      }
+    },
+    "message.couldNotReplaceModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not replace Modu: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法替换 Modu：%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotSave": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save %1$@: %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存 %1$@：%2$@"
+          }
+        }
+      }
+    },
+    "message.couldNotStartUpdateInstaller": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not start the update installer."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法启动更新程序。"
+          }
+        }
+      }
+    },
+    "message.couldNotStashWorkspaceChangesBeforeUpdatingWorkflow": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not stash workspace changes before updating the workflow skill; the bundled skill was not installed.%1$@ %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新工作流技能前无法将工作区改动存入 stash，内置技能未安装。%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "message.couldNotUpdateGitignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not update .gitignore: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法更新 .gitignore：%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotVerifyBranchDeletion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not verify branch deletion: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证分支删除结果：%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotVerifyNewBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not verify the new branch: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证新分支：%1$@"
+          }
+        }
+      }
+    },
+    "message.couldNotWaitForApplicationExit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not wait for the application to exit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法等待应用退出。"
+          }
+        }
+      }
+    },
+    "message.currentBranchIsNotBaseBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current branch is not the Base branch."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前分支不是基准分支。"
+          }
+        }
+      }
+    },
+    "message.currentLocalBranchWillBePermanentlyDeletedIncluding": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current local branch '%1$@' will be permanently deleted, including unmerged commits."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前本地分支“%1$@”将被永久删除，包括未合并的提交。"
+          }
+        }
+      }
+    },
+    "message.deletionTargetsOrCheckedOutBranchesChangedNothing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deletion targets or checked-out branches changed. Nothing has been deleted. Review a new confirmation."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除目标或检出的分支已变化，尚未删除任何内容，请重新确认。"
+          }
+        }
+      }
+    },
+    "message.detachedHEAD": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detached HEAD."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD 处于分离状态。"
+          }
+        }
+      }
+    },
+    "message.detachedHEADNoBranchDelete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detached HEAD — no branch to delete."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD 处于分离状态，没有要删除的分支。"
+          }
+        }
+      }
+    },
+    "message.differentURLsDeriveSameRepositoryName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Different URLs derive the same repository name: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不同地址生成了相同的仓库名称：%1$@"
+          }
+        }
+      }
+    },
+    "message.directoryAndRegistrationAreMissingOnlyDeclarationWill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Directory and registration are missing; only the declaration will be removed. No branch will be deleted."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录及登记信息均缺失，仅移除记录，不会删除分支。"
+          }
+        }
+      }
+    },
+    "message.directoryMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Directory missing: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录缺失：%1$@"
+          }
+        }
+      }
+    },
+    "message.downloadedInstallerIsIncompletePleaseTryAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The downloaded installer is incomplete. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载的安装包不完整，请重试。"
+          }
+        }
+      }
+    },
+    "message.duplicateRepositoryIdentity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate repository identity: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库标识重复：%1$@"
+          }
+        }
+      }
+    },
+    "message.duplicateURL": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate URL."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址重复。"
+          }
+        }
+      }
+    },
+    "message.existingDirectoryHasNoMatchingGitRegistration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing directory has no matching Git registration: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有目录没有匹配的 Git 登记信息：%1$@"
+          }
+        }
+      }
+    },
+    "message.existingNonDirectoryModuWorkflowNonRegularSKILL": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The existing non-directory modu-workflow, non-regular SKILL.md, or third-party link was kept."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有的非目录 modu-workflow、非普通文件 SKILL.md 或第三方链接已保留。"
+          }
+        }
+      }
+    },
+    "message.existingNonModuLocalBinModuCliWas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The existing non-Modu ~/.local/bin/modu-cli was kept. Move it before retrying."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有的非 Modu 文件 ~/.local/bin/modu-cli 已保留，请将其移走后重试。"
+          }
+        }
+      }
+    },
+    "message.existingNonRegularWorkflowSkillFileWasKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The existing non-regular workflow skill file was kept: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有的非普通工作流技能文件已保留：%1$@"
+          }
+        }
+      }
+    },
+    "message.expectedOneConfigurationDocument": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expected one configuration document."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置文件必须包含一个配置文档。"
+          }
+        }
+      }
+    },
+    "message.expectedPreparedWorkspaceInsideOwnedTemporaryMockDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expected a prepared workspace inside an owned temporary mock directory."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择当前用户拥有的临时 mock 目录中已准备的工作区。"
+          }
+        }
+      }
+    },
+    "message.expectedRealDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expected a real directory: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此路径必须是实际目录：%1$@"
+          }
+        }
+      }
+    },
+    "message.expectedRegularMockDataFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expected a regular mock data file: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mock 数据必须是普通文件：%1$@"
+          }
+        }
+      }
+    },
+    "message.fetchedBaseBranchIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fetched Base branch is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拉取的基准分支不可用。"
+          }
+        }
+      }
+    },
+    "message.git": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git %1$@: %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git %1$@：%2$@"
+          }
+        }
+      }
+    },
+    "message.gitFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git %1$@ failed (%2$lld). %3$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git %1$@ 执行失败（%2$lld）。%3$@"
+          }
+        }
+      }
+    },
+    "message.gitReturnedNoWorktreeRegistrations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git returned no worktree registrations."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 未返回任何工作树登记信息。"
+          }
+        }
+      }
+    },
+    "message.githubRequestFailedHTTPPleaseTryAgainLater": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub request failed (HTTP %1$lld). Please try again later."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 请求失败（HTTP %1$lld），请稍后重试。"
+          }
+        }
+      }
+    },
+    "message.githubReturnedInvalidResponse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub returned an invalid response."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 返回了无效响应。"
+          }
+        }
+      }
+    },
+    "message.gitignoreMustBeReadableWritableRegularFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ".gitignore must be a readable, writable regular file."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ".gitignore 必须是可读写的普通文件。"
+          }
+        }
+      }
+    },
+    "message.groupCommitTracksReservedResourcePath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The group commit tracks a reserved resource path."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组提交正在跟踪保留的资源路径。"
+          }
+        }
+      }
+    },
+    "message.groupContainsUnmanagedBareGitRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group contains an unmanaged bare Git repository: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组中包含未受管理的裸 Git 仓库：%1$@"
+          }
+        }
+      }
+    },
+    "message.groupContainsUnmanagedGitRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group contains an unmanaged Git repository: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组中包含未受管理的 Git 仓库：%1$@"
+          }
+        }
+      }
+    },
+    "message.groupIsNotConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group is not configured."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组尚未配置。"
+          }
+        }
+      }
+    },
+    "message.groupMembersMustReferenceDistinctConfiguredRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group members must reference distinct configured repositories."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组成员必须引用已配置的仓库，且不能重复。"
+          }
+        }
+      }
+    },
+    "message.groupMustBeMapping": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group must be a mapping."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组配置必须是映射。"
+          }
+        }
+      }
+    },
+    "message.groupNameConflictsWithExistingGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group name conflicts with an existing group."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组名称与已有分组冲突。"
+          }
+        }
+      }
+    },
+    "message.groupNameMustBeOneDirectoryNameAnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group name must be one directory name and a valid Git branch name."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组名称必须是单个目录名，同时符合 Git 分支命名规则。"
+          }
+        }
+      }
+    },
+    "message.groupRootBelongsAnotherRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group root belongs to another repository."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组根工作树属于另一个仓库。"
+          }
+        }
+      }
+    },
+    "message.groupRootHEADIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group root HEAD is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组根工作树的 HEAD 不可用。"
+          }
+        }
+      }
+    },
+    "message.groupRootRegistrationIsMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group root registration is missing."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组根工作树的登记信息缺失。"
+          }
+        }
+      }
+    },
+    "message.groupStillHasMembers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group still has members."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组仍有成员。"
+          }
+        }
+      }
+    },
+    "message.groupsMustBeMapping": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "groups must be a mapping."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "groups 必须是映射。"
+          }
+        }
+      }
+    },
+    "message.headDoesNotIdentifyCommit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD does not identify a commit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD 未指向有效提交。"
+          }
+        }
+      }
+    },
+    "message.headIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEAD 不可用。"
+          }
+        }
+      }
+    },
+    "message.ignoredFilesWillBePermanentlyDeleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignored files will be permanently deleted."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被忽略的文件将被永久删除。"
+          }
+        }
+      }
+    },
+    "message.importRequiresEmptyWorkspaceChooseAnotherWorkspaceIn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import requires an empty workspace. Choose another workspace in Settings. Existing files and configuration were not changed."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入需要空工作区，请在设置中选择其他工作区。现有文件和配置未被修改。"
+          }
+        }
+      }
+    },
+    "message.installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装"
+          }
+        }
+      }
+    },
+    "message.installedApplicationOrPreparedUpdateChangedPleaseCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installed application or prepared update changed. Please check for updates again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装的应用或准备好的更新发生变化，请重新检查更新。"
+          }
+        }
+      }
+    },
+    "message.installerChecksumDoesNotMatchPleaseTryAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer checksum does not match. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装包校验不匹配，请重试。"
+          }
+        }
+      }
+    },
+    "message.installerDoesNotContainAppleSiliconExecutable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer does not contain an Apple Silicon executable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装包不包含适用于 Apple Silicon 的可执行文件。"
+          }
+        }
+      }
+    },
+    "message.installerDoesNotContainExpectedVersionOfModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer does not contain the expected version of Modu."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装包中不是预期版本的 Modu。"
+          }
+        }
+      }
+    },
+    "message.installerIsMissingRequiredExecutable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer is missing a required executable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装包缺少必需的可执行文件。"
+          }
+        }
+      }
+    },
+    "message.invalidCommitObjectID": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid commit object ID."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交对象 ID 无效。"
+          }
+        }
+      }
+    },
+    "message.invalidGitStatusRecord": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid Git status record."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 状态记录无效。"
+          }
+        }
+      }
+    },
+    "message.invalidGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid group: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组配置无效：%1$@"
+          }
+        }
+      }
+    },
+    "message.invalidGroupBranchName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid group branch name: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组分支名称无效：%1$@"
+          }
+        }
+      }
+    },
+    "message.invalidResourcePath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid resource path."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资源路径无效。"
+          }
+        }
+      }
+    },
+    "message.invalidVersionOrCanonicalRootPath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid version or canonical root path."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置版本或规范化根目录路径无效。"
+          }
+        }
+      }
+    },
+    "message.isNotInstalled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is not installed."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未安装 %1$@。"
+          }
+        }
+      }
+    },
+    "message.latestReleaseHasNoCompatibleModuInstaller": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The latest release has no compatible Modu installer."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新版本尚未提供兼容的 Modu 安装包。"
+          }
+        }
+      }
+    },
+    "message.linkedWorktreesForRepositoriesContainingSubmodulesAreNot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linked worktrees for repositories containing submodules are not supported: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持为包含子模块的仓库创建关联工作树：%1$@"
+          }
+        }
+      }
+    },
+    "message.loginShellCouldNotCompleteCLICheckCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The login shell could not complete the CLI check. Check its startup configuration and retry."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 shell 无法完成 CLI 检查，请检查其启动配置后重试。"
+          }
+        }
+      }
+    },
+    "message.loginShellCouldNotFindModuCliAdd": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The login shell could not find modu-cli. Add ~/.local/bin to its PATH, then retry. Shell configuration is not changed by Modu."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 shell 找不到 modu-cli，请将 ~/.local/bin 加入其 PATH 后重试。Modu 不会修改 shell 配置。"
+          }
+        }
+      }
+    },
+    "message.mainRepositoryWillBeMovedTrash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Main repository will be moved to Trash."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主仓库将移入废纸篓。"
+          }
+        }
+      }
+    },
+    "message.memberIsNotConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member is not configured."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成员尚未配置。"
+          }
+        }
+      }
+    },
+    "message.missingRenameSourcePath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing rename source path."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名记录缺少原路径。"
+          }
+        }
+      }
+    },
+    "message.missingRepositoryStillHasConfiguredMembers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing repository still has configured members."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺失的仓库仍有已配置的成员。"
+          }
+        }
+      }
+    },
+    "message.mockScenariosAreOnlyAvailableInDebugBuilds": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mock scenarios are only available in Debug builds."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mock 场景仅在 Debug 构建中可用。"
+          }
+        }
+      }
+    },
+    "message.mockWorkspaceHasNotBeenPreparedSuccessfully": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mock workspace has not been prepared successfully."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mock 工作区尚未准备完成。"
+          }
+        }
+      }
+    },
+    "message.mockWorkspaceRequiresMock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--mock-workspace requires --mock."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--mock-workspace 必须与 --mock 一起使用。"
+          }
+        }
+      }
+    },
+    "message.moduCannotUpdateInLocationInstallInWritable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu cannot update in this location. Install it in a writable Applications folder and try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法在当前位置更新 Modu，请将应用移至可写入的 Applications 文件夹后重试。"
+          }
+        }
+      }
+    },
+    "message.moduCliResolvesDifferentCommandAdjustPATHOrder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modu-cli resolves to a different command. Adjust your PATH order or resolve the conflicting command, then retry.\nCurrent: %1$@\nExpected: %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modu-cli 指向了其他命令，请调整 PATH 顺序或处理冲突后重试。\n当前：%1$@\n预期：%2$@"
+          }
+        }
+      }
+    },
+    "message.moduDidNotExitInTimeUpdateWas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu did not exit in time. The update was not installed. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu 未能及时退出，尚未安装更新，请重试。"
+          }
+        }
+      }
+    },
+    "message.newBranchChangedDuringCreationAndWasKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new branch changed during creation and was kept: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新分支在创建过程中发生变化，已保留：%1$@"
+          }
+        }
+      }
+    },
+    "message.noCompleteSupportedGitRepositoryURLsWereFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No complete, supported Git repository URLs were found in this YAML file."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 YAML 文件中没有完整且受支持的 Git 仓库地址。"
+          }
+        }
+      }
+    },
+    "message.noLocalStartingCommitUpdateMainRepositoryFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No local starting commit. Update the main repository first: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用的本地起始提交，请先更新主仓库：%1$@"
+          }
+        }
+      }
+    },
+    "message.noRegisteredWorkspaceContainsCurrentDirectoryUseWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No registered workspace contains the current directory. Use --workspace <root>."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前目录不属于任何已登记的工作区，请使用 --workspace <root> 指定工作区。"
+          }
+        }
+      }
+    },
+    "message.notProcessedBecauseOperationStopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not processed because the operation stopped."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已停止，此项尚未处理。"
+          }
+        }
+      }
+    },
+    "message.notRepositoryRoot": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a repository root."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此路径不是仓库根目录。"
+          }
+        }
+      }
+    },
+    "message.notRepositoryRoot2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a repository root: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此路径不是仓库根目录：%1$@"
+          }
+        }
+      }
+    },
+    "message.onlyRepositoryDeclarationWillBeRemoved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the repository declaration will be removed."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅移除仓库记录。"
+          }
+        }
+      }
+    },
+    "message.operationCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation cancelled."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已取消。"
+          }
+        }
+      }
+    },
+    "message.operationCancelledCompletedResourcesWereKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation cancelled; completed resources were kept."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已取消，已完成的资源已保留。"
+          }
+        }
+      }
+    },
+    "message.originHEADDoesNotIdentifyCommit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin/HEAD does not identify a commit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin/HEAD 未指向有效提交。"
+          }
+        }
+      }
+    },
+    "message.originHEADDoesNotIdentifyValidComparisonCommit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin/HEAD does not identify a valid comparison commit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin/HEAD 未指向有效的比较提交。"
+          }
+        }
+      }
+    },
+    "message.registeredWorktreeHEADIsUnreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registered worktree HEAD is unreadable: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取已登记工作树的 HEAD：%1$@"
+          }
+        }
+      }
+    },
+    "message.reinstallModuCliLinkLocalBinModuCli": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstall modu-cli to link ~/.local/bin/modu-cli to this app’s bundled CLI."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请重新安装 modu-cli，将 ~/.local/bin/modu-cli 链接到当前 App 内置的 CLI。"
+          }
+        }
+      }
+    },
+    "message.releaseContainsUnsupportedInstallerChecksum": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release contains an unsupported installer checksum."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布版本提供的安装包校验格式不受支持。"
+          }
+        }
+      }
+    },
+    "message.releaseHasNoInstallerChecksum": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release has no installer checksum."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布版本未提供安装包校验值。"
+          }
+        }
+      }
+    },
+    "message.releaseVersionCouldNotBeCompared": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release version could not be compared."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法比较发布版本。"
+          }
+        }
+      }
+    },
+    "message.remoteDefaultBranchDoesNotIdentifyCommit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote default branch does not identify a commit."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端默认分支未指向有效提交。"
+          }
+        }
+      }
+    },
+    "message.remoteDefaultBranchIsInvalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote default branch is invalid."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端默认分支无效。"
+          }
+        }
+      }
+    },
+    "message.remoteHasNoValidDefaultBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote has no valid default branch."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端没有有效的默认分支。"
+          }
+        }
+      }
+    },
+    "message.repositoriesMustBeList": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "repositories must be a list."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "repositories 必须是列表。"
+          }
+        }
+      }
+    },
+    "message.repositoryDirectoryIsMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository directory is missing."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库目录缺失。"
+          }
+        }
+      }
+    },
+    "message.repositoryIsNotConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository is not configured."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库尚未配置。"
+          }
+        }
+      }
+    },
+    "message.repositoryIsStillUsedByWorktreesOutsideModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository is still used by worktrees outside Modu’s configuration. Resolve them outside Modu first. No resources were changed.\n%1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu 配置之外的工作树仍在使用此仓库，请先在 Modu 之外处理。资源未被修改。\n%1$@"
+          }
+        }
+      }
+    },
+    "message.repositoryMembersMustBeRemovedFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository members must be removed first."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先移除仓库成员。"
+          }
+        }
+      }
+    },
+    "message.repositoryMustBeMapping": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository must be a mapping."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库配置必须是映射。"
+          }
+        }
+      }
+    },
+    "message.repositoryNameIsAlreadyRegistered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository name is already registered: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库名称已登记：%1$@"
+          }
+        }
+      }
+    },
+    "message.repositoryOriginDoesNotMatchWorkspaceRecord": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository origin does not match the workspace record: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库 origin 与工作区记录不一致：%1$@"
+          }
+        }
+      }
+    },
+    "message.repositoryRemoteMustResolveLocalPathInsideTemporary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository remote must resolve to a local path inside the temporary directory: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库远端必须指向此临时目录内的本地路径：%1$@"
+          }
+        }
+      }
+    },
+    "message.repositorySummaryIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository summary is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库摘要不可用。"
+          }
+        }
+      }
+    },
+    "message.repositoryTargetAlreadyExists": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository target already exists: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库目标路径已存在：%1$@"
+          }
+        }
+      }
+    },
+    "message.repositoryTargetIsOccupied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository target is occupied."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库目标路径已被占用。"
+          }
+        }
+      }
+    },
+    "message.resourceIsNotConfigured": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resource is not configured."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资源尚未配置。"
+          }
+        }
+      }
+    },
+    "message.reusedBranchButComparisonWithIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reused branch '%1$@', but its comparison with '%2$@' is unavailable. %3$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复用分支“%1$@”，无法判断它是否落后于“%2$@”。%3$@"
+          }
+        }
+      }
+    },
+    "message.symbolicLinksAreNotAllowedInTemporaryPath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbolic links are not allowed in this temporary path: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此临时路径不允许使用符号链接：%1$@"
+          }
+        }
+      }
+    },
+    "message.trashCompletedWithoutVerifiableDestination": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trash completed without a verifiable destination: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓的操作已完成，但无法确认目标位置：%1$@"
+          }
+        }
+      }
+    },
+    "message.unknownOrDuplicateConfigurationField": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown or duplicate configuration field."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置中包含未知或重复的字段。"
+          }
+        }
+      }
+    },
+    "message.updateInstallationPlanIsInvalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update installation plan is invalid."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新安装计划无效，请重新检查更新。"
+          }
+        }
+      }
+    },
+    "message.updateInstallerDidNotBecomeReadyPleaseTry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update installer did not become ready. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新程序未能就绪，请重试。"
+          }
+        }
+      }
+    },
+    "message.updateInstallerHasNoValidProcessIdentifier": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update installer has no valid process identifier."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新程序缺少有效的进程标识。"
+          }
+        }
+      }
+    },
+    "message.updateInstallerStoppedUnexpectedlyPleaseTryAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update installer stopped unexpectedly. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新程序意外停止，请重试。"
+          }
+        }
+      }
+    },
+    "message.updateRequiresNewerVersionOfMacOS": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This update requires a newer version of macOS."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此更新需要更高版本的 macOS。"
+          }
+        }
+      }
+    },
+    "message.useBuildScriptPrepareMockLinkedWorktreeSelected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the build script to prepare --mock linked-worktree-selected --mock-workspace <root>."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用构建脚本准备 --mock linked-worktree-selected --mock-workspace <root>。"
+          }
+        }
+      }
+    },
+    "message.useHTTPSSSHOrSCPStyleGitURL": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use an HTTPS, SSH, or SCP-style Git URL without embedded credentials."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用 HTTPS、SSH 或 SCP 格式的 Git 地址，且不要在地址中包含凭据。"
+          }
+        }
+      }
+    },
+    "message.workingTreeHasChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working tree has changes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树有更改。"
+          }
+        }
+      }
+    },
+    "message.workingTreeIsClean": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working tree is clean."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树无更改。"
+          }
+        }
+      }
+    },
+    "message.workspaceChangeDiscardRequiresRegularFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace change discard requires a regular file: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "丢弃工作区改动要求目标是普通文件：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceChangesAndIndexStateWereRestoredBut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace changes and their index state were restored, but stash %1$@ could not be removed. Do not apply it again. %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区改动及暂存状态已恢复，但无法移除 stash %1$@。请勿再次应用它。%2$@"
+          }
+        }
+      }
+    },
+    "message.workspaceChangesWereRestored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace changes were restored."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区改动已恢复。"
+          }
+        }
+      }
+    },
+    "message.workspaceCommitRequiresRegularFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace commit requires a regular file: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区提交要求目标是普通文件：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceIsInUseByAnotherModuOperation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This workspace is in use by another Modu operation."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此工作区正被其他 Modu 操作使用。"
+          }
+        }
+      }
+    },
+    "message.workspaceIsNotWritable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace is not writable: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区不可写入：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceNotFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace not found: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到工作区：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceRecordIsMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace record is missing: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区记录缺失：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceRepositoryIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace repository is unavailable: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区仓库不可用：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceRootDoesNotMatchRecord": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace root does not match its record."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区根目录与其记录不一致。"
+          }
+        }
+      }
+    },
+    "message.workspaceTracksRepositoriesOrWorktreesRemovePathsFrom": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace tracks repositories/ or worktrees/. Remove those paths from Git outside Modu first."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区正在跟踪 repositories/ 或 worktrees/，请先使用外部 Git 工具移除对这些路径的跟踪。"
+          }
+        }
+      }
+    },
+    "message.workspacesCanTBeNested": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspaces can’t be nested: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区不能嵌套：%1$@"
+          }
+        }
+      }
+    },
+    "message.worktreeBelongsAnotherRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree belongs to another repository."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此工作树属于另一个仓库。"
+          }
+        }
+      }
+    },
+    "message.worktreeHEADIsUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree HEAD is unavailable."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树 HEAD 不可用。"
+          }
+        }
+      }
+    },
+    "message.worktreeIsLocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree is locked: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树已锁定：%1$@"
+          }
+        }
+      }
+    },
+    "message.worktreePathAlreadyExists": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree path already exists: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树路径已存在：%1$@"
+          }
+        }
+      }
+    },
+    "message.worktreePathIsAlreadyRegistered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree path is already registered."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树路径已登记。"
+          }
+        }
+      }
+    },
+    "message.worktreeRegistrationIsMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree registration is missing: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树登记信息缺失：%1$@"
+          }
+        }
+      }
+    },
+    "message.yamlContainsRepositoryURLWithEmbeddedCredentialsRemove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML contains a repository URL with embedded credentials. Remove credentials and retry."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML 中的仓库地址包含凭据，请移除凭据后重试。"
+          }
+        }
+      }
+    },
+    "message.yamlContainsUnresolvedOrRecursiveAlias": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML contains an unresolved or recursive alias."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML 包含无法解析或递归引用的别名。"
+          }
+        }
+      }
+    },
+    "ui.actions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
+          }
+        }
+      }
+    },
+    "ui.add": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加"
+          }
+        }
+      }
+    },
+    "ui.addRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Repository…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加仓库…"
+          }
+        }
+      }
+    },
+    "ui.addRepository2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加仓库"
+          }
+        }
+      }
+    },
+    "ui.added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已添加"
+          }
+        }
+      }
+    },
+    "ui.added2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增"
+          }
+        }
+      }
+    },
+    "ui.addingRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adding repository…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在添加仓库…"
+          }
+        }
+      }
+    },
+    "ui.agent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        }
+      }
+    },
+    "ui.alreadyExists": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already exists"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存在"
+          }
+        }
+      }
+    },
+    "ui.applied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applied"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已生效"
+          }
+        }
+      }
+    },
+    "ui.back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回"
+          }
+        }
+      }
+    },
+    "ui.backEdit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to Edit"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回编辑"
+          }
+        }
+      }
+    },
+    "ui.baseBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base branch"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基准分支"
+          }
+        }
+      }
+    },
+    "ui.bundledUpdateInstallerIsMissingReinstallModuAnd": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bundled update installer is missing. Reinstall Modu and try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置更新程序缺失，请重新安装 Modu 后重试。"
+          }
+        }
+      }
+    },
+    "ui.canTAddRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t add repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法添加仓库"
+          }
+        }
+      }
+    },
+    "ui.canTExportConfiguration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t export configuration"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导出配置"
+          }
+        }
+      }
+    },
+    "ui.canTImportIntoWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t import into this workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导入此工作区"
+          }
+        }
+      }
+    },
+    "ui.canTOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t open %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开 %1$@"
+          }
+        }
+      }
+    },
+    "ui.canTOpenWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t open workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开工作区"
+          }
+        }
+      }
+    },
+    "ui.canTReadConfigurationFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t read configuration file"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取配置文件"
+          }
+        }
+      }
+    },
+    "ui.canTSetGlobalShortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t set global shortcut"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法设置全局快捷键"
+          }
+        }
+      }
+    },
+    "ui.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "ui.cancelReload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Reload"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消重新加载"
+          }
+        }
+      }
+    },
+    "ui.cancelUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消更新"
+          }
+        }
+      }
+    },
+    "ui.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消"
+          }
+        }
+      }
+    },
+    "ui.cancelling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelling…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在取消…"
+          }
+        }
+      }
+    },
+    "ui.change": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改…"
+          }
+        }
+      }
+    },
+    "ui.changes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改"
+          }
+        }
+      }
+    },
+    "ui.checkAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Again"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新检查"
+          }
+        }
+      }
+    },
+    "ui.checkForUpdates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for Updates…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查更新…"
+          }
+        }
+      }
+    },
+    "ui.checking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查…"
+          }
+        }
+      }
+    },
+    "ui.checkingGitHubReleases": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking GitHub Releases…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查 GitHub Releases…"
+          }
+        }
+      }
+    },
+    "ui.checkingRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking repository…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查仓库…"
+          }
+        }
+      }
+    },
+    "ui.choose": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择…"
+          }
+        }
+      }
+    },
+    "ui.chooseAnother": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Another…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新选择…"
+          }
+        }
+      }
+    },
+    "ui.chooseAnotherWorkspaceInSettingsThenTryAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another workspace in Settings, then try again. Your files and configuration have not been changed."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在设置中选择其他工作区后重试。你的文件和配置未被修改。"
+          }
+        }
+      }
+    },
+    "ui.chooseRepositoriesCloneIntoWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose repositories to clone into this workspace."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要克隆到此工作区的仓库。"
+          }
+        }
+      }
+    },
+    "ui.chooseTool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose tool"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择工具"
+          }
+        }
+      }
+    },
+    "ui.chooseWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择工作区"
+          }
+        }
+      }
+    },
+    "ui.clean": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无更改"
+          }
+        }
+      }
+    },
+    "ui.cleanedUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleaned up"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已清理"
+          }
+        }
+      }
+    },
+    "ui.cleaningUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleaning up…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在清理…"
+          }
+        }
+      }
+    },
+    "ui.clearSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Search"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除搜索"
+          }
+        }
+      }
+    },
+    "ui.cliInstallation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI installation"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装 CLI"
+          }
+        }
+      }
+    },
+    "ui.clone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clone"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "克隆"
+          }
+        }
+      }
+    },
+    "ui.cloning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloning…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在克隆…"
+          }
+        }
+      }
+    },
+    "ui.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "ui.collapsed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapsed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已折叠"
+          }
+        }
+      }
+    },
+    "ui.commits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commits"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交"
+          }
+        }
+      }
+    },
+    "ui.committedWorkspaceFiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Committed workspace files"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已提交工作区文件"
+          }
+        }
+      }
+    },
+    "ui.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
+          }
+        }
+      }
+    },
+    "ui.completedItemsAreKeptWhenCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed items are kept when cancelled."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消后保留已完成项。"
+          }
+        }
+      }
+    },
+    "ui.completedWithWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成，有提示"
+          }
+        }
+      }
+    },
+    "ui.configuration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置"
+          }
+        }
+      }
+    },
+    "ui.configurationError": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configuration error"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配置文件错误"
+          }
+        }
+      }
+    },
+    "ui.confirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmation required"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要确认"
+          }
+        }
+      }
+    },
+    "ui.conflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conflict"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲突"
+          }
+        }
+      }
+    },
+    "ui.continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续"
+          }
+        }
+      }
+    },
+    "ui.continueWithoutSkill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue Without Skill"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不安装技能并继续"
+          }
+        }
+      }
+    },
+    "ui.copyPath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Path"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制路径"
+          }
+        }
+      }
+    },
+    "ui.couldnTCompleteOperationSeeDetailsForDiagnostic": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t complete the operation. See Details for the diagnostic information."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成操作，请展开详细信息查看诊断信息。"
+          }
+        }
+      }
+    },
+    "ui.couldnTCompleteUpdate2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t complete the update. %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成更新。%1$@"
+          }
+        }
+      }
+    },
+    "ui.create": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建"
+          }
+        }
+      }
+    },
+    "ui.createBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create branch"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建分支"
+          }
+        }
+      }
+    },
+    "ui.createGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建分组"
+          }
+        }
+      }
+    },
+    "ui.createWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create worktree"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建工作树"
+          }
+        }
+      }
+    },
+    "ui.createWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Worktree Group…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建工作树分组…"
+          }
+        }
+      }
+    },
+    "ui.createWorktreeGroup2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Worktree Group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建工作树分组"
+          }
+        }
+      }
+    },
+    "ui.created": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已创建"
+          }
+        }
+      }
+    },
+    "ui.createdDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created directory"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已创建目录"
+          }
+        }
+      }
+    },
+    "ui.creating": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在创建…"
+          }
+        }
+      }
+    },
+    "ui.creatingWorkspaceWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating workspace worktree…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在创建工作区工作树…"
+          }
+        }
+      }
+    },
+    "ui.creatingWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating worktree group…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在创建工作树分组…"
+          }
+        }
+      }
+    },
+    "ui.delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除…"
+          }
+        }
+      }
+    },
+    "ui.delete2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        }
+      }
+    },
+    "ui.deleteBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete branch"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除分支"
+          }
+        }
+      }
+    },
+    "ui.deleteGlobalShortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete global shortcut"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除全局快捷键"
+          }
+        }
+      }
+    },
+    "ui.deleteLinkedWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Linked Worktree?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除关联工作树？"
+          }
+        }
+      }
+    },
+    "ui.deleteRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Repository?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除仓库？"
+          }
+        }
+      }
+    },
+    "ui.deleteWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Worktree Group?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除工作树分组？"
+          }
+        }
+      }
+    },
+    "ui.deleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        }
+      }
+    },
+    "ui.deleting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在删除…"
+          }
+        }
+      }
+    },
+    "ui.details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详细信息"
+          }
+        }
+      }
+    },
+    "ui.dirty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirty"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有更改"
+          }
+        }
+      }
+    },
+    "ui.discardedManagedFileChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discarded managed file changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已丢弃受管文件改动"
+          }
+        }
+      }
+    },
+    "ui.dismiss": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭提示"
+          }
+        }
+      }
+    },
+    "ui.displayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Name"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示名称"
+          }
+        }
+      }
+    },
+    "ui.downloadingInstaller": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading installer…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在下载安装包…"
+          }
+        }
+      }
+    },
+    "ui.editGlobalShortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit global shortcut"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改全局快捷键"
+          }
+        }
+      }
+    },
+    "ui.editWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Worktree Group…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑工作树分组…"
+          }
+        }
+      }
+    },
+    "ui.editWorktreeGroup2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Worktree Group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑工作树分组"
+          }
+        }
+      }
+    },
+    "ui.editor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑器"
+          }
+        }
+      }
+    },
+    "ui.expandOrCollapse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand or collapse"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展开或折叠"
+          }
+        }
+      }
+    },
+    "ui.expanded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expanded"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已展开"
+          }
+        }
+      }
+    },
+    "ui.exportYAML": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export YAML…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出 YAML…"
+          }
+        }
+      }
+    },
+    "ui.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败 %1$@"
+          }
+        }
+      }
+    },
+    "ui.failed2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
+          }
+        }
+      }
+    },
+    "ui.fastForward": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast-forward"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快进"
+          }
+        }
+      }
+    },
+    "ui.finishingCurrentItemBeforeCancellation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finishing current item before cancellation…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在完成当前项，随后取消…"
+          }
+        }
+      }
+    },
+    "ui.followSystem": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow System"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随系统"
+          }
+        }
+      }
+    },
+    "ui.general": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用"
+          }
+        }
+      }
+    },
+    "ui.gitGUI": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git GUI"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 图形工具"
+          }
+        }
+      }
+    },
+    "ui.globalShortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global Shortcut"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全局快捷键"
+          }
+        }
+      }
+    },
+    "ui.groupCreation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group creation"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建分组"
+          }
+        }
+      }
+    },
+    "ui.groupName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group Name"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组名称"
+          }
+        }
+      }
+    },
+    "ui.groupUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新分组"
+          }
+        }
+      }
+    },
+    "ui.groupWorkspaceWorktreeMembersAndCurrentLocalBranches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The group workspace worktree, its members, and their current local branches (including unmerged commits) will be permanently deleted."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将永久删除分组根工作树、成员工作树及它们当前的本地分支（包括未合并提交）。"
+          }
+        }
+      }
+    },
+    "ui.groupWorkspaceWorktreeWillBeKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The group workspace worktree will be kept."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将保留分组根工作树。"
+          }
+        }
+      }
+    },
+    "ui.headBranch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Head branch"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前分支"
+          }
+        }
+      }
+    },
+    "ui.import": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入"
+          }
+        }
+      }
+    },
+    "ui.importRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入仓库"
+          }
+        }
+      }
+    },
+    "ui.importYAML": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import YAML…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 YAML…"
+          }
+        }
+      }
+    },
+    "ui.importingRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing repositories…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导入仓库…"
+          }
+        }
+      }
+    },
+    "ui.importingWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing workspace…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导入工作区…"
+          }
+        }
+      }
+    },
+    "ui.initializedGit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initialized Git"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已初始化 Git"
+          }
+        }
+      }
+    },
+    "ui.install": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装"
+          }
+        }
+      }
+    },
+    "ui.installAndRestart": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install and Restart"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装并重启"
+          }
+        }
+      }
+    },
+    "ui.installModuCli": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install modu-cli"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装 modu-cli"
+          }
+        }
+      }
+    },
+    "ui.installUpdateAndAutomaticallyRestartModuWorkspacesAre": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install the update and automatically restart Modu. Your workspaces are preserved."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装更新后将自动重新启动 Modu，工作区数据会保留。"
+          }
+        }
+      }
+    },
+    "ui.installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装"
+          }
+        }
+      }
+    },
+    "ui.installedCLI": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed CLI"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装 CLI"
+          }
+        }
+      }
+    },
+    "ui.installedVersion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed version: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前版本：%1$@"
+          }
+        }
+      }
+    },
+    "ui.installedWorkflowSkill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed workflow skill"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装工作流技能"
+          }
+        }
+      }
+    },
+    "ui.installerVerificationFailedPleaseDownloadAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer verification failed. Please download it again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装包校验失败，请重新下载。"
+          }
+        }
+      }
+    },
+    "ui.installing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在安装…"
+          }
+        }
+      }
+    },
+    "ui.language": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言"
+          }
+        }
+      }
+    },
+    "ui.latestReleaseHasNoCompatibleInstallerYetCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The latest release has no compatible installer yet. Check the release page or try again later."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新版本尚未提供兼容的安装包，请查看发布页面或稍后重试。"
+          }
+        }
+      }
+    },
+    "ui.letSStart": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let’s start"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始使用"
+          }
+        }
+      }
+    },
+    "ui.linkedWorktreeAndCurrentLocalBranchIncludingUnmerged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The linked worktree and its current local branch (including unmerged commits) will be permanently deleted."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将永久删除关联工作树及其当前本地分支（包括未合并提交）。"
+          }
+        }
+      }
+    },
+    "ui.loadMore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load More"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载更多"
+          }
+        }
+      }
+    },
+    "ui.loadingChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading changes…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载更改…"
+          }
+        }
+      }
+    },
+    "ui.loadingCommits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading commits…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载提交…"
+          }
+        }
+      }
+    },
+    "ui.loadingSummary": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading summary…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载摘要…"
+          }
+        }
+      }
+    },
+    "ui.loadingWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading workspace…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载工作区…"
+          }
+        }
+      }
+    },
+    "ui.localRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地仓库"
+          }
+        }
+      }
+    },
+    "ui.localRepositories2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Repositories…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地仓库…"
+          }
+        }
+      }
+    },
+    "ui.matches": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld matches"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配 %1$lld 个"
+          }
+        }
+      }
+    },
+    "ui.modified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改"
+          }
+        }
+      }
+    },
+    "ui.moduCanTUpdateInLocationMoveWritable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu can’t update in this location. Move it to a writable Applications folder and try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法在当前位置更新 Modu，请将应用移至可写入的 Applications 文件夹后重试。"
+          }
+        }
+      }
+    },
+    "ui.moduDidNotExitInTimeUpdateWas": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu did not exit in time. The update was not installed. Please try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu 未能及时退出，尚未安装更新，请重试。"
+          }
+        }
+      }
+    },
+    "ui.moduIsAvailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu %1$@ is available"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu %1$@ 已发布"
+          }
+        }
+      }
+    },
+    "ui.moduSetup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu Setup"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu 设置"
+          }
+        }
+      }
+    },
+    "ui.moveTrash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓"
+          }
+        }
+      }
+    },
+    "ui.moved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moved"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动"
+          }
+        }
+      }
+    },
+    "ui.noMatchingRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的仓库"
+          }
+        }
+      }
+    },
+    "ui.noRepositoriesWereAdded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No repositories were added"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有新增仓库"
+          }
+        }
+      }
+    },
+    "ui.noRepositoriesWithAccessibleRemoteAndValidDefault": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No repositories with an accessible remote and a valid default branch were found. Check the remote URLs, default branches, network connection, and access permissions."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到可从远端克隆的仓库，请检查远端地址、默认分支、网络连接和访问权限。"
+          }
+        }
+      }
+    },
+    "ui.noWorkspaceSelected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No workspace selected"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择工作区"
+          }
+        }
+      }
+    },
+    "ui.notProcessed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not processed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未处理"
+          }
+        }
+      }
+    },
+    "ui.ofProcessed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld processed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已处理 %1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "ui.ofSelected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld selected"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %1$lld / %2$lld 个"
+          }
+        }
+      }
+    },
+    "ui.ofSelected2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld selected"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "ui.ok": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "ui.onlySavesRepositoryAndGroupStructureNotFiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only saves repository and group structure, not files, history, or current branch state."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅保存仓库与分组结构，不备份文件、历史或当前分支状态。"
+          }
+        }
+      }
+    },
+    "ui.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开"
+          }
+        }
+      }
+    },
+    "ui.openWorkspaceInCodex": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Workspace in Codex"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Codex 中打开工作区"
+          }
+        }
+      }
+    },
+    "ui.openingWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening workspace…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在打开工作区…"
+          }
+        }
+      }
+    },
+    "ui.operation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
+          }
+        }
+      }
+    },
+    "ui.operationFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation failed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作失败"
+          }
+        }
+      }
+    },
+    "ui.optional": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选"
+          }
+        }
+      }
+    },
+    "ui.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不可用"
+          }
+        }
+      }
+    },
+    "ui.partiallyCompleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分完成"
+          }
+        }
+      }
+    },
+    "ui.preparingUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing update…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备更新…"
+          }
+        }
+      }
+    },
+    "ui.pressShortcut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press shortcut"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下快捷键"
+          }
+        }
+      }
+    },
+    "ui.quit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出"
+          }
+        }
+      }
+    },
+    "ui.quitOtherInstancesOfModuBeforeInstallingUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit other instances of Modu before installing the update."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先退出其他正在运行的 Modu 实例，再安装更新。"
+          }
+        }
+      }
+    },
+    "ui.readyInstallModuWillRestartAfterQuitting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to install. Modu will restart after quitting."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新已就绪，Modu 退出后将安装并重新启动。"
+          }
+        }
+      }
+    },
+    "ui.refreshChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh Changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新更改"
+          }
+        }
+      }
+    },
+    "ui.reinstall": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstall"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新安装"
+          }
+        }
+      }
+    },
+    "ui.reinstalling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstalling…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在重新安装…"
+          }
+        }
+      }
+    },
+    "ui.releaseNotes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release Notes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布说明"
+          }
+        }
+      }
+    },
+    "ui.releaseVersionCouldNotBeComparedPleaseCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release version could not be compared. Please check the release page."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法比较发布版本，请查看发布页面。"
+          }
+        }
+      }
+    },
+    "ui.reload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新加载"
+          }
+        }
+      }
+    },
+    "ui.reloadWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload Workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新加载工作区"
+          }
+        }
+      }
+    },
+    "ui.reloadingWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reloading workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在重新加载工作区"
+          }
+        }
+      }
+    },
+    "ui.removeDeclaration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove declaration"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除记录"
+          }
+        }
+      }
+    },
+    "ui.removeWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove worktree"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除工作树"
+          }
+        }
+      }
+    },
+    "ui.repositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库"
+          }
+        }
+      }
+    },
+    "ui.repository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库"
+          }
+        }
+      }
+    },
+    "ui.repositoryAddedWithIssue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository added with an issue"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库已添加，但有一项问题"
+          }
+        }
+      }
+    },
+    "ui.repositoryAddition": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository addition"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加仓库"
+          }
+        }
+      }
+    },
+    "ui.repositoryDeletion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deletion"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除仓库"
+          }
+        }
+      }
+    },
+    "ui.repositoryImport": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository import"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入仓库"
+          }
+        }
+      }
+    },
+    "ui.repositoryURL": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository URL"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库 URL"
+          }
+        }
+      }
+    },
+    "ui.repositoryUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新仓库"
+          }
+        }
+      }
+    },
+    "ui.repositoryWillMoveTrashLinkedWorktreesAndCurrent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The repository will move to Trash. Its linked worktrees and their current local branches (including unmerged commits) will be permanently deleted."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库将移入废纸篓；关联工作树及其当前本地分支（包括未合并提交）将永久删除。"
+          }
+        }
+      }
+    },
+    "ui.resourceCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resource check"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查资源"
+          }
+        }
+      }
+    },
+    "ui.restartModuApplyLanguageChange": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Modu to apply the language change."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新启动 Modu 后将应用语言更改。"
+          }
+        }
+      }
+    },
+    "ui.restoredWorkspaceChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored workspace changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复工作区改动"
+          }
+        }
+      }
+    },
+    "ui.result": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Result"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果"
+          }
+        }
+      }
+    },
+    "ui.reusedBranchIsCommitsBehindCommitsWereKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Reused branch '%1$@' is %2$lld commit behind '%3$@'. Its commits were kept."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Reused branch '%1$@' is %2$lld commits behind '%3$@'. Its commits were kept."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复用分支“%1$@”，比“%3$@”落后 %2$lld 个提交。分支提交已保留。"
+          }
+        }
+      },
+      "comment": "Arguments: reused branch name, number of commits, comparison branch or workspace HEAD."
+    },
+    "ui.revealInFinder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal in Finder"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示"
+          }
+        }
+      }
+    },
+    "ui.saveChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存更改"
+          }
+        }
+      }
+    },
+    "ui.savedConfiguration": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved configuration"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存配置"
+          }
+        }
+      }
+    },
+    "ui.saving": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在保存…"
+          }
+        }
+      }
+    },
+    "ui.scan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描"
+          }
+        }
+      }
+    },
+    "ui.scanningLocalRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning local repositories…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在扫描本地仓库…"
+          }
+        }
+      }
+    },
+    "ui.searchRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索仓库"
+          }
+        }
+      }
+    },
+    "ui.selectAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select All"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选"
+          }
+        }
+      }
+    },
+    "ui.selectOneOrMoreFoldersFindGitRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select one or more folders to find Git repositories. Their remote URLs will be used to clone into this workspace."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个或多个文件夹以查找 Git 仓库，随后可选择要从远端克隆到此工作区的仓库。"
+          }
+        }
+      }
+    },
+    "ui.setUpWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up Workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置工作区"
+          }
+        }
+      }
+    },
+    "ui.settingUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在设置…"
+          }
+        }
+      }
+    },
+    "ui.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
+    "ui.shortcutIsUnavailableChooseDifferentCombination": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This shortcut is unavailable. Choose a different combination."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此快捷键无法使用，请选择其他组合。"
+          }
+        }
+      }
+    },
+    "ui.showHideModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show/Hide Modu"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示/隐藏 Modu"
+          }
+        }
+      }
+    },
+    "ui.showWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示工作区"
+          }
+        }
+      }
+    },
+    "ui.skipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过 %1$@"
+          }
+        }
+      }
+    },
+    "ui.skipped2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过"
+          }
+        }
+      }
+    },
+    "ui.softwareUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software Update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "软件更新"
+          }
+        }
+      }
+    },
+    "ui.space": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Space"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空格"
+          }
+        }
+      }
+    },
+    "ui.staged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staged"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂存"
+          }
+        }
+      }
+    },
+    "ui.stagedUnstaged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staged / Unstaged"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂存 / 未暂存"
+          }
+        }
+      }
+    },
+    "ui.startCodexFromWorkspaceRootDiscoverWorkflowSkill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start Codex from the workspace root to discover the workflow skill."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从工作区根目录启动 Codex 以发现工作流技能。"
+          }
+        }
+      }
+    },
+    "ui.stashedWorkspaceChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stashed workspace changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂存工作区改动至 stash"
+          }
+        }
+      }
+    },
+    "ui.terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "终端"
+          }
+        }
+      }
+    },
+    "ui.trash2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trash: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓：%1$@"
+          }
+        }
+      }
+    },
+    "ui.unassigned": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unassigned"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未设置"
+          }
+        }
+      }
+    },
+    "ui.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不可用"
+          }
+        }
+      }
+    },
+    "ui.unconfirmed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unconfirmed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认"
+          }
+        }
+      }
+    },
+    "ui.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown (%1$@)"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知（%1$@）"
+          }
+        }
+      }
+    },
+    "ui.unset": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unset"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加入"
+          }
+        }
+      }
+    },
+    "ui.unstaged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unstaged"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未暂存"
+          }
+        }
+      }
+    },
+    "ui.untracked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untracked"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未跟踪"
+          }
+        }
+      }
+    },
+    "ui.updateRefs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update refs"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新引用"
+          }
+        }
+      }
+    },
+    "ui.updateRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update Repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新仓库"
+          }
+        }
+      }
+    },
+    "ui.updateRequiresNewerVersionOfMacOS": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This update requires a newer version of macOS."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此更新需要更高版本的 macOS。"
+          }
+        }
+      }
+    },
+    "ui.updated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新"
+          }
+        }
+      }
+    },
+    "ui.updatedGitignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated .gitignore"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 .gitignore"
+          }
+        }
+      }
+    },
+    "ui.updatingRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在更新仓库"
+          }
+        }
+      }
+    },
+    "ui.updatingRepositories2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating repositories…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在更新仓库…"
+          }
+        }
+      }
+    },
+    "ui.updatingWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating worktree group…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在更新工作树分组…"
+          }
+        }
+      }
+    },
+    "ui.waitingForModuQuit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for Modu to quit…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待 Modu 退出…"
+          }
+        }
+      }
+    },
+    "ui.warnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示"
+          }
+        }
+      }
+    },
+    "ui.workflowSkillUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workflow skill: Unavailable"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作流技能：不可用"
+          }
+        }
+      }
+    },
+    "ui.workflowSkillWasnTEnabled2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workflow skill wasn’t enabled. %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作流技能未启用。%1$@"
+          }
+        }
+      }
+    },
+    "ui.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在处理…"
+          }
+        }
+      }
+    },
+    "ui.workingTree2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working tree: %1$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树：%1$@"
+          }
+        }
+      }
+    },
+    "ui.workingTreeHasChanges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working tree has changes"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树有更改"
+          }
+        }
+      }
+    },
+    "ui.workspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区"
+          }
+        }
+      }
+    },
+    "ui.workspace2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace: "
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区："
+          }
+        }
+      }
+    },
+    "ui.workspaceChangeCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace change cancelled."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消切换工作区。"
+          }
+        }
+      }
+    },
+    "ui.workspaceDataCouldnTBeLoaded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace data couldn’t be loaded"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载工作区数据"
+          }
+        }
+      }
+    },
+    "ui.workspaceHEAD": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "workspace HEAD"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区 HEAD"
+          }
+        }
+      }
+    },
+    "ui.workspaceImport": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace import"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入工作区"
+          }
+        }
+      }
+    },
+    "ui.workspaceIsBusy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace is busy"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区正忙"
+          }
+        }
+      }
+    },
+    "ui.workspaceIsInUseReloadShortly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace is in use. Reload shortly."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区正被其他操作使用，请稍后重新加载。"
+          }
+        }
+      }
+    },
+    "ui.workspaceMustHaveNoRegisteredRepositoriesOrWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace must have no registered repositories or worktree groups, and no content in its repositories or worktrees folders."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区不能包含已登记的仓库或工作树分组，repositories 和 worktrees 目录也必须为空。"
+          }
+        }
+      }
+    },
+    "ui.workspaceOpening": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace opening"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开工作区"
+          }
+        }
+      }
+    },
+    "ui.worktreeDeletion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree deletion"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除工作树"
+          }
+        }
+      }
+    },
+    "ui.yamlFile": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML File…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YAML 文件…"
+          }
+        }
+      }
+    },
+    "ui.youReRunningLatestVersionOfModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re running the latest version of Modu."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你正在使用最新版本的 Modu。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

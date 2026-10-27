@@ -42,11 +42,11 @@ struct OperationProgressView: View {
             Divider()
             HStack(spacing: 12) {
                 if keepsCompletedItems {
-                    Text(operationPresentation.text.t("Completed items are kept when cancelled.", "取消后保留已完成项。"))
+                    Text(operationPresentation.text.string(.uiCompletedItemsAreKeptWhenCancelled))
                         .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                Button(operationPresentation.text.t("Cancel", "取消")) { operations.cancel() }.keyboardShortcut(.cancelAction)
+                Button(operationPresentation.text.string(.uiCancel)) { operations.cancel() }.keyboardShortcut(.cancelAction)
                     .disabled(!operations.canCancel)
             }.controlSize(.regular)
         }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background).interactiveDismissDisabled(operations.busy)

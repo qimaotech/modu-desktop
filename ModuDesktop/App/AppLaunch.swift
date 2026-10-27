@@ -16,7 +16,7 @@ extension AppModel {
 
     static func makeForLaunch(arguments: [String]) throws -> AppModel {
         guard let index = arguments.firstIndex(of: "--mock") else {
-            guard !arguments.contains("--mock-workspace") else { throw ModuError("invalid-input", "--mock-workspace requires --mock.") }
+            guard !arguments.contains("--mock-workspace") else { throw ModuError("invalid-input", .mockWorkspaceRequiresMock) }
             return AppModel()
         }
         #if DEBUG
@@ -25,11 +25,11 @@ extension AppModel {
               arguments.filter({ $0 == "--mock-workspace" }).count == 1,
               let workspaceIndex = arguments.firstIndex(of: "--mock-workspace"), workspaceIndex + 1 < arguments.count,
               arguments[workspaceIndex + 1].hasPrefix("/") else {
-            throw ModuError("invalid-input", "Use the build script to prepare --mock linked-worktree-selected --mock-workspace <root>.")
+            throw ModuError("invalid-input", .useBuildScriptPrepareMockLinkedWorktreeSelected)
         }
         return try MockWorkspace(scenario: scenario, workspace: URL(fileURLWithPath: arguments[workspaceIndex + 1])).makeModel()
         #else
-        throw ModuError("debug-only", "Mock scenarios are only available in Debug builds.")
+        throw ModuError("debug-only", .mockScenariosAreOnlyAvailableInDebugBuilds)
         #endif
     }
 }

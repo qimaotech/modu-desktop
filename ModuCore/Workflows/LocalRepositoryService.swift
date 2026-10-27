@@ -31,7 +31,7 @@ extension WorkspaceService {
                         else {
                             let gitDirectory = try await git.run(["rev-parse", "--absolute-git-dir"], at: directory).text
                             guard PathSafety.identity(URL(fileURLWithPath: gitDirectory)) == PathSafety.identity(directory) else {
-                                throw ModuError("resource-unavailable", "Not a repository root.")
+                                throw ModuError("resource-unavailable", .notRepositoryRoot)
                             }
                         }
                     } catch {

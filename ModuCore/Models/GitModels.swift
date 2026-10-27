@@ -30,6 +30,7 @@ public struct GitSummary: Sendable {
     public var base: String?
     public var baseOID: String?
     public var baseError: String?
+    public var baseMessage: UserMessage? = nil
     public init(head: String, headOID: String, hasRemotes: Bool = true, base: String? = nil, baseOID: String? = nil, baseError: String? = nil) {
         self.head = head; self.headOID = headOID; self.hasRemotes = hasRemotes
         self.base = base; self.baseOID = baseOID; self.baseError = baseError
@@ -40,5 +41,6 @@ public struct ResourceState: Sendable {
     public var available: Bool
     public var dirty: Bool?
     public var reason: String?
-    public init(resource: Resource, available: Bool, dirty: Bool? = nil, reason: String? = nil) { self.resource = resource; self.available = available; self.dirty = dirty; self.reason = reason }
+    public var reasonMessage: UserMessage?
+    public init(resource: Resource, available: Bool, dirty: Bool? = nil, reason: String? = nil, reasonMessage: UserMessage? = nil) { self.resource = resource; self.available = available; self.dirty = dirty; self.reason = reason; self.reasonMessage = reasonMessage }
 }
