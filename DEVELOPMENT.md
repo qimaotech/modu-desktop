@@ -12,10 +12,13 @@
 
 - 工作区与管理操作复用 `OperationLifecycle` 和 `OperationPresentation`，通过操作标识与功能上下文阻止过期结果覆盖当前状态。
 - 详情读取与更新检查各自维护任务取消、缓存或请求上下文，不并入管理操作的生命周期。
-- 自动更新的 DMG 下载到 `~/Library/Caches/fun.armantang.ModuDesktop/Updates/` 下的独立目录；准备安装成功后立即清理下载缓存，后续替换和重启不再依赖 DMG。准备失败时可保留供重试，校验失败、取消、重新检查或退出时清理本次缓存，不写入下载目录。
+
+### 自动更新
+
+- DMG 缓存在 `~/Library/Caches/fun.armantang.ModuDesktop/Updates/` 下的独立目录。准备安装成功后立即清理，后续替换和重启不再依赖 DMG；下载完整性校验失败（`update-integrity-failed`）、取消、重新检查或退出时清理本次缓存，其余准备失败可保留供重试。
 - 自动更新由 Core 准备并校验 DMG 中的应用，在当前应用旁暂存；退出准备期间先拒绝当前退出请求，异步清理完成并启动内置 CLI 的独立安装进程、确认就绪后，再次请求退出，避免 AppKit 的延迟退出模态循环阻塞主线程任务。安装器最多等待原进程退出 60 秒，超时通过本次安装的结果文件回传错误，原应用清除待退出状态并允许重试。
 - 安装器验证应用身份后原子替换应用，清理被替换的旧应用，再通过系统 `open` 请求启动新版；成功后删除暂存目录。替换或启动请求失败时保留已完成的效果和诊断文件，安装后的应用不自动还原。
-- CLI 符号链接在应用原路径替换后自动指向新版内置 CLI，无需重新安装；旧版复制安装迁移、链接失效或命令冲突仍进入现有设置流程。更新取消和过期回传由安装标识隔离，不修改工作区数据。
+- 更新任务通过请求与安装标识隔离取消和过期回传，不修改工作区数据；CLI 链接随应用原路径替换指向新版，迁移与修复方式见 [CLI 与 Agent](README.md#cli-与-agent)。
 
 ## 构建启动与调试
 
@@ -90,6 +93,7 @@
 - [CI](.github/workflows/ci.yml) 在 tag 构建中依次校验版本与 CHANGELOG、运行全量测试、打包并创建 GitHub Release；测试失败时上传 `.xcresult`。main 分支 push、PR 和手动触发仅构建打包。
 - [release_notes.py](script/release_notes.py) 校验 tag 与产品版本一致、当前版本章节格式正确且唯一非空，并提取该章节供 Release 使用；CI 附加系统要求与签名说明。章节格式见发布流程，普通分支构建无需发布章节，Unreleased 与其他版本内容不会混入本次发布。
 - 发布 tag、产品版本与 DMG 附件名必须匹配；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只提供更高产品版本的最新正式 Release，并要求包含 `Modu-<版本号>-arm64.dmg`。
+- [自动安装](ModuCore/Infrastructure/AppUpdateInstaller.swift) 还要求 Release 附件元数据提供有效的 SHA-256 `digest`，并通过文件大小与摘要校验；缺失或不匹配时拒绝安装。
 
 ## 文档与提示词维护
 

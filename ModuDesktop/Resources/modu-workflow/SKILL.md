@@ -12,8 +12,9 @@ description: Manage repositories and worktree groups in a Modu workspace through
 
 ## Context and commands
 
-- Start with `modu-cli workspace inspect --json` from inside the workspace, or add `--workspace <root>` when its root is known. Use the returned `workspace` path for later calls; a group directory is not a workspace root. Reuse inspection results; `repo list` and `worktree list` inspect only their respective scopes.
-- Pass `--workspace <root> --json` on every subsequent management call. Use `modu-cli --help` and subcommand `--help` for current syntax. Repository arguments use URL-derived IDs, not custom display names; `repo add --name` sets only a display name.
+- Start with `modu-cli workspace inspect --json` from inside the workspace, or add `--workspace <root>` when its root is known. Use the returned `workspace` path for later calls; a group directory is not a workspace root. Reuse current inspection results; `repo list` and `worktree list` inspect their respective resources.
+- All three inspection commands can remove records for missing resource directories across the workspace and may fetch `origin` when the `origin/HEAD` symbolic ref is missing.
+- Pass `--workspace <root> --json` on every subsequent management call. Use `modu-cli --help` and subcommand `--help` for current syntax. Repository arguments use URL-derived IDs, unique ignoring case; `repo add --name` sets only a display name and cannot resolve ID conflicts.
 - Read repository IDs from `items[].resource.repo` and group names from `items[].resource.group`; `resource.path` is a relative filesystem path, not a command argument.
 - CLI commands cover workspace inspection, repository list/add/remove, and worktree list/create/update/remove. Workspace initialization, repository updates, local scanning, and YAML import/export are App operations; do not invent CLI equivalents.
 
@@ -34,7 +35,8 @@ description: Manage repositories and worktree groups in a Modu workspace through
 ## Destructive changes
 
 - Before deletion or an update that removes members, run without `--execute` and review the returned plan, affected paths, branches, and risks.
-- Repeat with `--execute` only when the user has explicitly authorized that scope and its risks; otherwise present the plan for approval. Existing authorization does not need reconfirmation.
+- `--execute` computes targets from current state and is not bound to a previous invocation's plan. After a delay or external changes, preview again and compare paths, branches, and risks with the authorized scope.
+- Repeat with `--execute` only when the user has explicitly authorized the current scope and risks; otherwise present the revised plan for approval. Reuse authorization while that scope and its risks remain unchanged.
 - Worktree deletion permanently removes its files and current local branch, including ignored files, reused branches, and unmerged commits. The current branch may differ from the group name; a detached HEAD has no branch to delete. Repository removal first deletes configured members, then moves the main repository to Trash; read the whole plan.
 
 ## Results and failures
