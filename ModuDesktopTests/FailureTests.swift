@@ -88,7 +88,7 @@ struct FailureTests {
         })
         let task = Task {
             if kind == "single" { return await service.addRepository(.init(url: targetURL), at: f.root) }
-            return await service.importRepositoryYAML("urls: [\(f.remoteURL), \(targetURL), https://modu-test.invalid/later.git]", at: f.root)
+            return await service.importRepositories([f.remoteURL, targetURL, "https://modu-test.invalid/later.git"], at: f.root)
         }
         defer { task.cancel(); try? Data().write(to: release) }
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))

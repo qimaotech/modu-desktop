@@ -126,7 +126,7 @@ struct InterfaceText {
         if item.status == .success { return statusText(disposition) }
         return statusText(item.status.rawValue) + " · " + statusText(disposition)
     }
-    func resultMessage(_ item: ItemResult, overallMessage: String?, command: String? = nil) -> String? {
+    func resultMessage(_ item: ItemResult, overallMessage: String?) -> String? {
         guard let raw = item.message, !raw.isEmpty,
               ![overallMessage, item.status.rawValue, item.data?["disposition"]].contains(raw) else { return nil }
         if item.status == .success, let branch = item.data?["reused-branch"], let comparison = item.data?["comparison-base"] {

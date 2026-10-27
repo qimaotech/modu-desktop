@@ -150,11 +150,11 @@ struct WorkflowTests {
         let f = try await Fixture(); defer { f.remove() }
         _ = await f.service.openWorkspace(f.root)
         #expect(await f.service.addRepository(.init(url: f.remoteURL, name: "Custom"), at: f.root).status == .success)
-        let result = await f.service.importRepositoryYAML("values: [\(f.remoteURL), \(f.remoteURL)]", at: f.root)
+        let result = await f.service.importRepositories(try WorkspaceService.repositoryURLs(in: "values: [\(f.remoteURL), \(f.remoteURL)]"), at: f.root)
         #expect(result.status == .skipped)
         #expect(try await f.service.load(f.root).repositories.first?.name == "Custom")
         #expect(result.items.map(\.reasonCode) == ["already-exists", "duplicate-url"])
-        let conflict = await f.service.importRepositoryYAML("a: https://other.invalid/repo.git\nb: https://another.invalid/repo.git", at: f.root)
+        let conflict = await f.service.importRepositories(try WorkspaceService.repositoryURLs(in: "a: https://other.invalid/repo.git\nb: https://another.invalid/repo.git"), at: f.root)
         #expect(conflict.items.allSatisfy { $0.reasonCode == "repository-conflict" })
     }
     @Test func fastForwardAndIgnoredProtection() async throws {

@@ -415,7 +415,7 @@ struct WorkspaceCommitTests {
             try contents.write(to: file)
         }
         try await failSigning(f)
-        let result = await f.service.importRepositoryYAML("repos: [\(f.remoteURL), https://modu-test.invalid/other.git]", at: f.root)
+        let result = await f.service.importRepositories([f.remoteURL, "https://modu-test.invalid/other.git"], at: f.root)
         #expect(result.items.first?.reasonCode == "workspace-commit-failed")
         #expect(result.items.last?.reasonCode == "not-processed")
         #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])

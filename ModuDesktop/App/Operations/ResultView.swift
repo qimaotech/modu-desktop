@@ -89,7 +89,7 @@ struct ResultView: View {
                     Text(text.resultStatus(item)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 }
             }
-            let message = text.resultMessage(item, overallMessage: result.message, command: result.command)
+            let message = text.resultMessage(item, overallMessage: result.message)
             if let message { Text(message).foregroundStyle(DesignStyle.secondary) }
             ForEach(text.effectSummaries(item, workspace: result.workspace), id: \.self) { Text($0).font(DialogTypography.auxiliary) }
             if let trash = item.trashPath { Text(text.string(.uiTrash2(trash))).font(DialogTypography.path) }

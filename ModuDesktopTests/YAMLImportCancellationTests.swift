@@ -8,7 +8,7 @@ struct YAMLImportCancellationTests {
         let f = try await Fixture(); defer { f.remove() }
         let other = try await prepare(f)
         let (result, cancelled) = await Task {
-            let result = await f.service.importRepositoryYAML("repos: [\(f.remoteURL), \(other)]", at: f.root) { value in
+            let result = await f.service.importRepositories([f.remoteURL, other], at: f.root) { value in
                 if (value.target == "other" && value.phase.rawValue == phase) || (phase == "completed" && value.completed == value.total) {
                     withUnsafeCurrentTask { $0?.cancel() }
                 }
@@ -35,7 +35,7 @@ struct YAMLImportCancellationTests {
         let other = try await prepare(f)
         let result = await Task {
             if beforeFirst { withUnsafeCurrentTask { $0?.cancel() } }
-            return await f.service.importRepositoryYAML("repos: [\(f.remoteURL), \(other)]", at: f.root) { value in
+            return await f.service.importRepositories([f.remoteURL, other], at: f.root) { value in
                 if value.completed == 1 { withUnsafeCurrentTask { $0?.cancel() } }
             }
         }.value
@@ -60,7 +60,7 @@ struct YAMLImportCancellationTests {
         #expect(await f.service.openWorkspace(f.root).status == .success)
         if alreadyExists { #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success) }
         let (result, cancelled) = await Task {
-            let result = await f.service.importRepositoryYAML("repos: [\(f.remoteURL), \(f.remoteURL)]", at: f.root) { value in
+            let result = await f.service.importRepositories([f.remoteURL, f.remoteURL], at: f.root) { value in
                 if value.completed == 2 { withUnsafeCurrentTask { $0?.cancel() } }
             }
             return (result, Task.isCancelled)
@@ -79,7 +79,7 @@ struct YAMLImportCancellationTests {
         #expect(await f.service.openWorkspace(f.root).status == .success)
         let urls = (completedFirst ? [f.remoteURL] : []) + ["https://first.invalid/conflict.git", "https://second.invalid/conflict.git"]
         let (result, cancelled) = await Task {
-            let result = await f.service.importRepositoryYAML("repos: [\(urls.joined(separator: ", "))]", at: f.root) { value in
+            let result = await f.service.importRepositories(urls, at: f.root) { value in
                 if value.completed == urls.count { withUnsafeCurrentTask { $0?.cancel() } }
             }
             return (result, Task.isCancelled)

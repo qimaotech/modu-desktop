@@ -54,10 +54,6 @@ final class OperationPresentation {
         return progress.map { text.statusText($0.phase.rawValue) } ?? text.string(.uiWorking)
     }
 
-    var operationProgressSummaryText: String? {
-        operationProgressSummaryText(for: progress)
-    }
-
     func operationProgressSummaryText(for progress: OperationProgress?) -> String? {
         guard let progress, progress.total > 0 else { return nil }
         var parts = [text.string(.uiOfProcessed(Int(progress.completed), Int(progress.total)))]

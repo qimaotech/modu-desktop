@@ -46,7 +46,7 @@ struct RepositoryUpdateResultRow: View {
                     .accessibilityIdentifier("repo-update-status-\(item.resource.id)")
                     .help(statusLabel)
             }
-            if let message = text.resultMessage(item, overallMessage: nil, command: "repo.update") {
+            if let message = text.resultMessage(item, overallMessage: nil) {
                 Text(message).foregroundStyle(DesignStyle.secondary)
             }
             ForEach(visibleEffects, id: \.self) { Text($0).font(DialogTypography.auxiliary) }
