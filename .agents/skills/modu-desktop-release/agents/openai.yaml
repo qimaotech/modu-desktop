@@ -1,7 +1,7 @@
 interface:
   display_name: "Modu Desktop Release"
   short_description: "Update versions and changelog; create a local commit and tag"
-  default_prompt: "Use $modu-desktop-release to update the version and CHANGELOG and create a local release commit and tag. If I have not specified a version, analyze changes since the highest-version local stable release tag, recommend versions, and wait for my choice."
+  default_prompt: "Use $modu-desktop-release to update the version and CHANGELOG and create a local release commit and tag."
 
 policy:
   allow_implicit_invocation: false
