@@ -16,10 +16,20 @@ final class WorkspaceModel {
             let rootChanged = oldValue?.root != record?.root
             if rootChanged { onContextChange?(true) }
             guard let record else { return }
+            let groups = Set(record.groups.keys)
+            var expanded = expandedGroups
+            let previousGroups: Set<String>
             if rootChanged {
-                expandedGroups = Set(defaults.stringArray(forKey: sidebarPreferenceKey("expandedGroups")) ?? [])
+                let savedExpanded = defaults.stringArray(forKey: sidebarPreferenceKey("expandedGroups"))
+                expanded = Set(savedExpanded ?? [])
+                // Legacy preferences lack the seen-group list; preserve their existing collapsed state.
+                previousGroups = defaults.stringArray(forKey: sidebarPreferenceKey("knownGroups")).map { Set($0) }
+                    ?? (savedExpanded == nil ? [] : groups)
+            } else {
+                previousGroups = Set(oldValue?.groups.keys ?? [:].keys)
             }
-            expandedGroups.formIntersection(record.groups.keys)
+            expandedGroups = expanded.union(groups.subtracting(previousGroups)).intersection(groups)
+            defaults.set(groups.sorted(), forKey: sidebarPreferenceKey("knownGroups"))
         }
     }
     var blocked: String?
@@ -34,8 +44,10 @@ final class WorkspaceModel {
     }
     var expandedGroups = Set<String>() {
         didSet {
-            guard record != nil, expandedGroups != oldValue else { return }
-            defaults.set(expandedGroups.sorted(), forKey: sidebarPreferenceKey("expandedGroups"))
+            guard record != nil else { return }
+            let key = sidebarPreferenceKey("expandedGroups")
+            let expanded = expandedGroups.sorted()
+            if defaults.stringArray(forKey: key) != expanded { defaults.set(expanded, forKey: key) }
         }
     }
     private(set) var showsReloadProgress = true
