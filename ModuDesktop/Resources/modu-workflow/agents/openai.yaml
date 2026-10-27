@@ -4,4 +4,4 @@ interface:
   default_prompt: "Use $modu-workflow to inspect this workspace and list its repositories and worktree groups."
 
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

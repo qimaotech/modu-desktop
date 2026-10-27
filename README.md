@@ -71,7 +71,7 @@ modu-cli worktree create feature-checkout --repo order-service --repo storefront
 
 CLI 提供工作区检查、仓库列表/添加/删除、分组列表/创建/编辑/删除；工作区初始化与切换、批量导入、更新主仓库及 YAML 导入导出通过 App 操作。更多用法查看 `modu-cli --help` 及各子命令的 `--help`。
 
-工作区安装内置工作流 skill 后，可从工作区根目录启动 Codex，通过 `$modu-workflow` 手动调用，协助管理仓库和分组。创建前会确认分组名称和完整仓库列表；删除或移除成员前会检查影响范围与风险。
+工作区安装内置工作流 skill 后，可从工作区根目录启动 Codex，默认允许根据任务自动调用，也可通过 `$modu-workflow` 显式调用，协助管理仓库和分组。创建前会确认分组名称和完整仓库列表；删除或移除成员前会检查影响范围与风险。
 
 ### 工作区文件与自动提交
 

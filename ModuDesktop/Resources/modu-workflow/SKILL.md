@@ -1,6 +1,6 @@
 ---
 name: modu-workflow
-description: Manage repositories and worktree groups in a Modu workspace through modu-cli when explicitly invoked as $modu-workflow.
+description: Manage repositories and worktree groups in a Modu workspace through modu-cli. Use when the user asks to inspect the workspace, add or remove repositories, or manage worktree groups.
 ---
 
 # Modu workspace management

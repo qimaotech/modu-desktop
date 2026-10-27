@@ -99,4 +99,4 @@
 - 详细规则维护单一来源，其他入口保留摘要与引用；完整参数说明引用 CLI `--help` 或脚本，发布说明的收录标准维护在发布流程中。
 - 纯文档或提示词改动检查路径、命令、交叉引用及 `git diff --check`。
 - 内置工作流源文件位于 App 资源目录，工作区副本的覆盖规则与自定义方式见 [CLI 与 Agent](README.md#cli-与-agent)。同步实现见 [WorkspaceService.swift](ModuCore/Workflows/WorkspaceService.swift)：丢弃托管文件改动后，按需 stash 其他工作区文件，同步并自动提交内置内容，最后恢复其他改动。
-- 发布与内置工作流提示词均仅显式调用；修改时同步核对 `SKILL.md` 的 description，以及 `agents/openai.yaml` 的 default_prompt 与 `allow_implicit_invocation: false` 策略。
+- 内置工作流默认允许自动调用（`allow_implicit_invocation: true`），发布流程仅显式调用（`allow_implicit_invocation: false`）；修改时同步核对 `SKILL.md` 的 description，以及 `agents/openai.yaml` 的 default_prompt 与调用策略。
