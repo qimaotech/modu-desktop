@@ -4,6 +4,8 @@ import Observation
 
 @MainActor @Observable
 final class AppUpdateModel {
+    enum Phase { case idle, checking, available, upToDate, downloading, verifying, preparing, restarting, failed }
+
     private let preferences: AppPreferences
     private let service: AppUpdateService
     private let installer: AppUpdateInstaller
@@ -20,6 +22,7 @@ final class AppUpdateModel {
     private(set) var checked = false
     private(set) var error: String?
     private(set) var errorDetails: String?
+    private(set) var downloadFailed = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
     @ObservationIgnored private var handoffTask: Task<Void, Never>?
@@ -28,6 +31,16 @@ final class AppUpdateModel {
     private var prepared: PreparedAppUpdate?
     var working: Bool { checking || downloading || installing || restartPending }
     var needsTerminationPreparation: Bool { task != nil || cleanupTask != nil || installerURL != nil || restartPending }
+    var phase: Phase {
+        if restartPending { return .restarting }
+        if error != nil { return .failed }
+        if checking { return .checking }
+        if case .verifying = downloadProgress { return .verifying }
+        if downloading { return .downloading }
+        if installing { return .preparing }
+        if update != nil { return .available }
+        return checked ? .upToDate : .idle
+    }
 
     var text: InterfaceText { preferences.text }
 
@@ -45,7 +58,7 @@ final class AppUpdateModel {
     func check() {
         guard !working else { return }
         discardInstaller()
-        update = nil; error = nil; errorDetails = nil; checked = false; checking = true
+        update = nil; error = nil; errorDetails = nil; downloadFailed = false; checked = false; checking = true
         let id = UUID()
         requestID = id
         task = Task {
@@ -63,6 +76,7 @@ final class AppUpdateModel {
 
     func installAndRestart() {
         guard !working, let update else { return }
+        downloadFailed = false
         guard let helper else {
             error = text.string(.uiBundledUpdateInstallerIsMissingReinstallModuAnd)
             return
@@ -110,7 +124,7 @@ final class AppUpdateModel {
 
     func runInstallation(_ operation: @escaping @MainActor (UUID) async throws -> Void) {
         guard !working else { return }
-        error = nil; errorDetails = nil; downloadProgress = nil; installing = true
+        error = nil; errorDetails = nil; downloadFailed = false; downloadProgress = nil; installing = true
         let id = UUID()
         requestID = id
         // Cancellation can append this installation to cleanupTask, so capture only earlier cleanup.
@@ -124,6 +138,7 @@ final class AppUpdateModel {
                 try await operation(id)
             } catch {
                 guard !Task.isCancelled, requestID == id else { return }
+                downloadFailed = downloading
                 if (error as? ModuError)?.code == "update-integrity-failed" { discardInstaller() }
                 self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
             }

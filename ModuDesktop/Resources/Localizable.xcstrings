@@ -3761,6 +3761,23 @@
         }
       }
     },
+    "ui.checkingForUpdates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking for updates…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查更新…"
+          }
+        }
+      }
+    },
     "ui.checkingGitHubReleases": {
       "extractionState": "manual",
       "localizations": {
@@ -4713,6 +4730,40 @@
         }
       }
     },
+    "ui.downloadAgain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Again"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新下载"
+          }
+        }
+      }
+    },
+    "ui.downloadCompleteVerifyingInstaller": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download complete. Checking the installer’s integrity."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载已完成，正在检查安装包的完整性。"
+          }
+        }
+      }
+    },
     "ui.downloadingInstaller": {
       "extractionState": "manual",
       "localizations": {
@@ -5631,6 +5682,23 @@
         }
       }
     },
+    "ui.moduIsUpToDate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu is up to date"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu 已是最新版本"
+          }
+        }
+      }
+    },
     "ui.moduSetup": {
       "extractionState": "manual",
       "localizations": {
@@ -6001,6 +6069,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在准备更新…"
+          }
+        }
+      }
+    },
+    "ui.preparingUpdateRestartNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu will quit and restart when preparation is complete."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备完成后，Modu 将退出并重新启动。"
           }
         }
       }
@@ -6460,6 +6545,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "结果"
+          }
+        }
+      }
+    },
+    "ui.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
           }
         }
       }
@@ -7038,6 +7140,40 @@
         }
       }
     },
+    "ui.updateFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t complete update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能完成更新"
+          }
+        }
+      }
+    },
+    "ui.updateReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to install update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新已就绪"
+          }
+        }
+      }
+    },
     "ui.updateRefs": {
       "extractionState": "manual",
       "localizations": {
@@ -7085,6 +7221,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "此更新需要更高版本的 macOS。"
+          }
+        }
+      }
+    },
+    "ui.updateVersionChange": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu %1$@ → %2$@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modu %1$@ → %2$@"
+          }
+        }
+      }
+    },
+    "ui.updateWorkspacesPreserved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your workspaces will be preserved."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区数据会保留。"
           }
         }
       }
