@@ -13,9 +13,24 @@ struct AppUpdateView: View {
             Text(model.text.string(.uiInstalledVersion("\(ModuVersion.current)")))
                 .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
             if model.working {
-                HStack(spacing: 12) {
-                    ProgressView().controlSize(.small)
-                    Text(progressText)
+                if model.downloading, case let .downloading(receivedBytes, totalBytes) = model.downloadProgress, totalBytes > 0 {
+                    let fraction = min(max(Double(receivedBytes) / Double(totalBytes), 0), 1)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(progressText)
+                            Spacer()
+                            Text(fraction.formatted(.percent.precision(.fractionLength(0)).locale(model.text.locale.locale)))
+                                .monospacedDigit()
+                        }
+                        ProgressView(value: fraction).progressViewStyle(.linear)
+                        Text("\(byteCount(receivedBytes)) / \(byteCount(totalBytes))")
+                            .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        ProgressView().controlSize(.small)
+                        Text(progressText)
+                    }
                 }
             } else if model.update != nil {
                 Text(model.text.string(.uiInstallUpdateAndAutomaticallyRestartModuWorkspacesAre))
@@ -48,8 +63,13 @@ struct AppUpdateView: View {
 
     private var progressText: String {
         if model.restartPending { return model.text.string(.uiReadyInstallModuWillRestartAfterQuitting) }
+        if case .verifying = model.downloadProgress { return model.text.string(.uiVerifyingInstaller) }
         if model.downloading { return model.text.string(.uiDownloadingInstaller) }
         if model.installing { return model.text.string(.uiPreparingUpdate) }
         return model.text.string(.uiCheckingGitHubReleases)
+    }
+
+    private func byteCount(_ count: Int64) -> String {
+        count.formatted(.byteCount(style: .file).locale(model.text.locale.locale))
     }
 }

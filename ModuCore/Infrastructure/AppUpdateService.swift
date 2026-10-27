@@ -19,6 +19,11 @@ public struct AppUpdate: Sendable {
     }
 }
 
+public enum AppUpdateDownloadProgress: Sendable {
+    case downloading(receivedBytes: Int64, totalBytes: Int64)
+    case verifying
+}
+
 public struct AppUpdateService: Sendable {
     public static let releasesURL = URL(string: "https://github.com/qimaotech/modu-desktop/releases/latest")!
     private let session: URLSession
@@ -41,13 +46,15 @@ public struct AppUpdateService: Sendable {
         return try update(from: data, currentVersion: currentVersion)
     }
 
-    public func download(_ update: AppUpdate) async throws -> URL {
+    public func download(_ update: AppUpdate, progress: @escaping @Sendable (AppUpdateDownloadProgress) -> Void = { _ in }) async throws -> URL {
         var request = URLRequest(url: update.asset.browserDownloadURL)
         request.timeoutInterval = 60
-        let (temporary, response) = try await session.download(for: request)
+        let delegate = AppUpdateDownloadDelegate(totalBytes: update.asset.size, progress: progress)
+        let (temporary, response) = try await delegate.download(request, configuration: session.configuration)
         defer { try? FileManager.default.removeItem(at: temporary) }
         try Task.checkCancellation()
         try validate(response)
+        progress(.verifying)
         return try cacheDownload(at: temporary, asset: update.asset)
     }
 
@@ -147,6 +154,83 @@ public struct AppUpdateService: Sendable {
             case draft, prerelease, assets
             case tagName = "tag_name"
             case htmlURL = "html_url"
+        }
+    }
+}
+
+private final class AppUpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private typealias Download = (URL, URLResponse)
+    private let totalBytes: Int64
+    private let progress: @Sendable (AppUpdateDownloadProgress) -> Void
+    private let lock = NSLock()
+    private var lastReport: ContinuousClock.Instant?
+    private var task: URLSessionDownloadTask?
+    private var continuation: CheckedContinuation<Download, Error>?
+    private var result: Result<Download, Error>?
+    private var cancelled = false
+
+    init(totalBytes: Int64, progress: @escaping @Sendable (AppUpdateDownloadProgress) -> Void) {
+        self.totalBytes = totalBytes
+        self.progress = progress
+    }
+
+    func download(_ request: URLRequest, configuration: URLSessionConfiguration) async throws -> (URL, URLResponse) {
+        // The async URLSession convenience method suppresses download delegate callbacks.
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let task = session.downloadTask(with: request)
+                let cancelled = lock.withLock {
+                    self.task = task
+                    self.continuation = continuation
+                    return self.cancelled
+                }
+                if cancelled { task.cancel() } else { task.resume() }
+            }
+        } onCancel: {
+            let task = self.lock.withLock {
+                self.cancelled = true
+                return self.task
+            }
+            task?.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let now = ContinuousClock.now
+        let shouldReport = lock.withLock {
+            if let lastReport, now - lastReport < .milliseconds(100), totalBytesWritten < totalBytes { return false }
+            lastReport = now
+            return true
+        }
+        if shouldReport { progress(.downloading(receivedBytes: totalBytesWritten, totalBytes: totalBytes)) }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let result = Result<Download, Error> {
+            guard let response = downloadTask.response else { throw URLError(.badServerResponse) }
+            let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            // URLSession removes its file when this callback returns; retain it for async verification.
+            try FileManager.default.moveItem(at: location, to: temporary)
+            return (temporary, response)
+        }
+        lock.withLock { self.result = result }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let (continuation, result) = lock.withLock {
+            let values = (self.continuation, self.result)
+            self.continuation = nil; self.result = nil; self.task = nil
+            return values
+        }
+        if let error {
+            if case let .success((temporary, _)) = result { try? FileManager.default.removeItem(at: temporary) }
+            continuation?.resume(throwing: error)
+        } else {
+            continuation?.resume(with: result ?? .failure(URLError(.unknown)))
         }
     }
 }

@@ -82,6 +82,78 @@ struct AppUpdateTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path).isEmpty)
     }
 
+    @Test func downloadReportsProgressWithoutContentLengthAndThenVerifies() async throws {
+        let cache = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let session = downloadSession()
+        defer { session.invalidateAndCancel() }
+        let service = AppUpdateService(session: session, cacheDirectory: cache)
+        let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
+        let progress = DownloadProgressRecorder()
+
+        let url = try await service.download(update, progress: progress.record)
+
+        #expect(try Data(contentsOf: url) == DownloadProtocol.chunk + DownloadProtocol.chunk)
+        #expect(progress.values.contains {
+            if case let .downloading(received, total) = $0 { return received > 0 && received < total && total == update.asset.size }
+            return false
+        }, "\(progress.values)")
+        guard case .verifying = progress.values.last else { Issue.record("Missing verification phase"); return }
+        service.discardDownload(at: url)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path).isEmpty)
+    }
+
+    @Test func cancelledDownloadDoesNotVerifyOrCacheAnIncompleteInstaller() async throws {
+        let cache = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let session = downloadSession(hold: true)
+        defer { session.invalidateAndCancel() }
+        let service = AppUpdateService(session: session, cacheDirectory: cache)
+        let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
+        let progress = DownloadProgressRecorder()
+        let download = Task { try await service.download(update, progress: progress.record) }
+        defer { download.cancel() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while progress.values.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(!progress.values.isEmpty)
+        download.cancel()
+
+        do {
+            _ = try await download.value
+            Issue.record("Cancelled download succeeded")
+        } catch {
+            #expect(error is CancellationError || (error as? URLError)?.code == .cancelled)
+        }
+        #expect(!PathSafety.exists(cache))
+        #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })
+    }
+
+    @Test func interruptedDownloadReportsTheFailureWithoutVerifyingOrCaching() async throws {
+        let cache = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let session = downloadSession(fail: true)
+        defer { session.invalidateAndCancel() }
+        let service = AppUpdateService(session: session, cacheDirectory: cache)
+        let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
+        let progress = DownloadProgressRecorder()
+
+        do {
+            _ = try await service.download(update, progress: progress.record)
+            Issue.record("Interrupted download succeeded")
+        } catch {
+            #expect((error as? URLError)?.code == .networkConnectionLost)
+        }
+        #expect(!PathSafety.exists(cache))
+        #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })
+    }
+
+    private func downloadSession(hold: Bool = false, fail: Bool = false) -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DownloadProtocol.self]
+        configuration.httpAdditionalHeaders = ["X-Modu-Test-Hold": String(hold), "X-Modu-Test-Fail": String(fail)]
+        return URLSession(configuration: configuration)
+    }
+
     private func release(version: String, draft: Bool = false, prerelease: Bool = false, filename: String? = nil,
                          downloadURL: String? = nil, size: Int = 3, digest: String? = nil) throws -> Data {
         let name = filename ?? "Modu-\(version)-arm64.dmg"
@@ -92,4 +164,43 @@ struct AppUpdateTests {
                                                           "html_url": "https://github.com/qimaotech/modu-desktop/releases/tag/v\(version)",
                                                           "assets": [asset]])
     }
+}
+
+private final class DownloadProtocol: URLProtocol, @unchecked Sendable {
+    static let chunk = Data(repeating: 42, count: 65_536)
+    private let queue = DispatchQueue(label: "ModuTests.UpdateDownload")
+    private var completion: DispatchWorkItem?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        queue.async { [self] in
+            guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil) else { return }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Self.chunk)
+            guard request.value(forHTTPHeaderField: "X-Modu-Test-Hold") != "true" else { return }
+            let completion = DispatchWorkItem { [self] in
+                if request.value(forHTTPHeaderField: "X-Modu-Test-Fail") == "true" {
+                    client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
+                    return
+                }
+                client?.urlProtocol(self, didLoad: Self.chunk)
+                client?.urlProtocolDidFinishLoading(self)
+            }
+            self.completion = completion
+            queue.asyncAfter(deadline: .now() + 0.5, execute: completion)
+        }
+    }
+
+    override func stopLoading() {
+        queue.async { [self] in completion?.cancel(); completion = nil }
+    }
+}
+
+private final class DownloadProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [AppUpdateDownloadProgress] = []
+    var values: [AppUpdateDownloadProgress] { lock.withLock { recorded } }
+    func record(_ progress: AppUpdateDownloadProgress) { lock.withLock { recorded.append(progress) } }
 }

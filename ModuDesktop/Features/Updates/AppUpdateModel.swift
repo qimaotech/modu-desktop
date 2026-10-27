@@ -14,6 +14,7 @@ final class AppUpdateModel {
     private(set) var installerURL: URL?
     private(set) var checking = false
     private(set) var downloading = false
+    private(set) var downloadProgress: AppUpdateDownloadProgress?
     private(set) var installing = false
     private(set) var restartPending = false
     private(set) var checked = false
@@ -75,13 +76,24 @@ final class AppUpdateModel {
         runInstallation { [self] id in
             if installerURL == nil {
                 downloading = true
-                let url = try await service.download(update)
+                downloadProgress = .downloading(receivedBytes: 0, totalBytes: update.asset.size)
+                let url = try await service.download(update) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.requestID == id, self.downloading else { return }
+                        // A queued byte report must not restore the download UI after verification starts.
+                        if case .verifying = self.downloadProgress { return }
+                        if case let .downloading(received, _) = progress,
+                           case let .downloading(previous, _) = self.downloadProgress, received < previous { return }
+                        self.downloadProgress = progress
+                    }
+                }
                 guard !Task.isCancelled, requestID == id else {
                     service.discardDownload(at: url)
                     return
                 }
                 installerURL = url
                 downloading = false
+                downloadProgress = nil
             }
             guard let installerURL else { return }
             let prepared = try await installer.prepare(installer: installerURL, update: update, application: application, helper: helper)
@@ -98,13 +110,13 @@ final class AppUpdateModel {
 
     func runInstallation(_ operation: @escaping @MainActor (UUID) async throws -> Void) {
         guard !working else { return }
-        error = nil; errorDetails = nil; installing = true
+        error = nil; errorDetails = nil; downloadProgress = nil; installing = true
         let id = UUID()
         requestID = id
         // Cancellation can append this installation to cleanupTask, so capture only earlier cleanup.
         let previousCleanup = cleanupTask
         task = Task {
-            defer { if requestID == id { downloading = false; installing = false; task = nil } }
+            defer { if requestID == id { downloading = false; downloadProgress = nil; installing = false; task = nil } }
             do {
                 await previousCleanup?.value
                 guard !Task.isCancelled, requestID == id else { return }
@@ -132,7 +144,7 @@ final class AppUpdateModel {
             }
         }
         task = nil; installerURL = nil
-        checking = false; downloading = false; installing = false
+        checking = false; downloading = false; downloadProgress = nil; installing = false
     }
 
     func prepareToTerminate() async -> Bool {

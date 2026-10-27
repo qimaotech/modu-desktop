@@ -7174,6 +7174,23 @@
         }
       }
     },
+    "ui.verifyingInstaller": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying installer…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在校验安装包…"
+          }
+        }
+      }
+    },
     "ui.waitingForModuQuit": {
       "extractionState": "manual",
       "localizations": {
