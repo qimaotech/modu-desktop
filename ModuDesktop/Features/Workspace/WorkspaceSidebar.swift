@@ -90,8 +90,8 @@ struct WorkspaceSidebar: View {
         HStack(spacing: 4) {
             Button { expanded.wrappedValue.toggle() } label: {
                 HStack(spacing: 6) {
-                    DesignIcon(name: "Disclosure").rotationEffect(.degrees(expanded.wrappedValue ? 0 : -90))
-                    SidebarFolderIcon(expanded: expanded.wrappedValue)
+                    SidebarDisclosureIcon(expanded: expanded.wrappedValue)
+                    SidebarFolderIcon()
                     Text(title).font(.system(size: 13, weight: .medium))
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
@@ -114,12 +114,12 @@ struct WorkspaceSidebar: View {
         HStack(spacing: 6) {
             if resource.kind == .group {
                 Button { workspace.toggleGroup(title); sidebarFocused = true } label: {
-                    DesignIcon(name: "Disclosure").rotationEffect(.degrees(workspace.expandedGroups.contains(title) ? 0 : -90))
+                    SidebarDisclosureIcon(expanded: workspace.expandedGroups.contains(title))
                 }.accessibilityLabel(preferences.text.string(.uiExpandOrCollapse) + " " + title)
             }
             Button { workspace.selectSidebarRow(resource); sidebarFocused = true } label: {
                 HStack(spacing: 6) {
-                    if resource.kind == .group { SidebarFolderIcon(expanded: workspace.expandedGroups.contains(title)) }
+                    if resource.kind == .group { SidebarFolderIcon() }
                     else { DesignIcon(name: "FolderGit") }
                     Text(title).font(.system(size: 13, weight: resource.kind == .group ? .medium : .regular)).lineLimit(1)
                     Spacer(minLength: 4)
@@ -150,17 +150,24 @@ struct WorkspaceSidebar: View {
     }
 }
 
-private struct SidebarFolderIcon: View {
+private struct SidebarDisclosureIcon: View {
     let expanded: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Image(nsImage: expanded ? Self.expandedImage : Self.collapsedImage).renderingMode(.original).resizable().scaledToFit()
+        Image(systemName: "chevron.right").font(.system(size: 9, weight: .heavy))
+            .foregroundStyle(.secondary)
+            .rotationEffect(.degrees(expanded ? 90 : 0))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: expanded)
+            .frame(width: 10, height: 16).accessibilityHidden(true)
+    }
+}
+
+private struct SidebarFolderIcon: View {
+    var body: some View {
+        Image(nsImage: Self.folderImage).renderingMode(.original).resizable().scaledToFit()
             .frame(width: 16, height: 16).scaleEffect(0.92).accessibilityHidden(true)
     }
 
-    private static let collapsedImage = NSWorkspace.shared.icon(for: .folder)
-    // AppKit has no named open-folder image; keep the generic folder if the system resource is unavailable.
-    private static let expandedImage = Bundle(path: "/System/Library/CoreServices/CoreTypes.bundle")?
-        .url(forResource: "OpenFolderIcon", withExtension: "icns")
-        .flatMap { NSImage(contentsOf: $0) } ?? collapsedImage
+    private static let folderImage = NSWorkspace.shared.icon(for: .folder)
 }
