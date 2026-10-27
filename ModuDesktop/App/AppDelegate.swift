@@ -8,8 +8,19 @@ import Observation
     @ObservationIgnored private(set) weak var mainWindow: NSWindow?
     private(set) var mainWindowIsOpen = false
     private(set) var startupTask: Task<Void, Never>?
-    private var terminationTask: Task<Void, Never>?
+    private(set) var terminationTask: Task<Void, Never>?
+    private var terminationPrepared = false
+    private let terminate: (NSApplication) -> Void
     var reopenWindow: (() -> Void)?
+
+    override convenience init() {
+        self.init(terminate: { $0.terminate(nil) })
+    }
+
+    init(terminate: @escaping (NSApplication) -> Void) {
+        self.terminate = terminate
+        super.init()
+    }
 
     func start(model: AppModel, onReady: @escaping @MainActor () -> Void, onFinished: @escaping @MainActor (Bool) -> Void) {
         guard startupTask == nil, !model.started else { return }
@@ -34,7 +45,7 @@ import Observation
         #endif
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if terminationTask != nil { return .terminateLater }
+        if terminationTask != nil { return .terminateCancel }
         if let model, model.busy {
             if model.updates.restartPending { model.presentation.quitPending = true }
             guard model.operations.canCancel || model.cancelling else { return .terminateCancel }
@@ -42,6 +53,7 @@ import Observation
             return .terminateCancel
         }
         if model?.presentation.result != nil { model?.presentation.quitPending = true; return .terminateCancel }
+        if terminationPrepared { return .terminateNow }
         if startupTask != nil || model?.updates.needsTerminationPreparation == true {
             let model = model
             model?.presentation.quitPending = true
@@ -50,11 +62,14 @@ import Observation
             terminationTask = Task {
                 await startupTask?.value
                 let canTerminate = await model?.updates.prepareToTerminate() ?? true
-                if !canTerminate { model?.presentation.quitPending = false }
                 terminationTask = nil
-                sender.reply(toApplicationShouldTerminate: canTerminate)
+                guard canTerminate else { model?.presentation.quitPending = false; return }
+                terminationPrepared = true
+                defer { terminationPrepared = false }
+                terminate(sender)
             }
-            return .terminateLater
+            // A deferred AppKit quit runs a modal loop that can starve these MainActor tasks.
+            return .terminateCancel
         }
         return .terminateNow
     }

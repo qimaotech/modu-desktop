@@ -36,7 +36,8 @@ final class AppModel {
         busy && management.sheet == nil && presentation.resultHost == .main && (!openingWorkspace || workspace.showsReloadProgress)
     }
 
-    init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil) {
+    init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
+         updates: AppUpdateModel? = nil) {
         self.service = service
         self.toolService = toolService ?? ExternalTools(git: service.git)
         let installer = installer ?? InstallationService(support: service.store.support)
@@ -44,12 +45,12 @@ final class AppModel {
         let preferences = AppPreferences(defaults: defaults ?? Self.launchDefaults())
         self.preferences = preferences
         globalShortcut = GlobalShortcutModel(preferences: preferences)
-        updates = AppUpdateModel(preferences: preferences)
+        self.updates = updates ?? AppUpdateModel(preferences: preferences)
         let operations = OperationLifecycle()
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
-        updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
+        self.updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
         let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
         self.workspace = workspace
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation, preferences: preferences)
