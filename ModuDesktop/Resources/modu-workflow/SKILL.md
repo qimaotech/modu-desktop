@@ -9,12 +9,14 @@ description: Manage repositories and worktree groups in a Modu workspace through
 
 - Do not edit the workspace copies of this skill's `SKILL.md` or `agents/openai.yaml`. Modu manages these files, discards their uncommitted working-tree and index changes when opening or reloading the workspace, and synchronizes the bundled content.
 - For workspace-specific conventions or additional workflow steps, recommend creating or maintaining a separate `modu-workflow-addon` skill at `.agents/skills/modu-workflow-addon/SKILL.md` under the workspace root.
+- Group roots reuse an available same-named local branch or start from the workspace's current HEAD. Uncommitted addon changes are not copied into new groups, and existing groups do not synchronize automatically. Commit custom workflow changes only with the user's authorization.
 
 ## Context and commands
 
 - Start with `modu-cli workspace inspect --json` from inside the workspace, or add `--workspace <root>` when its root is known. Use the returned `workspace` path for later calls; a group directory is not a workspace root. Reuse current inspection results; `repo list` and `worktree list` inspect their respective resources.
 - All three inspection commands can remove records for missing resource directories across the workspace and may fetch `origin` when the `origin/HEAD` symbolic ref is missing.
 - Pass `--workspace <root> --json` on every subsequent management call. Use `modu-cli --help` and subcommand `--help` for current syntax. Repository arguments use URL-derived IDs, unique ignoring case; `repo add --name` sets only a display name and cannot resolve ID conflicts.
+- `repo add` automatically commits the workspace's entire `.gitignore` when it differs from HEAD, including pre-existing manual edits.
 - Read repository IDs from `items[].resource.repo` and group names from `items[].resource.group`; `resource.path` is a relative filesystem path, not a command argument.
 - CLI commands cover workspace inspection, repository list/add/remove, and worktree list/create/update/remove. Workspace initialization, repository updates, local scanning, and YAML import/export are App operations; do not invent CLI equivalents.
 

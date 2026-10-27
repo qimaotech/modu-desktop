@@ -30,12 +30,13 @@
 | 普通开发启动，恢复开发工作区 | `task run` |
 | 重新选择开发工作区 | `task run -- --reset` |
 | 构建并激活隔离 Git 场景，验证启动并输出 PID | `task mock` |
-| 隔离构建与启动验证，不停止已有实例；输出 PID 后保持后台运行 | `task verify -- --mock linked-worktree-selected` |
+| 隔离工作区数据的构建与启动验证，不停止已有实例；输出 PID 后保持后台运行 | `task verify -- --mock linked-worktree-selected` |
 | 隔离 LLDB 调试，输入 run 启动 | `task debug -- --mock linked-worktree-selected` |
 | 本次隔离实例的进程日志 | `task logs -- --mock linked-worktree-selected` |
 | 本次隔离实例的 Modu subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
 
-- 临时验证优先使用隔离 verify；构建或启动相关改动用它检查构建与启动，原生窗口或交互改动按需临时执行 UI 自动化。
+- 临时验证优先使用带 mock 的 verify；构建或启动相关改动用它检查构建与启动，原生窗口或交互改动按需临时执行 UI 自动化。
+- mock 默认复用开发构建产物；需要独立构建产物时，为 `MODU_DERIVED_DATA_PATH` 指定本次专用目录。
 - 调试与日志命令使用临时场景示例；普通开发模式可省略 mock 参数。
 - mock 数据由 [prepare_mock_workspace.py](script/prepare_mock_workspace.py) 准备，启动验证由 [verify_app.swift](script/verify_app.swift) 执行。
 
