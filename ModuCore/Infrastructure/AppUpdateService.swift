@@ -22,8 +22,12 @@ public struct AppUpdate: Sendable {
 public struct AppUpdateService: Sendable {
     public static let releasesURL = URL(string: "https://github.com/qimaotech/modu-desktop/releases/latest")!
     private let session: URLSession
+    private let cacheDirectory: URL
 
-    public init(session: URLSession = .shared) { self.session = session }
+    public init(session: URLSession = .shared, cacheDirectory: URL? = nil) {
+        self.session = session
+        self.cacheDirectory = cacheDirectory ?? URL.cachesDirectory.appending(path: "fun.armantang.ModuDesktop/Updates", directoryHint: .isDirectory)
+    }
 
     public func check(currentVersion: String = ModuVersion.current) async throws -> AppUpdate? {
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/qimaotech/modu-desktop/releases/latest")!)
@@ -44,13 +48,24 @@ public struct AppUpdateService: Sendable {
         defer { try? FileManager.default.removeItem(at: temporary) }
         try Task.checkCancellation()
         try validate(response)
-        try verifyDownload(at: temporary, asset: update.asset)
+        return try cacheDownload(at: temporary, asset: update.asset)
+    }
+
+    public func discardDownload(at url: URL) {
+        let directory = url.deletingLastPathComponent()
+        guard PathSafety.canonical(directory.deletingLastPathComponent()).path == PathSafety.canonical(cacheDirectory).path,
+              UUID(uuidString: directory.lastPathComponent) != nil else { return }
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    func cacheDownload(at temporary: URL, asset: AppUpdate.Asset) throws -> URL {
+        try verifyDownload(at: temporary, asset: asset)
         try Task.checkCancellation()
-        let downloads = try FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = downloads.appendingPathComponent("Modu-Update-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        let directory = cacheDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         do {
-            let destination = directory.appendingPathComponent(update.asset.name)
+            let destination = directory.appendingPathComponent(asset.name)
             try FileManager.default.moveItem(at: temporary, to: destination)
             try Task.checkCancellation()
             return destination

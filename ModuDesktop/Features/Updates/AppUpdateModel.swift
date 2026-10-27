@@ -26,7 +26,7 @@ final class AppUpdateModel {
     private var requestID = UUID()
     private var prepared: PreparedAppUpdate?
     var working: Bool { checking || downloading || installing || restartPending }
-    var needsTerminationPreparation: Bool { task != nil || cleanupTask != nil || restartPending }
+    var needsTerminationPreparation: Bool { task != nil || cleanupTask != nil || installerURL != nil || restartPending }
 
     var text: InterfaceText { preferences.text }
 
@@ -43,7 +43,8 @@ final class AppUpdateModel {
 
     func check() {
         guard !working else { return }
-        update = nil; installerURL = nil; error = nil; errorDetails = nil; checked = false; checking = true
+        discardInstaller()
+        update = nil; error = nil; errorDetails = nil; checked = false; checking = true
         let id = UUID()
         requestID = id
         task = Task {
@@ -76,7 +77,7 @@ final class AppUpdateModel {
                 downloading = true
                 let url = try await service.download(update)
                 guard !Task.isCancelled, requestID == id else {
-                    try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+                    service.discardDownload(at: url)
                     return
                 }
                 installerURL = url
@@ -84,6 +85,9 @@ final class AppUpdateModel {
             }
             guard let installerURL else { return }
             let prepared = try await installer.prepare(installer: installerURL, update: update, application: application, helper: helper)
+            // The prepared application no longer depends on the downloaded disk image.
+            service.discardDownload(at: installerURL)
+            if self.installerURL == installerURL { self.installerURL = nil }
             guard !Task.isCancelled, requestID == id else {
                 installer.discard(prepared)
                 return
@@ -108,7 +112,7 @@ final class AppUpdateModel {
                 try await operation(id)
             } catch {
                 guard !Task.isCancelled, requestID == id else { return }
-                if (error as? ModuError)?.code == "update-integrity-failed" { installerURL = nil }
+                if (error as? ModuError)?.code == "update-integrity-failed" { discardInstaller() }
                 self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
             }
         }
@@ -117,12 +121,17 @@ final class AppUpdateModel {
     func cancel() {
         guard !restartPending else { return }
         requestID = UUID()
-        if let task {
-            task.cancel()
+        if task != nil || installerURL != nil {
+            task?.cancel()
             let previousCleanup = cleanupTask
-            cleanupTask = Task { await previousCleanup?.value; await task.value }
+            let task = task, installerURL = installerURL, service = service
+            cleanupTask = Task {
+                await previousCleanup?.value
+                await task?.value
+                if let installerURL { service.discardDownload(at: installerURL) }
+            }
         }
-        task = nil
+        task = nil; installerURL = nil
         checking = false; downloading = false; installing = false
     }
 
@@ -174,6 +183,11 @@ final class AppUpdateModel {
         self.prepared = nil; restartPending = false
         self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
         onRestartFailure?()
+    }
+
+    private func discardInstaller() {
+        if let installerURL { service.discardDownload(at: installerURL) }
+        installerURL = nil
     }
 
     private func errorText(_ error: Error) -> String {

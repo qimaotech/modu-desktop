@@ -47,6 +47,41 @@ struct AppUpdateTests {
         #expect(throws: ModuError.self) { try service.verifyDownload(at: file, asset: invalid.asset) }
     }
 
+    @Test func cachedDownloadsAreIsolatedAndCleanupPreservesOtherFiles() throws {
+        let directory = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = directory.appending(path: "Caches/Updates")
+        let service = AppUpdateService(cacheDirectory: cache)
+        let update = try #require(try service.update(from: release(version: "2.0.0", size: 3), currentVersion: "1.0.0"))
+        let temporary = directory.appending(path: "download")
+        try Data("abc".utf8).write(to: temporary)
+        let first = try service.cacheDownload(at: temporary, asset: update.asset)
+        try Data("abc".utf8).write(to: temporary)
+        let second = try service.cacheDownload(at: temporary, asset: update.asset)
+        #expect(first != second && first.lastPathComponent == update.asset.name)
+        #expect(first.deletingLastPathComponent().deletingLastPathComponent().path == cache.path)
+        #expect(try Data(contentsOf: first) == Data("abc".utf8))
+        #expect(!PathSafety.exists(temporary))
+
+        let manual = directory.appending(path: UUID().uuidString).appending(path: update.asset.name)
+        try FileManager.default.createDirectory(at: manual.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("manual download".utf8).write(to: manual)
+        service.discardDownload(at: manual)
+        service.discardDownload(at: cache.appending(path: update.asset.name))
+        service.discardDownload(at: first)
+        service.discardDownload(at: first)
+        #expect(!PathSafety.exists(first.deletingLastPathComponent()))
+        #expect(try Data(contentsOf: manual) == Data("manual download".utf8))
+        #expect(try Data(contentsOf: second) == Data("abc".utf8))
+        service.discardDownload(at: second)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path).isEmpty)
+
+        try Data("incomplete".utf8).write(to: temporary)
+        #expect(throws: ModuError.self) { try service.cacheDownload(at: temporary, asset: update.asset) }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path).isEmpty)
+    }
+
     private func release(version: String, draft: Bool = false, prerelease: Bool = false, filename: String? = nil,
                          downloadURL: String? = nil, size: Int = 3, digest: String? = nil) throws -> Data {
         let name = filename ?? "Modu-\(version)-arm64.dmg"
