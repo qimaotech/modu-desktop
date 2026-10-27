@@ -55,23 +55,15 @@ extension WorkspaceService {
     public static func repositoryURLs(in text: String) throws -> [String] {
         guard let node = try Yams.compose(yaml: text) else { return [] }
         var result: [String] = []
-        var anchors: [String: Node] = [:]
-        func collect(_ node: Node) {
-            if case .alias = node { return }
-            if let anchor = node.anchor { anchors[anchor.rawValue] = node }
-            if let map = node.mapping { for pair in map { collect(pair.key); collect(pair.value) } }
-            else if let sequence = node.sequence { for child in sequence { collect(child) } }
-        }
-        collect(node)
-        var visiting = Set<String>()
-        func visit(_ node: Node) throws {
-            if case .alias(let alias) = node {
-                guard let target = anchors[alias.anchor.rawValue], visiting.insert(alias.anchor.rawValue).inserted else { throw ModuError("invalid-input", .yamlContainsUnresolvedOrRecursiveAlias) }
-                defer { visiting.remove(alias.anchor.rawValue) }
-                try visit(target); return
+        // Yams resolves aliases while composing, so count every visit to the expanded nodes.
+        var remainingNodes = 10_000
+        func visit(_ node: Node, depth: Int = 0) throws {
+            guard remainingNodes > 0, depth <= 100 else {
+                throw ModuError("invalid-input", .yamlTooComplexToImport)
             }
-            if let map = node.mapping { for pair in map { try visit(pair.value) } }
-            else if let sequence = node.sequence { for child in sequence { try visit(child) } }
+            remainingNodes -= 1
+            if let map = node.mapping { for pair in map { try visit(pair.value, depth: depth + 1) } }
+            else if let sequence = node.sequence { for child in sequence { try visit(child, depth: depth + 1) } }
             else if let value = node.string {
                 let raw = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 if (try? RepositoryIdentity(raw)) != nil { result.append(raw) }

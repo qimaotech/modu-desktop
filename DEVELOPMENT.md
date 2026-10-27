@@ -57,6 +57,7 @@
 | 保留测试结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
 | 明确需要时运行全量测试 | `task test` |
 
+- 在 Codex 沙箱中运行测试前，核对用户级 SwiftPM 缓存的写入权限。若缓存不在可写范围，且已有日志确认该测试入口需要提权，首次执行即申请所需权限，不重复尝试已知会失败的普通执行；权限配置变化后重新评估。
 - [run_tests.py](script/run_tests.py) 隔离并清理本次测试环境，默认删除结果包；检查实际执行数量与清理结果，退出或清理无法确认时保留环境并返回失败。
 - 零用例或全跳过不算通过，`-enumerate-tests` 除外；筛选失败时先核对方法标识与 `TEST_FILTER`。
 - Mock 测试聚焦场景加载、外部工具目标及安装、删除、目录和网络隔离；完整刷新、分组管理与 YAML 流程复用 [业务测试](ModuDesktopTests/)，避免重复覆盖。

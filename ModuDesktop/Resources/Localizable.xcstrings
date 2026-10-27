@@ -3200,19 +3200,19 @@
         }
       }
     },
-    "message.yamlContainsUnresolvedOrRecursiveAlias": {
+    "message.yamlTooComplexToImport": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "YAML contains an unresolved or recursive alias."
+            "value": "YAML is too complex to import. Reduce nesting or repeated aliases and retry."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "YAML 包含无法解析或递归引用的别名。"
+            "value": "YAML 内容过于复杂，请减少嵌套或重复别名后重试。"
           }
         }
       }

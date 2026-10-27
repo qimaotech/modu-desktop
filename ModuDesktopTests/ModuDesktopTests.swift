@@ -23,6 +23,31 @@ struct ModuCoreTests {
         #expect(urls == ["https://example.test/a.git", "git@example.test:b"])
         #expect(try WorkspaceService.repositoryURLs(in: "url: &repo https://example.test/a.git\nagain: *repo").count == 2)
         #expect(throws: (any Error).self) { try WorkspaceService.repositoryURLs(in: "loop: &loop [*loop]") }
+        #expect(throws: (any Error).self) { try WorkspaceService.repositoryURLs(in: "unknown: *missing") }
+        let aliased = """
+        first: &first [https://example.test/a.git, git@example.test:b]
+        second: &second [*first, *first]
+        third: *second
+        """
+        #expect(try WorkspaceService.repositoryURLs(in: aliased) == Array(repeating: urls, count: 5).flatMap { $0 })
+    }
+    @Test(arguments: ["url-aliases", "text-aliases", "deep-aliases"])
+    func repositoryYAMLRejectsExcessiveExpansion(_ kind: String) throws {
+        let value = kind == "text-aliases" ? "ordinary text" : "https://example.test/repo.git"
+        var yaml = "l0: &a0 \(value)\n"
+        for index in 1...(kind == "deep-aliases" ? 150 : 18) {
+            let previous = "*a\(index - 1)"
+            let aliases = kind == "deep-aliases" ? previous : "\(previous), \(previous)"
+            yaml += "l\(index): &a\(index) [\(aliases)]\n"
+        }
+        do {
+            _ = try WorkspaceService.repositoryURLs(in: yaml)
+            Issue.record("Excessive YAML expansion should fail.")
+        } catch {
+            let failure = try #require(error as? ModuError)
+            #expect(failure.code == "invalid-input")
+            #expect(failure.userMessage == .yamlTooComplexToImport)
+        }
     }
     @Test(arguments: ["new", "recorded", "missing-metadata"])
     func openingNonGitWorkspaceInitializesGit(_ kind: String) async throws {

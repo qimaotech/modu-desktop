@@ -59,7 +59,7 @@ extension InterfaceText {
         case .couldNotReadBranchComparisonCount: return string(.messageCouldNotReadBranchComparisonCount)
         case .notRepositoryRoot: return string(.messageNotRepositoryRoot)
         case .noCompleteSupportedGitRepositoryURLsWereFound: return string(.messageNoCompleteSupportedGitRepositoryURLsWereFound)
-        case .yamlContainsUnresolvedOrRecursiveAlias: return string(.messageYamlContainsUnresolvedOrRecursiveAlias)
+        case .yamlTooComplexToImport: return string(.messageYamlTooComplexToImport)
         case .yamlContainsRepositoryURLWithEmbeddedCredentialsRemove: return string(.messageYamlContainsRepositoryURLWithEmbeddedCredentialsRemove)
         case .importRequiresEmptyWorkspaceChooseAnotherWorkspaceIn: return string(.messageImportRequiresEmptyWorkspaceChooseAnotherWorkspaceIn)
         case .workspaceRecordIsMissing(let arg1): return string(.messageWorkspaceRecordIsMissing(arg1))

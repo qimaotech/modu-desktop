@@ -55,7 +55,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case couldNotReadBranchComparisonCount
     case notRepositoryRoot
     case noCompleteSupportedGitRepositoryURLsWereFound
-    case yamlContainsUnresolvedOrRecursiveAlias
+    case yamlTooComplexToImport
     case yamlContainsRepositoryURLWithEmbeddedCredentialsRemove
     case importRequiresEmptyWorkspaceChooseAnotherWorkspaceIn
     case workspaceRecordIsMissing(String)
@@ -250,7 +250,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .couldNotReadBranchComparisonCount: return "Could not read the branch comparison count."
         case .notRepositoryRoot: return "Not a repository root."
         case .noCompleteSupportedGitRepositoryURLsWereFound: return "No complete, supported Git repository URLs were found in this YAML file."
-        case .yamlContainsUnresolvedOrRecursiveAlias: return "YAML contains an unresolved or recursive alias."
+        case .yamlTooComplexToImport: return "YAML is too complex to import. Reduce nesting or repeated aliases and retry."
         case .yamlContainsRepositoryURLWithEmbeddedCredentialsRemove: return "YAML contains a repository URL with embedded credentials. Remove credentials and retry."
         case .importRequiresEmptyWorkspaceChooseAnotherWorkspaceIn: return "Import requires an empty workspace. Choose another workspace in Settings. Existing files and configuration were not changed."
         case .workspaceRecordIsMissing(let arg1): return "Workspace record is missing: \(arg1)"
