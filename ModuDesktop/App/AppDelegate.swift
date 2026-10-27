@@ -1,10 +1,12 @@
 import SwiftUI
 import AppKit
 import ModuCore
+import Observation
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor @Observable final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: AppModel?
-    weak var mainWindow: NSWindow?
+    @ObservationIgnored private(set) weak var mainWindow: NSWindow?
+    private(set) var mainWindowIsOpen = false
     private(set) var startupTask: Task<Void, Never>?
     private var terminationTask: Task<Void, Never>?
     var reopenWindow: (() -> Void)?
@@ -56,6 +58,26 @@ import ModuCore
         }
         return .terminateNow
     }
+
+    func observeMainWindow(_ window: NSWindow) {
+        guard mainWindow !== window else { return }
+        if let mainWindow { NotificationCenter.default.removeObserver(self, name: nil, object: mainWindow) }
+        mainWindow = window
+        mainWindowIsOpen = window.isVisible || window.isMiniaturized
+        NotificationCenter.default.addObserver(self, selector: #selector(mainWindowDidBecomeKey), name: NSWindow.didBecomeKeyNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(mainWindowWillClose), name: NSWindow.willCloseNotification, object: window)
+    }
+
+    func returnToMainWindow() {
+        guard mainWindowIsOpen, let mainWindow else { return }
+        NSApp.unhide(nil)
+        if mainWindow.isMiniaturized { mainWindow.deminiaturize(nil) }
+        mainWindow.makeKeyAndOrderFront(nil)
+        mainWindow.attachedSheet?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func mainWindowDidBecomeKey() { mainWindowIsOpen = true }
+    @objc private func mainWindowWillClose() { mainWindowIsOpen = false }
 
     private func toggleVisibility() {
         if NSApp.isActive, !NSApp.isHidden, NSApp.orderedWindows.contains(where: { $0.isVisible && !$0.isMiniaturized && $0.canBecomeMain }) {

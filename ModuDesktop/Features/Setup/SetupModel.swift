@@ -6,6 +6,7 @@ import Observation
 final class SetupModel {
     private let model: AppModel
     private(set) var cliReady = false
+    private(set) var cliPreviouslyInstalled = false
     private(set) var cliMessage = ""
     private(set) var candidate: URL?
     private var candidateRequiresExistingRecord = false
@@ -26,6 +27,7 @@ final class SetupModel {
         let check = await model.installer.checkCLI()
         guard !Task.isCancelled else { return }
         cliReady = check.available; cliMessage = check.message
+        cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
         cliActivity = nil
         await restoreSavedCandidate()
     }
@@ -35,7 +37,10 @@ final class SetupModel {
         working = true; cliActivity = .installing; error = nil
         model.runSetupOperation { [self] in
             var outcome = OperationResult(command: "cli.install", workspace: nil)
-            defer { cliActivity = nil; working = false }
+            defer {
+                cliPreviouslyInstalled = cliPreviouslyInstalled || PathSafety.exists(model.installer.commandLink)
+                cliActivity = nil; working = false
+            }
             do {
                 let check = try await model.installer.installCLI()
                 cliReady = check.available; cliMessage = check.message

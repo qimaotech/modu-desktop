@@ -4,12 +4,16 @@ import ModuCore
 
 struct SetupView: View {
     @Bindable var model: AppModel
+    var canReturnToMainWindow: () -> Bool
+    var returnToMainWindow: () -> Void
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
     @State private var setup: SetupModel
 
-    init(model: AppModel) {
+    init(model: AppModel, canReturnToMainWindow: @escaping () -> Bool, returnToMainWindow: @escaping () -> Void) {
         self.model = model
+        self.canReturnToMainWindow = canReturnToMainWindow
+        self.returnToMainWindow = returnToMainWindow
         _setup = State(initialValue: SetupModel(model: model))
     }
 
@@ -60,8 +64,8 @@ struct SetupView: View {
             }.padding(.horizontal, 24).padding(.vertical, 32)
             Divider()
             HStack {
-                Button(model.hasSavedWorkspace ? model.t("Cancel", "取消") : model.t("Quit", "退出")) {
-                    if setup.cliReady && model.hasSavedWorkspace { dismiss(); openWindow(id: "main") }
+                Button(canReturnToMainWindow() ? model.t("Cancel", "取消") : model.t("Quit", "退出")) {
+                    if canReturnToMainWindow() { dismiss(); returnToMainWindow() }
                     else { NSApp.terminate(nil) }
                 }.disabled(setup.working).keyboardShortcut(.cancelAction)
                 Spacer()
@@ -89,9 +93,9 @@ struct SetupView: View {
 
     var installButtonLabel: some View {
         ZStack {
-            Text(model.t("Install", "安装")).hidden()
+            Text(installTitle).hidden()
             Text(model.t("Checking…", "正在检查…")).padding(.leading, 18).hidden()
-            Text(model.t("Installing…", "正在安装…")).padding(.leading, 18).hidden()
+            Text(installingTitle).padding(.leading, 18).hidden()
             HStack(spacing: 6) {
                 if setup.cliActivity != nil {
                     ProgressView().controlSize(.mini).frame(width: 12, height: 12).accessibilityHidden(true)
@@ -104,9 +108,17 @@ struct SetupView: View {
     var installButtonTitle: String {
         switch setup.cliActivity {
         case .checking: model.t("Checking…", "正在检查…")
-        case .installing: model.t("Installing…", "正在安装…")
-        case nil: model.t("Install", "安装")
+        case .installing: installingTitle
+        case nil: installTitle
         }
+    }
+
+    private var installTitle: String {
+        setup.cliPreviouslyInstalled ? model.t("Reinstall", "重新安装") : model.t("Install", "安装")
+    }
+
+    private var installingTitle: String {
+        setup.cliPreviouslyInstalled ? model.t("Reinstalling…", "正在重新安装…") : model.t("Installing…", "正在安装…")
     }
 
     var continueButtonLabel: some View {

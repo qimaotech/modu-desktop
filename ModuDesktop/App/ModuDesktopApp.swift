@@ -50,11 +50,11 @@ struct ModuDesktopApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
         Window(model.t("Set Up Workspace", "设置工作区"), id: "setup") {
-            SetupView(model: model).id(model.workspace.record?.root)
+            SetupView(model: model, canReturnToMainWindow: { delegate.mainWindowIsOpen }, returnToMainWindow: delegate.returnToMainWindow).id(model.workspace.record?.root)
                 .onAppear { delegate.model = model }.frame(width: 560).frame(minHeight: 320 - setupChromeHeight)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(WindowChromeHeight(height: $setupChromeHeight))
-                .background(WindowCloseHandler(shouldQuit: { !model.hasSavedWorkspace }))
+                .background(WindowCloseHandler(shouldQuit: { !delegate.mainWindowIsOpen }, onClose: delegate.returnToMainWindow))
         }
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
@@ -88,6 +88,6 @@ struct ModuDesktopApp: App {
             window.setFrame(frame, display: false)
         }
         window.titlebarSeparatorStyle = .line
-        delegate.mainWindow = window
+        delegate.observeMainWindow(window)
     }
 }
