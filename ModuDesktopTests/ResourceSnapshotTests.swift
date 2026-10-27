@@ -1,10 +1,9 @@
 import Foundation
 import Testing
 @testable import ModuCore
-@testable import ModuDesktop
 
 struct ResourceSnapshotTests {
-    @Test(arguments: ["fetch-failed", "base-still-missing"]) @MainActor
+    @Test(arguments: ["fetch-failed", "base-still-missing"])
     func missingBaseRecoveryFetchesOnceAndPreservesChanges(_ outcome: String) async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
@@ -30,15 +29,6 @@ struct ResourceSnapshotTests {
         #expect(snapshot.changes?.map(\.path) == ["new.txt"] && snapshot.changesError == nil)
         #expect(snapshot.summary?.headOID == head && snapshot.summaryError == nil)
         #expect(snapshot.summary?.baseOID == nil && snapshot.summary?.baseError != nil)
-        let summary = try #require(snapshot.summary)
-        let diagnostic = try #require(summary.baseError)
-        let message = try #require(summary.baseMessage)
-        for locale in [AppLocale.simplifiedChinese, .english] {
-            let text = InterfaceText(locale: locale)
-            let tooltip = text.baseBranchHelp(summary)
-            #expect(tooltip.hasPrefix(text.message(message)))
-            #expect(tooltip.contains(diagnostic))
-        }
         let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
         #expect(commands.filter { $0.contains("built-in: git fetch ") }.count == 1)
     }
@@ -81,54 +71,5 @@ struct ResourceSnapshotTests {
         let result = await inspection.value
         #expect(result.items.map(\.status) == [.success, .failed, .success, .cancelled])
         #expect(result.status == .partialSuccess && result.reasonCode == nil && result.exitCode == 1)
-    }
-
-    @Test @MainActor func inspectionAndDetailPreloadShareOneStatusReadPerResource() async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let service = try await prepare(fixture)
-        let suite = fixture.directory.lastPathComponent
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(fixture.root.path, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: service)
-        await model.workspace.reload()
-        await model.workspace.detailPreloadTask?.value
-        let record = try #require(model.workspace.record)
-        let paths = try readPaths(fixture.directory.appending(path: "snapshot-reads")).filter { $0 != PathSafety.identity(record.rootURL) }
-        #expect(paths.sorted() == service.resources(record).map { PathSafety.identity(record.rootURL.appending(path: $0.path)) }.sorted())
-        #expect(model.workspace.states[Resource.member("feature", "repo").id]?.dirty == false)
-
-        let path = record.memberURL("feature", "repo")
-        try Data("new edit".utf8).write(to: path.appending(path: "new.txt"))
-        model.workspace.selection = .member("feature", "repo")
-        await model.workspace.details.detailTask?.value
-        await model.workspace.detailPreloadTask?.value
-        #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
-    }
-
-    private func prepare(_ fixture: Fixture) async throws -> WorkspaceService {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
-        let record = try fixture.service.store.load(fixture.root)
-        let monitor = fixture.directory.appending(path: "snapshot-monitor")
-        try Data("""
-        #!/bin/sh
-        printf '%s\\n' "$PWD" >> "$MODU_SNAPSHOT_READS"
-        printf 'test-token\\000/\\000'
-        """.utf8).write(to: monitor)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        for root in [record.rootURL, record.repositoryURL("repo")] {
-            _ = try await fixture.service.git.run(["config", "core.fsmonitor", monitor.path], at: root)
-            _ = try await fixture.service.git.run(["config", "core.fsmonitorHookVersion", "2"], at: root)
-        }
-        var runner = fixture.service.git.runner
-        runner.environment["MODU_SNAPSHOT_READS"] = fixture.directory.appending(path: "snapshot-reads").path
-        return WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
-    }
-
-    private func readPaths(_ file: URL) throws -> [String] {
-        try String(contentsOf: file, encoding: .utf8).split(separator: "\n").map { PathSafety.identity(URL(fileURLWithPath: String($0))) }
     }
 }

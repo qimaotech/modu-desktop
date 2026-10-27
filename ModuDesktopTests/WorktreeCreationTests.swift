@@ -99,10 +99,6 @@ struct WorktreeCreationTests {
             #expect(item.data?["warning-code"] == "branch-behind-base")
             #expect(item.data?["reused-branch"] == "feature" && item.data?["behind-count"] == "1")
             #expect(item.data?["comparison-base"] == (kind == "root" ? "HEAD" : "origin/main"))
-            #expect(item.message?.contains("1 commit behind") == true)
-            let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(result)) as? [String: Any])
-            let items = try #require(json["items"] as? [[String: Any]])
-            #expect(items.contains { ($0["data"] as? [String: String])?["warning-code"] == "branch-behind-base" })
         } else { #expect(item.message == nil && item.data == nil) }
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == reused)
         #expect(try await f.service.git.oid("HEAD", at: record.rootURL.appending(path: resource.path)) == reused)

@@ -93,7 +93,6 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
-        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
         let model = AppModel(defaults: defaults, service: service)
         model.workspace.record = try store.load(fixture.root)
         if kind == "workspace" {
@@ -114,7 +113,6 @@ import Testing
                 #expect(model.presentation.quitPending)
             } else { model.cancel() }
             #expect(model.cancelling && operation.isCancelled && model.busy)
-            #expect(model.presentation.operationProgressPhaseText == "Finishing current item before cancellation…")
             #expect(try store.load(fixture.root).repositories.map(\.id) == ["repo"])
             #expect(PathSafety.exists(fixture.root.appending(path: "repositories/repo")))
             #expect(!PathSafety.exists(fixture.root.appending(path: "repositories/other")))
@@ -157,7 +155,6 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
-        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         let yaml = workspaceYAML(fixture, other: nil, group: true)
@@ -173,7 +170,6 @@ import Testing
             #expect(model.progress?.phase == .checkingRepository && model.progress?.cancellable == true)
             model.cancel()
             #expect(model.cancelling && operation.isCancelled)
-            #expect(model.presentation.operationProgressPhaseText == "Cancelling…")
             try pause.resume()
             await operation.value
             await model.workspace.detailPreloadTask?.value

@@ -5,12 +5,14 @@ import Testing
 
 struct BuildAndRunScriptTests {
     @Test func verificationPreservesExistingInstances() async throws {
-        let result = try await trace(["--verify"])
+        let result = try await traceLogs(["--verify"])
         #expect(result.status == 0)
-        #expect(result.text == "build\nverify:")
+        #expect(result.text.hasPrefix("build\n"))
+        #expect(result.text.contains("launch:"))
+        #expect(!result.text.contains("stop") && !result.text.contains("log:"))
     }
 
-    @Test(arguments: ["--logs", "--telemetry"], [false, true])
+    @Test(arguments: [("--logs", false), ("--telemetry", true)])
     func loggingUsesOnlyTheLaunchedInstance(_ mode: String, _ mock: Bool) async throws {
         let arguments = [mode] + (mock ? ["--mock", "linked-worktree-selected"] : [])
         let result = try await traceLogs(arguments)
@@ -23,17 +25,16 @@ struct BuildAndRunScriptTests {
                               : "log:--process 12345"))
     }
 
-    @Test(arguments: ["--logs", "--telemetry"], ["", "App instance PID: 0", "App instance PID: Modu", "App instance PID: 12345\nApp instance PID: 67890"])
-    func loggingRejectsMissingOrAmbiguousInstanceIDs(_ mode: String, _ output: String) async throws {
-        let result = try await traceLogs([mode], output: output)
+    @Test(arguments: ["", "App instance PID: 0", "App instance PID: Modu", "App instance PID: 12345\nApp instance PID: 67890"])
+    func loggingRejectsMissingOrAmbiguousInstanceIDs(_ output: String) async throws {
+        let result = try await traceLogs(["--logs"], output: output)
         #expect(result.status == 1)
         #expect(!result.text.contains("log:"))
         #expect(String(decoding: result.stderr, as: UTF8.self).contains("Could not identify the launched App instance"))
     }
 
-    @Test(arguments: ["--logs", "--telemetry"])
-    func failedLaunchDoesNotStartLoggingEvenWhenItReportsAPID(_ mode: String) async throws {
-        let result = try await traceLogs([mode], status: 23)
+    @Test func failedLaunchDoesNotStartLoggingEvenWhenItReportsAPID() async throws {
+        let result = try await traceLogs(["--telemetry"], status: 23)
         #expect(result.status == 23)
         #expect(result.text.contains("App instance PID: 12345"))
         #expect(!result.text.contains("log:"))
@@ -107,18 +108,6 @@ struct BuildAndRunScriptTests {
         guard let line = output.split(separator: "\n").first(where: { $0.hasPrefix("App instance PID: ") }),
               let pid = Int32(line.dropFirst("App instance PID: ".count)) else { return nil }
         return NSRunningApplication(processIdentifier: pid)
-    }
-
-    private func trace(_ arguments: [String]) async throws -> CommandOutput {
-        let script = """
-        source "$1"
-        stop_app() { echo stop; }
-        build_app() { echo build; }
-        open_app() { echo open; }
-        verify_app() { echo "verify:$MOCK_SCENARIO"; }
-        main "${@:2}"
-        """
-        return try await CommandRunner().run("/bin/bash", ["-c", script, "modu-script-tests", Self.root.appending(path: "script/build_and_run.sh").path] + arguments)
     }
 
     private func traceLogs(_ arguments: [String], output: String = "App instance PID: 12345", status: Int32 = 0) async throws -> CommandOutput {

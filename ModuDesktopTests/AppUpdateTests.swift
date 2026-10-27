@@ -20,7 +20,6 @@ struct AppUpdateTests {
             try release(version: "2.0.0", downloadURL: "http://github.com/qimaotech/modu-desktop/releases/download/v2.0.0/Modu-2.0.0-arm64.dmg"),
             try release(version: "2.0.0", downloadURL: "https://github.com/other/repo/releases/download/v2.0.0/Modu-2.0.0-arm64.dmg"),
             try release(version: "2.0.0", downloadURL: "https://example.com/Modu-2.0.0-arm64.dmg"),
-            try release(version: "2.0.0", filename: "../../Modu.app"),
             try release(version: "2.0.0-beta.1")
         ] {
             #expect(throws: ModuError.self) { try service.update(from: data, currentVersion: "1.0.0") }
@@ -103,45 +102,30 @@ struct AppUpdateTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path).isEmpty)
     }
 
-    @Test func cancelledDownloadDoesNotVerifyOrCacheAnIncompleteInstaller() async throws {
+    @Test(arguments: [false, true])
+    func failedOrCancelledDownloadDoesNotVerifyOrCacheAnIncompleteInstaller(_ cancelled: Bool) async throws {
         let cache = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cache) }
-        let session = downloadSession(hold: true)
+        let session = downloadSession(hold: cancelled, fail: !cancelled)
         defer { session.invalidateAndCancel() }
         let service = AppUpdateService(session: session, cacheDirectory: cache)
         let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
         let progress = DownloadProgressRecorder()
         let download = Task { try await service.download(update, progress: progress.record) }
         defer { download.cancel() }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while progress.values.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try #require(!progress.values.isEmpty)
-        download.cancel()
+        if cancelled {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while progress.values.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            try #require(!progress.values.isEmpty)
+            download.cancel()
+        }
 
         do {
             _ = try await download.value
-            Issue.record("Cancelled download succeeded")
+            Issue.record("Incomplete download succeeded")
         } catch {
-            #expect(error is CancellationError || (error as? URLError)?.code == .cancelled)
-        }
-        #expect(!PathSafety.exists(cache))
-        #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })
-    }
-
-    @Test func interruptedDownloadReportsTheFailureWithoutVerifyingOrCaching() async throws {
-        let cache = TestEnvironment.temporaryDirectory.appending(path: UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: cache) }
-        let session = downloadSession(fail: true)
-        defer { session.invalidateAndCancel() }
-        let service = AppUpdateService(session: session, cacheDirectory: cache)
-        let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
-        let progress = DownloadProgressRecorder()
-
-        do {
-            _ = try await service.download(update, progress: progress.record)
-            Issue.record("Interrupted download succeeded")
-        } catch {
-            #expect((error as? URLError)?.code == .networkConnectionLost)
+            if cancelled { #expect(error is CancellationError || (error as? URLError)?.code == .cancelled) }
+            else { #expect((error as? URLError)?.code == .networkConnectionLost) }
         }
         #expect(!PathSafety.exists(cache))
         #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })

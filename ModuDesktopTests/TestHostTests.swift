@@ -17,8 +17,6 @@ import Testing
             #expect(value["executable"] as? String == Bundle.main.executableURL.map(PathSafety.canonical)?.path)
             #expect(WorkspaceStore.defaultSupport.path == directory.appending(path: "support").path)
             #expect(TestEnvironment.temporaryDirectory.path == directory.appending(path: "tmp").path)
-            let marker = TestEnvironment.temporaryDirectory.appending(path: "host-test-marker")
-            try Data().write(to: marker)
         }
     }
 }

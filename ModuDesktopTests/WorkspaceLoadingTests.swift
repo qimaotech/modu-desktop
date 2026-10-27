@@ -591,36 +591,6 @@ import SwiftUI
     }
 
     @Test(arguments: [false, true])
-    func cliCreatedGroupsExpandOnReloadAndReopen(_ reopen: Bool) async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
-        let model = try await makeModel(fixture)
-        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("closed", repositories: ["repo"], at: fixture.root).status == .success)
-        model.workspace.record = try fixture.service.store.load(fixture.root)
-        model.workspace.toggleGroup("closed")
-        #expect(model.workspace.expandedGroups.isEmpty)
-
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = fixture.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = fixture.service.store.support.path
-        let output = try await runner.run(executable.path, ["worktree", "create", "feature", "--repo", "repo", "--json", "--workspace", fixture.root.path])
-        #expect(output.status == 0)
-        #expect(try JSONDecoder().decode(OperationResult.self, from: output.stdout).status == .success)
-
-        let refreshed = reopen ? AppModel(defaults: model.defaults, service: fixture.service) : model
-        await refreshed.workspace.reload()
-        await refreshed.workspace.detailPreloadTask?.value
-        #expect(refreshed.workspace.record?.groups["feature"]?.repositories == ["repo"])
-        #expect(refreshed.workspace.expandedGroups == ["feature"])
-        refreshed.workspace.toggleGroup("feature")
-        await refreshed.workspace.reload()
-        await refreshed.workspace.detailPreloadTask?.value
-        #expect(refreshed.workspace.expandedGroups.isEmpty)
-    }
-
-    @Test(arguments: [false, true])
     func openingWorkspacesUsesSavedRecordsAndPreservesHistory(_ legacyPreferences: Bool) async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }

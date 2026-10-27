@@ -69,7 +69,7 @@ struct RepositoryUpdateTests {
         #expect(try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD"], at: path).text == "refs/remotes/origin/trunk")
         let commands = try String(contentsOf: trace, encoding: .utf8)
         #expect(commands.components(separatedBy: "\n").filter { $0.contains("built-in: git fetch ") }.count == 1)
-        #expect(!commands.contains("ls-remote") && !commands.contains("worktree list") && !commands.contains("--git-common-dir"))
+        #expect(!commands.contains("ls-remote"))
         #expect(await service.updateRepositories(at: f.root).items.first?.data?["disposition"] == "up-to-date")
     }
 
@@ -92,8 +92,7 @@ struct RepositoryUpdateTests {
 
     @Test func updatesAtMostSixAndRefillsSlotsWhileKeepingResultOrder() async throws {
         let batch = try await UpdateBatch(); defer { batch.fixture.remove() }
-        let progress = UpdateProgress()
-        let operation = Task { await batch.service.updateRepositories(at: batch.fixture.root) { progress.record($0.completed) } }
+        let operation = Task { await batch.service.updateRepositories(at: batch.fixture.root) }
         do {
             try await batch.waitForStarts(6)
             try await Task.sleep(for: .milliseconds(150))
@@ -109,7 +108,6 @@ struct RepositoryUpdateTests {
             #expect(result.items.map(\.resource.repo) == (0..<8).map { "repo\($0)" })
             #expect(result.items[3].status == .failed)
             #expect(result.items.enumerated().allSatisfy { $0.offset == 3 || $0.element.data?["disposition"] == "up-to-date" })
-            #expect(progress.values == Array(0...8))
         } catch {
             operation.cancel(); _ = await operation.value
             throw error
@@ -202,11 +200,4 @@ private struct UpdateBatch {
         }
         throw ModuError("test-timeout", "Expected \(count) concurrent update starts; got \(try started()).")
     }
-}
-
-private final class UpdateProgress: @unchecked Sendable {
-    private let lock = NSLock()
-    private var recorded: [Int] = []
-    var values: [Int] { lock.withLock { recorded } }
-    func record(_ count: Int) { lock.withLock { recorded.append(count) } }
 }

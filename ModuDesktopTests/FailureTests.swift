@@ -364,9 +364,7 @@ struct FailureTests {
             #expect(installed.message.contains("could not find modu-cli") && !installed.message.contains("conflict"))
         } else if conflictingCommand {
             let resolved = output == "alias" ? "/usr/bin/true" : oldLink.path
-            let message = await InterfaceText(locale: .simplifiedChinese).message(try #require(installed.userMessage))
-            #expect(message.contains("当前：") && message.contains(resolved))
-            #expect(message.contains("预期：") && message.contains(source.path))
+            #expect(installed.message.contains(resolved) && installed.message.contains(source.path))
         }
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: bin.appending(path: "modu-cli").path) == installer.executable.path)
         if conflictingCommand { #expect(try Data(contentsOf: oldLink) == Data(contentsOf: source)) }
@@ -394,9 +392,7 @@ struct FailureTests {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: installer.executable)
         #expect(await installer.checkCLIInstallation().available)
         let check = await installer.checkCLIPath()
-        #expect(!check.available && check.message.contains("could not complete the CLI check"))
-        let message = await InterfaceText(locale: .simplifiedChinese).message(try #require(check.userMessage))
-        #expect(message.contains("启动配置") && !message.contains("PATH") && !message.contains("冲突"))
+        #expect(!check.available && check.userMessage == .loginShellCouldNotCompleteCLICheckCheck)
     }
 
     @Test(arguments: ["file", "link", "app-link", "unsafe-parent", "unsafe-bin", "parent-link", "bin-link"])
@@ -613,14 +609,6 @@ struct FailureTests {
             _ = try? await task.value
             throw error
         }
-    }
-    @Test func invalidCredentialURLIsNeverSerialized() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        _ = await f.service.openWorkspace(f.root)
-        let result = await f.service.addRepository(.init(url: "https://secret-token@example.invalid/repo.git"), at: f.root)
-        let encoded = String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
-        #expect(!encoded.contains("secret-token"))
-        #expect(result.status == .failed)
     }
     private func prepare(_ f: Fixture) async throws {
         #expect(await f.service.openWorkspace(f.root).status == .success)

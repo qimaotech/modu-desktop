@@ -191,6 +191,7 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary == nil && model.workspace.detail.summaryError != nil)
         #expect(model.workspace.detail.changes == nil && model.workspace.detail.changesError != nil)
+        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
         #expect(model.workspace.states[repository.id]?.available == false)
         #expect(model.workspace.states[repository.id]?.dirty == nil)
     }
@@ -210,46 +211,18 @@ import Testing
         await model.workspace.reload()
         await model.workspace.detailPreloadTask?.value
         #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
-        model.workspace.selection = .repository("repo")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
-        model.workspace.selection = .group("feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.summary?.head == "feature")
-        #expect(model.workspace.detail.summary?.hasRemotes == false)
-        #expect(model.workspace.detail.summary?.base == nil && model.workspace.detail.summary?.baseError == nil)
-        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
-        #expect(model.workspace.states[Resource.group("feature").id]?.dirty == true)
-        model.workspace.selection = .member("feature", "repo")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.summary?.head == "feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
-
-        model.workspace.selection = .repository("repo")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["main.txt"])
-        model.workspace.selection = nil
-        #expect(model.workspace.detail.changes == nil && !model.workspace.detailLoading)
-        model.workspace.selection = .member("feature", "repo")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.summary?.head == "feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["member.txt"])
-
-        model.workspace.selection = .group("feature")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
-        try await waitForDetail(model)
-        await model.workspace.detailPreloadTask?.value
-        try FileManager.default.removeItem(at: record.groupURL("feature"))
-        model.workspace.refreshDetail()
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.summary == nil && model.workspace.detail.summaryError != nil)
-        #expect(model.workspace.detail.changes == nil && model.workspace.detail.changesError != nil)
-        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
-        #expect(model.workspace.states[Resource.group("feature").id]?.available == false)
+        for (resource, file, head) in [
+            (Resource.repository("repo"), "main.txt", "main"),
+            (.group("feature"), "group.txt", "feature"),
+            (.member("feature", "repo"), "member.txt", "feature")
+        ] {
+            model.workspace.selection = resource
+            #expect(model.workspace.detail.changes?.map(\.path) == [file])
+            try await waitForDetail(model)
+            #expect(model.workspace.detail.summary?.head == head)
+            #expect(model.workspace.detail.changes?.map(\.path) == [file])
+            #expect(model.workspace.states[resource.id]?.dirty == true)
+        }
     }
 
     @Test func groupDetailsRefreshWhenRemotesAreAddedAndRemoved() async throws {

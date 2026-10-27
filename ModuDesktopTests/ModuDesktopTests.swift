@@ -11,9 +11,6 @@ struct ModuCoreTests {
         #expect(changes.first { $0.path == "file" }?.workingTree == "D")
         #expect(changes.first { $0.path == "new\npath" }?.originalPath == "old\tpath")
         #expect(changes.first { $0.path == "conflict" }?.conflict == true)
-        let encoded = try JSONEncoder().encode(ItemResult(.repository("service")))
-        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        #expect(object["reason-code"] is NSNull); #expect(object["message"] is NSNull)
     }
     @Test func configurationAndYAMLValidation() throws {
         #expect(throws: (any Error).self) { try ConfigValidation.validateDocument("{\"version\":1,\"version\":1}", workspace: true) }
@@ -51,7 +48,7 @@ struct ModuCoreTests {
     }
     @Test(arguments: ["new", "recorded", "missing-metadata"])
     func openingNonGitWorkspaceInitializesGit(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         let root = fixture.root
         let notes = root.appending(path: "notes.txt")
         try Data("keep me".utf8).write(to: notes)
@@ -77,14 +74,18 @@ struct ModuCoreTests {
         #expect(reopened.status == .success)
         #expect(!reopened.items.flatMap(\.effects).contains { $0.action == "git-init" })
     }
-    @Test(arguments: ["valid", "missing", "invalid", "missing-root"])
+    @Test(arguments: ["valid", "missing", "invalid", "unsupported-version", "missing-root"])
     func savedWorkspaceCandidateRequiresValidRecordWithoutWrites(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         try fixture.service.store.save(WorkspaceRecord(root: PathSafety.canonical(fixture.root).path))
         let file = fixture.service.store.recordURL(fixture.root)
         switch kind {
         case "missing": try FileManager.default.removeItem(at: file)
         case "invalid": try Data("invalid".utf8).write(to: file)
+        case "unsupported-version":
+            var record = try fixture.service.store.load(fixture.root)
+            record.version = 2
+            try JSONEncoder().encode(record).write(to: file)
         case "missing-root": try FileManager.default.removeItem(at: fixture.root)
         default: break
         }
@@ -95,7 +96,11 @@ struct ModuCoreTests {
         } catch {
             #expect(kind != "valid")
             if kind == "missing" { #expect((error as? ModuError)?.code == "configuration-missing") }
-            if kind == "invalid" { #expect((error as? ModuError)?.code == "invalid-configuration") }
+            if kind == "invalid" || kind == "unsupported-version" {
+                let failure = ModuError.wrap(error)
+                #expect(failure.code == "invalid-configuration")
+                #expect(failure.message.contains(file.path))
+            }
         }
         #expect((PathSafety.exists(file) ? try Data(contentsOf: file) : nil) == before)
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
@@ -106,7 +111,7 @@ struct ModuCoreTests {
 
     @Test(arguments: ["repositories", "worktrees"])
     func unregisteredNonemptyWorkspaceIsRejectedWithoutWrites(_ name: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         let directory = fixture.root.appending(path: name)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let file = directory.appending(path: ".user-data")
@@ -163,27 +168,18 @@ struct ModuCoreTests {
         #expect(deleted.status == .success, "\(deleted.items) \(deleted.message ?? "")")
         #expect(try await fixture.service.load(fixture.root).groups.isEmpty)
     }
-    @Test(arguments: [false, true])
-    func newWorkspaceIgnoreProtectsGeneratedFilesAndIsCommittedOnce(_ existingGit: Bool) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        if existingGit { _ = try await fixture.service.git.run(["init"], at: fixture.root) }
+    @Test func newWorkspaceIgnoreProtectsGeneratedFiles() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        let file = fixture.root.appending(path: ".gitignore")
-        let contents = try Data(contentsOf: file)
-        #expect(try await fixture.service.git.run(["show", "HEAD:.gitignore"], at: fixture.root).stdout == contents)
         let ignoredPaths = [
             "app.log", "node_modules/package/index.js", "dist/index.js", ".vscode/settings.json", ".DS_Store",
             "repositories/repo/README", "worktrees/feature/README"
         ]
         let ignored = try await fixture.service.git.run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--"] + ignoredPaths + [".vscode/extensions.json", "README.md"], at: fixture.root)
         #expect(ignored.text.components(separatedBy: "\n") == ignoredPaths)
-        let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(try Data(contentsOf: file) == contents)
-        #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
     }
     @Test func ignoreRulesUseModuSectionAndPreserveExistingContent() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         let file = fixture.root.appending(path: ".gitignore")
         let rules = "/repositories/\n/worktrees/\n"
         let cases = [

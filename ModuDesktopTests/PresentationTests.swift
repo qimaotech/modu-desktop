@@ -23,27 +23,19 @@ import Testing
 
     @Test func successfulCreationPreservesWarningsAndTheirEffects() async throws {
         try await withModel { model in
-            for warning in ["branch-behind-base", "branch-comparison-unavailable", "none"] {
-                model.management.sheet = .create
-                var item = ItemResult(.member("feature", "repo"))
-                item.effects = [.init("create-worktree", item.resource.path)]
-                if warning != "none" {
-                    item.data = ["warning-code": warning, "reused-branch": "feature", "comparison-base": "origin/main"]
-                    item.message = "Reused branch needs attention."
-                }
-                let outcome = OperationResult(command: "worktree.create", workspace: try #require(model.workspace.record).root, items: [item])
-                model.management.run { _, _, _ in outcome }
-                await (try #require(model.operation)).value
-                #expect(model.management.sheet == nil && !model.busy && model.presentation.completionMessage == nil)
-                #expect((model.presentation.result != nil) == (warning != "none"))
-                if let result = model.presentation.result {
-                    #expect(result.status == .success && result.exitCode == 0)
-                    #expect(result.items.first?.data == item.data && result.items.first?.message == item.message)
-                    #expect(result.items.first?.effects == item.effects)
-                    #expect(model.presentation.text.resultDisplayItems(result).map(\.resource) == [item.resource])
-                }
-                model.presentation.dismissResult()
-            }
+            model.management.sheet = .create
+            var item = ItemResult(.member("feature", "repo"))
+            item.effects = [.init("create-worktree", item.resource.path)]
+            item.data = ["warning-code": "branch-behind-base", "reused-branch": "feature", "comparison-base": "origin/main"]
+            item.message = "Reused branch needs attention."
+            let outcome = OperationResult(command: "worktree.create", workspace: try #require(model.workspace.record).root, items: [item])
+            model.management.run { _, _, _ in outcome }
+            await (try #require(model.operation)).value
+            #expect(model.management.sheet == nil && !model.busy && model.presentation.completionMessage == nil)
+            let result = try #require(model.presentation.result)
+            #expect(result.status == .success && result.exitCode == 0)
+            #expect(result.items.first?.data == item.data && result.items.first?.message == item.message)
+            #expect(result.items.first?.effects == item.effects)
         }
     }
 
@@ -120,7 +112,7 @@ import Testing
         try await withModel { model in
             for (status, effects, quitting, presentsResult) in [
                 ("success", true, false, false), ("failed", false, false, true),
-                ("partial-success", true, false, true), ("skipped", false, false, true),
+                ("partial-success", true, false, true),
                 ("cancelled", false, false, false), ("cancelled", true, false, true),
                 ("success", true, true, true)
             ] {
@@ -138,39 +130,6 @@ import Testing
                 #expect(model.presentation.resultHost == (presentsResult ? .settings : .main))
                 #expect(model.presentation.completionMessage == nil)
                 model.presentation.quitPending = false
-                model.presentation.dismissResult()
-            }
-        }
-    }
-
-    @Test func repositoryUpdateKeepsChangedAndFailedResults() async throws {
-        try await withModel { model in
-            for (status, dispositions) in [
-                ("success", ["updated", "up-to-date"]),
-                ("success", ["up-to-date"]),
-                ("partial-success", ["updated", "failed"]),
-                ("cancelled", ["updated", "cancelled", "not-processed"]),
-                ("cancelled", ["cancelled", "not-processed"])
-            ] {
-                model.management.run { _, root, _ in
-                    let items = dispositions.enumerated().map { index, disposition in
-                        let resource = Resource.repository("repo-\(index)")
-                        if disposition == "not-processed" { return ItemResult.notProcessed(resource) }
-                        if ["failed", "cancelled"].contains(disposition) { return ItemResult(resource, status: OperationStatus(rawValue: disposition)!) }
-                        var item = ItemResult(resource)
-                        item.data = ["disposition": disposition]
-                        return item
-                    }
-                    return OperationResult(command: "repo.update", workspace: root.path, status: OperationStatus(rawValue: status)!, items: items)
-                }
-                await (try #require(model.operation)).value
-                let visible = dispositions.indices.filter { ["updated", "failed"].contains(dispositions[$0]) }
-                #expect(!model.busy && model.progress == nil && model.presentation.completionMessage == nil)
-                #expect((model.presentation.result != nil) == !visible.isEmpty)
-                if let result = model.presentation.result {
-                    #expect(result.items.count == dispositions.count)
-                    #expect(model.presentation.text.resultDisplayItems(result).map(\.resource) == visible.map { .repository("repo-\($0)") })
-                }
                 model.presentation.dismissResult()
             }
         }

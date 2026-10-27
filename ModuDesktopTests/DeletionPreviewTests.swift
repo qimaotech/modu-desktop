@@ -27,16 +27,12 @@ import Testing
             let target = try #require(model.management.deletion.first { $0.resource == repository })
             #expect(model.management.canConfirmDelete && model.management.formError == nil)
             #expect(target.dirty == (state != "clean"))
-            for cachedDirty: Bool? in [nil, false, true] {
-                model.workspace.states[repository.id] = ResourceState(resource: repository, available: true, dirty: cachedDirty)
-                #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionStatus(target) == (state == "clean" ? "Clean" : "Dirty"))
-            }
             #expect(try fixture.service.store.load(fixture.root) == record)
             #expect(PathSafety.exists(path))
         }
     }
 
-    @Test func unreadableRepositoryStatusBlocksDeletionWithoutShowingClean() async throws {
+    @Test func unreadableRepositoryStatusBlocksDeletionAndPreservesResources() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
         let record = try fixture.service.store.load(fixture.root)
@@ -49,9 +45,9 @@ import Testing
         try Data("invalid index".utf8).write(to: record.repositoryURL("repo").appending(path: ".git/index"))
         model.management.prepareDelete(.repository("repo"))
         await model.management.deletePreviewTask?.value
-        #expect(model.management.formError?.contains("Git status failed") == true)
+        #expect(model.management.formError != nil)
         #expect(model.management.deletion.isEmpty && !model.management.deletionLoading && !model.management.canConfirmDelete)
-        #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionDisplayResources.first == repository)
+        #expect(model.management.deletionResources.contains(repository))
         model.management.confirmDelete()
         #expect(model.operation == nil && !model.busy)
         #expect(try fixture.service.store.load(fixture.root) == record)

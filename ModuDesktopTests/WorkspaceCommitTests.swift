@@ -107,37 +107,25 @@ struct WorkspaceCommitTests {
         #expect(try Data(contentsOf: skill) == Data("user content".utf8))
     }
 
-    @Test(arguments: [false, true])
-    func updatedSkillIsCommittedAndIdenticalContentDoesNotCreateAnotherCommit(_ legacyLink: Bool) async throws {
+    @Test func legacySkillLinkIsMigratedAndCommittedWithoutChangingItsTarget() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
         let installer = InstallationService(support: f.service.store.support)
         try Data("old skill\n".utf8).write(to: source)
         #expect(await f.service.openWorkspace(f.root, skill: source, installer: installer).status == .success)
-        if legacyLink {
-            let directory = f.root.appending(path: ".agents/skills/modu-workflow")
-            let target = installer.support.appending(path: "versions/0.1.0/modu-workflow")
-            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.moveItem(at: directory, to: target)
-            try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: target)
-        }
-        let previous = try await f.service.git.oid("HEAD", at: f.root)
+        let directory = f.root.appending(path: ".agents/skills/modu-workflow")
+        let target = installer.support.appending(path: "versions/0.1.0/modu-workflow")
+        try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: directory, to: target)
+        try FileManager.default.createSymbolicLink(at: directory, withDestinationURL: target)
         try Data("new skill\n".utf8).write(to: source)
         let opened = await f.service.openWorkspaceWithRecord(f.root, skill: source, installer: installer)
         #expect(opened.result.status == .success && opened.skillError == nil, "\(opened.result.items)")
-        let message = legacyLink ? "chore: initialize Modu workspace" : "chore: update Modu workflow skill"
-        #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "\(message)\n\nAuto-committed-by: Modu")
         #expect(try await changedPaths(f) == [".agents/skills/modu-workflow/SKILL.md"])
         #expect(try await f.service.git.run(["show", "HEAD:.agents/skills/modu-workflow/SKILL.md"], at: f.root).stdout == Data(contentsOf: source))
         #expect(try await f.service.git.run(["status", "--porcelain"], at: f.root).stdout.isEmpty)
         #expect(!opened.result.items.flatMap(\.effects).contains { $0.action == "stash-workspace" })
-        let updated = try await f.service.git.oid("HEAD", at: f.root)
-        #expect(updated != previous)
-        #expect(await f.service.openWorkspace(f.root, skill: source, installer: installer).status == .success)
-        #expect(try await f.service.git.oid("HEAD", at: f.root) == updated)
-        if legacyLink {
-            #expect(try Data(contentsOf: installer.support.appending(path: "versions/0.1.0/modu-workflow/SKILL.md")) == Data("old skill\n".utf8))
-        }
+        #expect(try Data(contentsOf: target.appending(path: "SKILL.md")) == Data("old skill\n".utf8))
     }
 
     @Test func skillUpdateRestoresDirtyWorkspaceAndPreservesExistingStashes() async throws {

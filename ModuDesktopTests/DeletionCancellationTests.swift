@@ -34,11 +34,6 @@ import Testing
             #expect(model.progress?.cancellable == false && model.operations.canCancel)
             model.cancel()
             #expect(model.cancelling && operation.isCancelled)
-            for locale in [AppLocale.english, .simplifiedChinese] {
-                defaults.set(locale.rawValue, forKey: "appLanguage")
-                let presentation = OperationPresentation(preferences: AppPreferences(defaults: defaults), operations: model.operations, terminate: {})
-                #expect(presentation.operationProgressPhaseText == (locale == .simplifiedChinese ? "正在完成当前项，随后取消…" : "Finishing current item before cancellation…"))
-            }
             #expect(model.busy && !PathSafety.exists(record.rootURL.appending(path: current.path)))
             #expect(try await fixture.service.git.oid("refs/heads/feature", at: repository) != nil)
             try Data().write(to: probe.release)

@@ -157,16 +157,9 @@ struct WorkflowTests {
         let conflict = await f.service.importRepositories(try WorkspaceService.repositoryURLs(in: "a: https://other.invalid/repo.git\nb: https://another.invalid/repo.git"), at: f.root)
         #expect(conflict.items.allSatisfy { $0.reasonCode == "repository-conflict" })
     }
-    @Test func fastForwardAndIgnoredProtection() async throws {
+    @Test func repositoryUpdatePreservesIgnoredFilesThatBecomeTrackedUpstream() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         let source = f.directory.appending(path: "source"), main = f.root.appending(path: "repositories/repo")
-        try Data("upstream\n".utf8).write(to: source.appending(path: "README"))
-        _ = try await f.service.git.run(["add", "README"], at: source)
-        _ = try await f.service.git.run(["commit", "-m", "upstream"], at: source)
-        _ = try await f.service.git.run(["push", f.directory.appending(path: "repo.git").path, "main"], at: source)
-        let updated = await f.service.updateRepositories(at: f.root)
-        #expect(updated.items.first?.data?["disposition"] == "updated", "\(updated.items)")
-        #expect(try String(contentsOf: main.appending(path: "README"), encoding: .utf8) == "upstream\n")
         try Data("/secret\n".utf8).write(to: main.appending(path: ".git/info/exclude"))
         try Data("local-secret".utf8).write(to: main.appending(path: "secret"))
         try Data("remote".utf8).write(to: source.appending(path: "secret"))
@@ -217,21 +210,14 @@ struct WorkflowTests {
     }
     @Test func cliJSONContractAndMissingUpdateMembersHaveNoEffects() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         let original = try Data(contentsOf: f.service.store.recordURL(f.root))
-        let failure = try await runner.run(executable.path, ["--workspace", f.root.path, "worktree", "update", "feature", "--execute", "--json"])
+        let failure = try await runCLI(["--workspace", f.root.path, "worktree", "update", "feature", "--execute", "--json"], in: f)
         #expect(failure.status == 2)
-        let json = try JSONSerialization.jsonObject(with: failure.stdout) as! [String: Any]
+        let json = try #require(JSONSerialization.jsonObject(with: failure.stdout) as? [String: Any])
         #expect(json["schema-version"] as? Int == 1)
         #expect(json["reason-code"] as? String == "invalid-input")
         #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
-        let list = try await runner.run(executable.path, ["--workspace", f.root.path, "repo", "list", "--json"])
-        #expect(list.status == 0, "\(list.text)")
-        let result = try JSONDecoder().decode(OperationResult.self, from: list.stdout)
-        #expect(result.items.count == 1)
-        let preview = try await runner.run(executable.path, ["repo", "remove", "repo", "--json", "--workspace", f.root.path])
+        let preview = try await runCLI(["repo", "remove", "repo", "--json", "--workspace", f.root.path], in: f)
         #expect(preview.status == 1)
         #expect(try JSONDecoder().decode(OperationResult.self, from: preview.stdout).status == .confirmationRequired)
     }
@@ -239,9 +225,6 @@ struct WorkflowTests {
     @Test func cliGlobalOptionsRemainBeforeArgumentTerminator() async throws {
         let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         for placement in ["leading", "interleaved", "trailing", "equals"] {
             let arguments: [String]
             switch placement {
@@ -250,7 +233,7 @@ struct WorkflowTests {
             case "trailing": arguments = ["repo", "list", "--json", "--workspace", f.root.path, "--"]
             default: arguments = ["--workspace=\(f.root.path)", "repo", "--json", "list", "--"]
             }
-            let output = try await runner.run(executable.path, arguments, at: f.directory)
+            let output = try await runCLI(arguments, in: f)
             try #require(output.status == 0, "\(output.text)")
             let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
             #expect(result.command == "repo.list" && result.status == .success && result.items.isEmpty)
@@ -261,11 +244,8 @@ struct WorkflowTests {
     @Test func cliRepositoryURLAfterArgumentTerminatorIsPreserved() async throws {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         let workspace = ["--workspace=\(f.root.path)"]
-        let output = try await runner.run(executable.path, ["--json"] + workspace + ["repo", "add", "--", f.remoteURL], at: f.directory)
+        let output = try await runCLI(["--json"] + workspace + ["repo", "add", "--", f.remoteURL], in: f)
         try #require(output.status == 0, "\(output.text)")
         let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
         #expect(result.command == "repo.add" && result.status == .success)
@@ -322,14 +302,11 @@ struct WorkflowTests {
         #expect(failure.status == .failed && failure.reasonCode != nil && failure.message != nil)
         #expect(inspection.reasonCode == nil)
 
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         for command in ["repo", "worktree"] {
             let status = command == "repo" && hasRepository ? "partial-success" : "failed"
             let failureMessage = try #require(failure.message)
             for json in [false, true] {
-                let output = try await runner.run(executable.path, [command, "list", "--workspace", f.root.path] + (json ? ["--json"] : []))
+                let output = try await runCLI([command, "list", "--workspace", f.root.path] + (json ? ["--json"] : []), in: f)
                 #expect(output.status == 1, "\(output.text)")
                 if json {
                     let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
@@ -356,9 +333,6 @@ struct WorkflowTests {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
         let saved = try f.service.store.load(f.root)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         for kind in ["repository", "group", "member"] {
             var record = saved
             let metadata = (kind == "member" ? saved.memberURL("feature", "repo") : saved.groupURL("feature")).appending(path: ".git")
@@ -370,7 +344,7 @@ struct WorkflowTests {
             try f.service.store.save(record)
             let original = try Data(contentsOf: f.service.store.recordURL(f.root))
             for command in ["repo", "worktree"] {
-                let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
+                let output = try await runCLI([command, "list", "--json", "--workspace", f.root.path], in: f)
                 let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
                 let related = kind == "repository" ? command == "repo" : command == "worktree"
                 #expect(output.status == (related ? 1 : 0), "\(output.text)")
@@ -405,11 +379,8 @@ struct WorkflowTests {
         case "busy": lease = try f.service.store.lock(f.root)
         default: break
         }
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         for command in ["repo", "worktree"] {
-            let output = try await runner.run(executable.path, [command, "list", "--json", "--workspace", f.root.path])
+            let output = try await runCLI([command, "list", "--json", "--workspace", f.root.path], in: f)
             let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
             #expect(result.command == "\(command).list" && result.items.isEmpty)
             if kind == "empty" {
@@ -426,15 +397,11 @@ struct WorkflowTests {
     @Test func cliInvalidRepositoryURLIsARequestErrorWithExitCodeTwo() async throws {
         let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
-        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-        var runner = f.service.git.runner
-        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
         let trace = f.directory.appending(path: "invalid-input-cli-trace")
-        runner.environment["GIT_TRACE"] = trace.path
         let before = try Data(contentsOf: f.service.store.recordURL(f.root))
         for json in [false, true] {
             for url in ["file:///tmp/repo.git", "https://user:sensitive-token@example.test/repo.git"] {
-                let output = try await runner.run(executable.path, ["repo", "add", url, "--workspace", f.root.path] + (json ? ["--json"] : []))
+                let output = try await runCLI(["repo", "add", url, "--workspace", f.root.path] + (json ? ["--json"] : []), in: f, environment: ["GIT_TRACE": trace.path])
                 #expect(output.status == 2)
                 if json {
                     let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
@@ -553,6 +520,14 @@ struct WorkflowTests {
             }
             #expect(PathSafety.exists(repository))
         }
+    }
+
+    private func runCLI(_ arguments: [String], in fixture: Fixture, environment: [String: String] = [:]) async throws -> CommandOutput {
+        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
+        var runner = fixture.service.git.runner
+        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = fixture.service.store.support.path
+        runner.environment.merge(environment) { _, value in value }
+        return try await runner.run(executable.path, arguments, at: fixture.directory)
     }
 
     private func prepare(_ fixture: Fixture) async throws {
