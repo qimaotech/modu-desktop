@@ -53,7 +53,7 @@ final class AppModel {
         self.updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
         let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
         self.workspace = workspace
-        let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation, preferences: preferences)
+        let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
         self.management = management
         workspace.onContextChange = { [weak management] rootChanged in management?.contextChanged(rootChanged: rootChanged) }
         for category in Set(ExternalTool.builtIn.map(\.category)) {

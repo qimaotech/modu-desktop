@@ -8,7 +8,6 @@ final class ManagementModel {
     private let session: WorkspaceModel
     private let operations: OperationLifecycle
     private let presentation: OperationPresentation
-    private let preferences: AppPreferences
     // SwiftUI can still render the closed sheet; reset its progress when the next sheet opens.
     private(set) var progressPresentation: ManagementProgressPresentation?
     var repositoryImport: RepositoryImportSelection?
@@ -48,12 +47,11 @@ final class ManagementModel {
     private var busy: Bool { operations.busy }
     private var text: InterfaceText { presentation.text }
 
-    init(service: WorkspaceService, session: WorkspaceModel, operations: OperationLifecycle, presentation: OperationPresentation, preferences: AppPreferences) {
+    init(service: WorkspaceService, session: WorkspaceModel, operations: OperationLifecycle, presentation: OperationPresentation) {
         self.service = service
         self.session = session
         self.operations = operations
         self.presentation = presentation
-        self.preferences = preferences
     }
 
     func contextChanged(rootChanged: Bool) {
