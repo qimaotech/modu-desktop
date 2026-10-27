@@ -3540,6 +3540,23 @@
         }
       }
     },
+    "ui.canTReadCommits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t read commits"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取提交记录"
+          }
+        }
+      }
+    },
     "ui.canTReadConfigurationFile": {
       "extractionState": "manual",
       "localizations": {

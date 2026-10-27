@@ -288,6 +288,35 @@ import Testing
         #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
     }
 
+    @Test func commitReadFailureAlertsOnlyForTheCurrentSelection() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let path = try #require(model.workspace.record?.repositoryURL("repo"))
+        _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
+
+        model.workspace.refreshDetail()
+        await model.workspace.detailPreloadTask?.value
+        #expect(model.presentation.message == nil)
+
+        model.workspace.selection = .repository("repo")
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.changesError == nil)
+        #expect(model.workspace.detail.commitsError != nil)
+        #expect(model.presentation.messageTitle == model.text.string(.uiCanTReadCommits))
+        #expect(model.presentation.message?.contains("invalid-date-format") == true)
+        #expect(model.presentation.messageHost == .main)
+
+        model.presentation.message = nil
+        model.workspace.refreshDetail()
+        let cancelled = try #require(model.workspace.details.detailTask)
+        model.workspace.selection = nil
+        await cancelled.value
+        await model.workspace.detailPreloadTask?.value
+        #expect(cancelled.isCancelled && model.presentation.message == nil)
+    }
+
     @Test func paginationSurvivesSelectionButNotNewHeadsOrWorkspaces() async throws {
         let resource = Resource.repository("repo")
         let fixture = try await Fixture()
@@ -302,6 +331,14 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")
         #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
+        _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
+        model.workspace.loadMore()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
+        #expect(model.presentation.messageTitle == model.text.string(.uiCanTReadCommits))
+        #expect(model.presentation.message?.contains("invalid-date-format") == true)
+        model.presentation.message = nil
+        _ = try await fixture.service.git.run(["config", "--unset", "log.date"], at: path)
         model.workspace.loadMore()
         try await waitForDetail(model)
         #expect(model.workspace.detail.commits?.count == 31 && !model.workspace.detail.canLoadMore)

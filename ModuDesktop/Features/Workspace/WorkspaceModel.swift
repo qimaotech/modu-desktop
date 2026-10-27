@@ -80,6 +80,10 @@ final class WorkspaceModel {
         self.presentation = presentation
         details = RepositoryDetailModel(service: service)
         details.onIdle = { [weak self] in self?.startDetailPreload() }
+        details.onCommitsError = { [weak self] error in
+            guard let self, !self.presentation.quitPending else { return }
+            self.presentation.presentMessage(Git.sanitize(error.message), title: self.text.string(.uiCanTReadCommits))
+        }
     }
 
     func sidebarPreferenceKey(_ name: String) -> String { "sidebar.\(record?.root ?? defaults.string(forKey: "workspace") ?? "").\(name)" }

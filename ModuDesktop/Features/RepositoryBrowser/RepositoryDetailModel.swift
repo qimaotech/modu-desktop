@@ -18,6 +18,7 @@ final class RepositoryDetailModel {
     // Inspection snapshots skip one background reread; selecting a resource always refreshes it.
     private var freshSnapshots: [Resource: ResourceSnapshot] = [:]
     @ObservationIgnored var onIdle: (() -> Void)?
+    @ObservationIgnored var onCommitsError: ((ModuError) -> Void)?
     private var currentURL: URL? {
         guard let workspace, let selection else { return nil }
         return try? PathSafety.child(selection.path, of: workspace.rootURL, allowMissing: false)
@@ -43,7 +44,10 @@ final class RepositoryDetailModel {
                 updateState(selection, from: partial)
             }
             guard !Task.isCancelled, self.generation == token, self.workspace?.root == root else { return }
-            if let loaded { detail = loaded; detailCache[selection] = loaded; updateState(selection, from: loaded) }
+            if let loaded {
+                detail = loaded; detailCache[selection] = loaded; updateState(selection, from: loaded)
+                if loaded.summary?.baseOID != nil, let error = loaded.commitsError { onCommitsError?(error) }
+            }
             detailLoading = false
             onIdle?()
         }
@@ -69,6 +73,7 @@ final class RepositoryDetailModel {
             } catch {
                 guard !Task.isCancelled, self.generation == token, self.workspace?.root == root else { return }
                 detail.commitsError = .wrap(error)
+                onCommitsError?(.wrap(error))
             }
         }
     }
