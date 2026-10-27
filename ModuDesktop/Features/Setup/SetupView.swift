@@ -15,12 +15,14 @@ struct SetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 16) {
                 VStack(spacing: 0) {
                     HStack(spacing: 16) {
-                        stepGraphic("1.", icon: "ToolIcons/Terminal")
-                        Text(model.t("Install modu-cli", "安装 modu-cli"))
-                        Spacer(minLength: 8)
+                        stepGraphic("ToolIcons/Terminal")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.t("Install modu-cli", "安装 modu-cli")).fontWeight(.semibold)
+                            pathLabel(model.installer.commandLink)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
                         if setup.cliReady && setup.cliActivity == nil {
                             HStack(spacing: 4) { DesignIcon(name: "Success", size: 20); Text(model.t("Installed", "已安装")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
                         } else {
@@ -30,33 +32,32 @@ struct SetupView: View {
                             .accessibilityLabel(installButtonTitle)
                             .buttonStyle(.borderedProminent).disabled(setup.working || setup.cliActivity != nil)
                         }
-                    }.padding(.horizontal, 20).frame(height: 68)
-                    Divider().padding(.horizontal, 20).frame(height: 11)
+                    }.padding(.horizontal, 20).frame(height: 84)
+                    Divider().padding(.horizontal, 20)
                     HStack(spacing: 16) {
-                        stepGraphic("2.", icon: "DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
-                        Text(model.t("Choose Workspace", "选择工作区")).fixedSize().opacity(setup.cliReady ? 1 : 0.4)
-                        if let candidate = setup.candidate {
-                            HStack(spacing: 4) {
-                                DesignIcon(name: "Success", size: 20)
-                                Text((candidate.path as NSString).abbreviatingWithTildeInPath).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary).lineLimit(1).truncationMode(.middle).help(candidate.path)
-                                    .accessibilityIdentifier("workspaceCandidate").accessibilityValue(candidate.path)
-                            }.frame(maxWidth: .infinity, alignment: .trailing)
-                        } else {
-                            Spacer(minLength: 8)
-                        }
-                        Button(model.t("Choose…", "选择…")) { choose() }.disabled(!setup.cliReady || setup.working)
-                    }.padding(.horizontal, 20).frame(height: 68)
+                        stepGraphic("DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.t("Choose Workspace", "选择工作区")).fontWeight(.semibold)
+                            if let candidate = setup.candidate {
+                                pathLabel(candidate).accessibilityIdentifier("workspaceCandidate")
+                            } else {
+                                Text(model.t("No workspace selected", "尚未选择工作区")).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading).opacity(setup.cliReady ? 1 : 0.4)
+                        Button(setup.candidate == nil ? model.t("Choose…", "选择…") : model.t("Change…", "更改…")) { choose() }.disabled(!setup.cliReady || setup.working)
+                    }.padding(.horizontal, 20).frame(height: 84)
                 }.formPlate()
-                VStack(alignment: .leading, spacing: 8) {
-                    if !setup.cliMessage.isEmpty && !setup.cliReady && setup.cliMessage != "Install modu-cli to continue." { Text(model.presentation.text.message(setup.cliMessage)).textSelection(.enabled) }
-                    if setup.skillConflict {
-                        Label(model.t("Workflow skill: Unavailable", "工作流技能：不可用"), systemImage: "exclamationmark.circle")
-                    }
-                    if let error = setup.error { ScrollView { Text(model.presentation.text.message(error)).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 90) }
-                    if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
-                }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
-                Spacer(minLength: 0)
-            }.padding(.horizontal, 36).padding(.top, 24).padding(.bottom, 20)
+                if showsStatus {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if showsCLIMessage { Text(model.presentation.text.message(setup.cliMessage)).textSelection(.enabled) }
+                        if setup.skillConflict {
+                            Label(model.t("Workflow skill: Unavailable", "工作流技能：不可用"), systemImage: "exclamationmark.circle")
+                        }
+                        if let error = setup.error { ScrollView { Text(model.presentation.text.message(error)).foregroundStyle(.red).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 90) }
+                        if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
+                    }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                }
+            }.padding(.horizontal, 24).padding(.vertical, 32)
             Divider()
             HStack {
                 Button(model.hasSavedWorkspace ? model.t("Cancel", "取消") : model.t("Quit", "退出")) {
@@ -69,13 +70,21 @@ struct SetupView: View {
                 }
                 .accessibilityLabel(continueButtonTitle)
                 .keyboardShortcut(.defaultAction).disabled(!setup.cliReady || setup.candidate == nil || setup.working)
-            }.padding(.horizontal, 20).frame(height: 52)
+            }.padding(.horizontal, 24).frame(height: 54)
         }.font(DialogTypography.body).background(DesignStyle.background)
         .interactiveDismissDisabled(setup.working)
         .sheet(isPresented: Binding(get: { model.presentation.resultHost == .setup && model.presentation.result != nil }, set: { if !$0 { model.presentation.dismissResult() } })) {
             if let result = model.presentation.result { ResultView(text: model.presentation.text, result: result) { model.presentation.dismissResult() } }
         }
         .task { await setup.check() }
+    }
+
+    private var showsStatus: Bool {
+        showsCLIMessage || setup.skillConflict || setup.error != nil || (setup.working && !setup.settingUp && setup.cliActivity == nil)
+    }
+
+    private var showsCLIMessage: Bool {
+        !setup.cliMessage.isEmpty && !setup.cliReady && setup.cliMessage != "Install modu-cli to continue."
     }
 
     var installButtonLabel: some View {
@@ -121,11 +130,14 @@ struct SetupView: View {
         setup.skillConflict ? model.t("Continue Without Skill", "不安装技能并继续") : model.t("Continue", "继续")
     }
 
-    private func stepGraphic(_ number: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Text(number).font(DialogTypography.body.weight(.semibold)).foregroundStyle(DesignStyle.secondary)
-            Image(icon).resizable().scaledToFit().frame(width: 24, height: 24).frame(width: 48).accessibilityHidden(true)
-        }
+    private func stepGraphic(_ icon: String) -> some View {
+        Image(icon).resizable().scaledToFit().frame(width: 32, height: 32).frame(width: 48).accessibilityHidden(true)
+    }
+
+    private func pathLabel(_ url: URL) -> some View {
+        Text((url.path as NSString).abbreviatingWithTildeInPath)
+            .font(DialogTypography.path).foregroundStyle(DesignStyle.secondary)
+            .lineLimit(1).truncationMode(.middle).help(url.path).accessibilityValue(url.path)
     }
 
     private func choose() {

@@ -51,7 +51,8 @@ struct ModuDesktopApp: App {
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
         Window(model.t("Set Up Workspace", "设置工作区"), id: "setup") {
             SetupView(model: model).id(model.workspace.record?.root)
-                .onAppear { delegate.model = model }.frame(width: 720, height: 520 - setupChromeHeight)
+                .onAppear { delegate.model = model }.frame(width: 560).frame(minHeight: 320 - setupChromeHeight)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(WindowChromeHeight(height: $setupChromeHeight))
                 .background(WindowCloseHandler(shouldQuit: { !model.hasSavedWorkspace }))
         }
