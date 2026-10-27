@@ -37,7 +37,7 @@ struct RepositoryDetailView: View {
     }
 
     var showsChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
-    var showsCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.commitsError == nil && workspace.detail.commits?.isEmpty == false }
+    var showsCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.commits?.isEmpty == false }
 
     private func summary(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {

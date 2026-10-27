@@ -337,6 +337,8 @@ import Testing
         #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
         #expect(model.presentation.messageTitle == model.text.string(.uiCanTReadCommits))
         #expect(model.presentation.message?.contains("invalid-date-format") == true)
+        let detailView = RepositoryDetailView(workspace: model.workspace, preferences: model.preferences, tools: [], preferredToolIDs: [:], openTool: { _ in })
+        #expect(detailView.showsCommits)
         model.presentation.message = nil
         _ = try await fixture.service.git.run(["config", "--unset", "log.date"], at: path)
         model.workspace.loadMore()
