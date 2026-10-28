@@ -39,15 +39,10 @@ struct AppUpdateView: View {
                     .help(model.text.string(.uiAutomaticallyCheckForUpdatesHelp))
                     .disabled(model.restartPending)
                 Spacer(minLength: 16)
-                Button(model.text.string(.uiClose)) { dismissWindow(id: "updates") }
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(model.working)
-                    .opacity(model.working ? 0 : 1)
-                    .accessibilityHidden(model.working)
                 Button(action: performPrimaryAction) {
                     Text(primaryActionTitle).frame(minWidth: 120)
                 }
-                .keyboardShortcut(model.working ? .cancelAction : .defaultAction)
+                .keyboardShortcut(model.working ? nil : .defaultAction)
                 .disabled(model.restartPending)
             }
             .controlSize(.regular)
@@ -55,6 +50,10 @@ struct AppUpdateView: View {
         .font(DialogTypography.body)
         .padding(24).frame(width: 520, alignment: .leading).fixedSize(horizontal: false, vertical: true)
         .background(WindowCloseHandler(shouldQuit: { model.cancel(); return model.restartPending }))
+        .onExitCommand {
+            if model.working { model.cancel() }
+            else { dismissWindow(id: "updates") }
+        }
         .onChange(of: model.phase) { _, _ in
             showingErrorDetails = false
             AccessibilityNotification.Announcement(title).post()
