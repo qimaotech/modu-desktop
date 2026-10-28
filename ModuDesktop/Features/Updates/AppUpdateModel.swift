@@ -92,6 +92,7 @@ final class AppUpdateModel {
     func installAndRestart() {
         guard !working, let update else { return }
         downloadFailed = false
+        errorDetails = nil
         guard let helper else {
             error = text.string(.uiBundledUpdateInstallerIsMissingReinstallModuAnd)
             return
@@ -265,7 +266,10 @@ final class AppUpdateModel {
         case "update-location-unwritable": text.string(.uiModuCanTUpdateInLocationMoveWritable)
         case "update-system-unsupported": text.string(.uiUpdateRequiresNewerVersionOfMacOS)
         case "update-exit-timeout": text.string(.uiModuDidNotExitInTimeUpdateWas)
-        default: text.string(.uiCouldnTCompleteUpdate2(text.message(error)))
+        default:
+            if update == nil { text.string(.uiUpdateCheckFailureDescription) }
+            else if downloadFailed { text.string(.uiUpdateDownloadFailureDescription) }
+            else { text.string(.uiUpdateInstallFailureDescription) }
         }
     }
 }

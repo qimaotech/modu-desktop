@@ -3812,23 +3812,6 @@
         }
       }
     },
-    "ui.checkingGitHubReleases": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checking GitHub Releases…"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在检查 GitHub Releases…"
-          }
-        }
-      }
-    },
     "ui.checkingRepository": {
       "extractionState": "manual",
       "localizations": {
@@ -4322,23 +4305,6 @@
         }
       }
     },
-    "ui.couldnTCompleteUpdate2": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t complete the update. %1$@"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法完成更新。%1$@"
-          }
-        }
-      }
-    },
     "ui.create": {
       "extractionState": "manual",
       "localizations": {
@@ -4787,13 +4753,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download complete. Checking the installer’s integrity."
+            "value": "Checking the installer’s integrity…"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "下载已完成，正在检查安装包的完整性。"
+            "value": "正在检查安装包的完整性…"
           }
         }
       }
@@ -6096,13 +6062,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modu will quit and restart when preparation is complete."
+            "value": "Modu will restart when preparation finishes."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "准备完成后，Modu 将退出并重新启动。"
+            "value": "准备完成后将重启 Modu。"
           }
         }
       }
@@ -6158,19 +6124,36 @@
         }
       }
     },
+    "ui.quittingModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitting Modu…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在退出 Modu…"
+          }
+        }
+      }
+    },
     "ui.readyInstallModuWillRestartAfterQuitting": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ready to install. Modu will restart after quitting."
+            "value": "The update will install after Modu quits, then Modu will reopen."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "更新已就绪，Modu 退出后将安装并重新启动。"
+            "value": "退出后将自动安装更新并重新打开。"
           }
         }
       }
@@ -7163,47 +7146,132 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose “Install and Restart” to download and install the update, then restart Modu. Your workspaces are preserved."
+            "value": "Modu will restart after installation."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "点击“安装并重启”后将下载、安装更新并重启 Modu，工作区数据会保留。"
+            "value": "安装完成后将重启 Modu。"
           }
         }
       }
     },
-    "ui.updateFailed": {
+    "ui.updateCheckFailed": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn’t complete update"
+            "value": "Couldn’t Check for Updates"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "未能完成更新"
+            "value": "检查更新失败"
           }
         }
       }
     },
-    "ui.updateReady": {
+    "ui.updateCheckFailureDescription": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ready to install update"
+            "value": "Unable to check for updates right now. Please try again later."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "更新已就绪"
+            "value": "暂时无法检查更新，请稍后重试。"
+          }
+        }
+      }
+    },
+    "ui.updateCheckingDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Getting the latest version information…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在获取最新版本信息…"
+          }
+        }
+      }
+    },
+    "ui.updateDownloadFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download Failed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载安装包失败"
+          }
+        }
+      }
+    },
+    "ui.updateDownloadFailureDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your connection, then download the update again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查网络连接后重新下载。"
+          }
+        }
+      }
+    },
+    "ui.updateInstallFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t Install Update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法安装更新"
+          }
+        }
+      }
+    },
+    "ui.updateInstallFailureDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again, or install the latest version of Modu manually."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请重试，或手动安装最新版本的 Modu。"
           }
         }
       }
@@ -7276,19 +7344,36 @@
         }
       }
     },
-    "ui.updateWorkspacesPreserved": {
+    "ui.updateWaitingForOperation": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your workspaces will be preserved."
+            "value": "Waiting for the current operation to finish before restarting."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "工作区数据会保留。"
+            "value": "正在等待当前操作结束，随后继续重启。"
+          }
+        }
+      }
+    },
+    "ui.updateWaitingForResult": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review the operation results to continue restarting."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先处理操作结果，随后继续重启。"
           }
         }
       }
@@ -7391,23 +7476,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在校验安装包…"
-          }
-        }
-      }
-    },
-    "ui.waitingForModuQuit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for Modu to quit…"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在等待 Modu 退出…"
           }
         }
       }
@@ -7714,23 +7782,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "YAML 文件…"
-          }
-        }
-      }
-    },
-    "ui.youReRunningLatestVersionOfModu": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You’re running the latest version of Modu."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你正在使用最新版本的 Modu。"
           }
         }
       }

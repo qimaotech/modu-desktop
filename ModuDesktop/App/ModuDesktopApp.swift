@@ -68,7 +68,7 @@ struct ModuDesktopApp: App {
         .restorationBehavior(.disabled)
         .commandsRemoved()
         Window(model.text.string(.uiSoftwareUpdate), id: "updates") {
-            AppUpdateView(model: model.updates)
+            AppUpdateView(model: model.updates, waitingForOperation: model.busy, waitingForResult: model.presentation.result != nil)
                 .environment(\.locale, model.preferences.activeLocale.locale)
         }
         .windowResizability(.contentSize)
