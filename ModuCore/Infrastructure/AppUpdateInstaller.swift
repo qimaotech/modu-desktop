@@ -139,7 +139,7 @@ public struct AppUpdateInstaller: Sendable {
         if let failure = try failure(for: update) { return failure }
         let pid = try String(contentsOf: update.ready, encoding: .utf8)
         guard let pid = Int32(pid), pid > 1 else { throw ModuError("update-helper-failed", .updateInstallerHasNoValidProcessIdentifier) }
-        let process = try AppUpdateProcessExit(pid)
+        let process = try ProcessExitMonitor(pid)
         while true {
             try Task.checkCancellation()
             if let failure = try failure(for: update) { return failure }
@@ -233,7 +233,7 @@ public struct AppUpdateInstaller: Sendable {
 
     private func waitForExit(_ pid: Int32, update: PreparedAppUpdate) async throws {
         try await withTaskCancellationHandler {
-            let process = try AppUpdateProcessExit(pid)
+            let process = try ProcessExitMonitor(pid)
             try Data(String(getpid()).utf8).write(to: update.ready, options: .atomic)
             let deadline = ContinuousClock.now.advanced(by: .seconds(exitTimeout))
             while ContinuousClock.now < deadline {
@@ -257,30 +257,6 @@ private struct AppUpdateFailure: Codable {
 
     init(identifier: UUID, error: ModuError) {
         self.identifier = identifier; code = error.code; message = error.message
-    }
-}
-
-private final class AppUpdateProcessExit {
-    private let queue: Int32
-
-    init(_ pid: Int32) throws {
-        queue = kqueue()
-        guard queue >= 0 else { throw ModuError("update-helper-failed", .couldNotMonitorApplicationExit) }
-        var event = kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
-        guard kevent(queue, &event, 1, nil, 0, nil) == 0 else {
-            close(queue)
-            throw ModuError("update-helper-failed", .couldNotMonitorRunningApplication)
-        }
-    }
-
-    deinit { close(queue) }
-
-    func exited() throws -> Bool {
-        var event = kevent()
-        var timeout = timespec(tv_sec: 0, tv_nsec: 0)
-        let count = kevent(queue, nil, 0, &event, 1, &timeout)
-        if count < 0, errno != EINTR { throw ModuError("update-helper-failed", .couldNotWaitForApplicationExit) }
-        return count == 1
     }
 }
 

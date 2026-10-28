@@ -3625,6 +3625,23 @@
         }
       }
     },
+    "ui.canTRestartModu": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t Restart Modu"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法重新启动 Modu"
+          }
+        }
+      }
+    },
     "ui.cancel": {
       "extractionState": "manual",
       "localizations": {
@@ -3723,6 +3740,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "更改…"
+          }
+        }
+      }
+    },
+    "ui.changeLanguage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Language"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改语言"
           }
         }
       }
@@ -5410,6 +5444,23 @@
         }
       }
     },
+    "ui.languageSavedRestartManually": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your language preference was saved. Please restart Modu manually to apply it."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言设置已保存，请手动重新启动 Modu 以应用更改。"
+          }
+        }
+      }
+    },
     "ui.latestReleaseHasNoCompatibleInstallerYetCheck": {
       "extractionState": "manual",
       "localizations": {
@@ -6498,19 +6549,36 @@
         }
       }
     },
+    "ui.restart": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新启动"
+          }
+        }
+      }
+    },
     "ui.restartModuApplyLanguageChange": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restart Modu to apply the language change."
+            "value": "Modu will restart to apply the language change."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "重新启动 Modu 后将应用语言更改。"
+            "value": "Modu 将重新启动以应用语言更改。"
           }
         }
       }

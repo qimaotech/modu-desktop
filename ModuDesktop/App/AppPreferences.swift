@@ -10,7 +10,6 @@ final class AppPreferences {
     let activeLocale: AppLocale
     private let preferredLanguages: [String]
     var text: InterfaceText { InterfaceText(locale: activeLocale) }
-    var languageChangeRequiresRestart: Bool { appLanguage.resolve(preferredLanguages: preferredLanguages) != activeLocale }
     var globalShortcut: GlobalShortcut? {
         didSet {
             if let globalShortcut, let data = try? JSONEncoder().encode(globalShortcut) { defaults.set(data, forKey: "globalShortcut") }
@@ -32,4 +31,7 @@ final class AppPreferences {
         else { globalShortcut = nil }
     }
 
+    func languageChangeRequiresRestart(_ language: AppLanguage) -> Bool {
+        language.resolve(preferredLanguages: preferredLanguages) != activeLocale
+    }
 }

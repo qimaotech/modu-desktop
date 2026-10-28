@@ -68,6 +68,9 @@ import Testing
         #expect(PathSafety.canonical(link) == PathSafety.canonical(model.installer.executable))
         model.appLanguage = .simplifiedChinese
         #expect(mock.defaults.string(forKey: "appLanguage") == "zh_CN")
+        let reopened = try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: mock.fixture.root)
+        #expect(reopened.defaults.string(forKey: "appLanguage") == "zh_CN")
+        #expect(reopened.makeModel().preferences.activeLocale == .simplifiedChinese)
         #expect(UserDefaults.standard.string(forKey: "workspace") == savedWorkspace)
         #expect(UserDefaults.standard.string(forKey: "appLanguage") == savedLanguage)
         mock.remove()

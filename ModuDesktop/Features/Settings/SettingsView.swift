@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var openingWorkspaceURL: URL?
     @State private var closingAfterWorkspaceChange = false
     @State private var choosingAgain = false
+    @State private var pendingLanguage: AppLanguage?
     private var presentingOperation: Bool { openingWorkspaceURL != nil || (model.presentation.resultHost == .settings && (model.presentation.result != nil || (model.busy && !model.openingWorkspace))) }
 
     var body: some View {
@@ -19,15 +20,23 @@ struct SettingsView: View {
                     HStack {
                         Text(model.text.string(.uiLanguage))
                         Spacer()
-                        Picker(model.text.string(.uiLanguage), selection: $model.appLanguage) {
+                        Picker(model.text.string(.uiLanguage), selection: languageSelection) {
                             Text(model.text.string(.uiFollowSystem)).tag(AppLanguage.system)
                             Text(verbatim: "简体中文").tag(AppLanguage.simplifiedChinese)
                             Text(verbatim: "English").tag(AppLanguage.english)
                         }.labelsHidden().frame(width: 150)
+                            .alert(model.text.string(.uiChangeLanguage), isPresented: Binding(get: { pendingLanguage != nil }, set: { if !$0 { pendingLanguage = nil } }), presenting: pendingLanguage) { language in
+                                Button(model.text.string(.uiCancel), role: .cancel) { pendingLanguage = nil }
+                                Button(model.text.string(.uiRestart)) {
+                                    model.changeLanguageAndRestart(language)
+                                    pendingLanguage = nil
+                                }
+                                .keyboardShortcut(.defaultAction)
+                            } message: { _ in
+                                Text(model.text.string(.uiRestartModuApplyLanguageChange))
+                            }
+                            .disabled(model.presentation.quitPending || model.updates.installing || model.updates.restartPending || model.relaunch.restartPending)
                     }.padding(.horizontal, 16).frame(height: 60).formPlate()
-                    if model.preferences.languageChangeRequiresRestart {
-                        Text(model.text.string(.uiRestartModuApplyLanguageChange)).font(DialogTypography.auxiliary).foregroundStyle(.secondary)
-                    }
                 }
                 GlobalShortcutSettingsView(model: model.globalShortcut)
                 VStack(alignment: .leading, spacing: 12) {
@@ -75,6 +84,16 @@ struct SettingsView: View {
         }) {
             operationSheetContents
         }
+    }
+    private var languageSelection: Binding<AppLanguage> {
+        Binding(get: { pendingLanguage ?? model.appLanguage }, set: { language in
+            guard language != model.appLanguage else { return }
+            if model.preferences.languageChangeRequiresRestart(language) {
+                pendingLanguage = language
+            } else {
+                model.appLanguage = language
+            }
+        })
     }
     var operationSheetPresentation: Binding<Bool> {
         Binding(get: { presentingOperation }, set: { if !$0 && openingWorkspaceURL == nil { model.presentation.dismissResult() } })

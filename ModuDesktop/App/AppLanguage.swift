@@ -43,7 +43,8 @@ enum ModuDesktopLauncher {
         let defaults = AppModel.launchDefaults()
         let preference = AppLanguage(rawValue: defaults.string(forKey: "appLanguage") ?? "") ?? .system
         #if DEBUG
-        let locale = ProcessInfo.processInfo.arguments.contains("--mock") ? AppLocale.english : preference.resolve(preferredLanguages: preferredLanguages)
+        let freshMock = ProcessInfo.processInfo.arguments.contains("--mock") && ProcessInfo.processInfo.environment["MODU_TEST_DEFAULTS"] == nil
+        let locale = freshMock ? AppLocale.english : preference.resolve(preferredLanguages: preferredLanguages)
         #else
         let locale = preference.resolve(preferredLanguages: preferredLanguages)
         #endif

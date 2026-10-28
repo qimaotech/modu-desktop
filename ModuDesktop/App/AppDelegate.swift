@@ -41,29 +41,31 @@ import Observation
         model?.updates.cancel()
         model?.globalShortcut.stop()
         #if DEBUG
-        model?.mockWorkspace?.remove()
+        if model?.relaunch.restartPending != true { model?.mockWorkspace?.remove() }
         #endif
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationTask != nil { return .terminateCancel }
         if let model, model.busy {
-            if model.updates.restartPending { model.presentation.quitPending = true }
+            if model.updates.restartPending || model.relaunch.restartPending { model.presentation.quitPending = true }
             guard model.operations.canCancel || model.cancelling else { return .terminateCancel }
             model.presentation.quitPending = true; model.cancel()
             return .terminateCancel
         }
         if model?.presentation.result != nil { model?.presentation.quitPending = true; return .terminateCancel }
         if terminationPrepared { return .terminateNow }
-        if startupTask != nil || model?.updates.needsTerminationPreparation == true {
+        if startupTask != nil || model?.updates.needsTerminationPreparation == true || model?.relaunch.restartPending == true {
             let model = model
             model?.presentation.quitPending = true
             let startupTask = startupTask
+            let relaunchRequested = model?.relaunch.restartPending == true
             startupTask?.cancel()
             terminationTask = Task {
                 await startupTask?.value
-                let canTerminate = await model?.updates.prepareToTerminate() ?? true
+                var canTerminate = await model?.updates.prepareToTerminate() ?? true
+                if canTerminate { canTerminate = await model?.relaunch.prepareToTerminate() ?? true }
                 terminationTask = nil
-                guard canTerminate else { model?.presentation.quitPending = false; return }
+                guard canTerminate, !relaunchRequested || model?.relaunch.restartPending == true else { model?.presentation.quitPending = false; return }
                 terminationPrepared = true
                 defer { terminationPrepared = false }
                 terminate(sender)

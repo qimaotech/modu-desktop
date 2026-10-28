@@ -16,7 +16,7 @@ struct ModuDesktopApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     var body: some Scene {
         Window("Modu", id: "main") {
-            ContentView(model: model, chromeHeight: chromeHeight, startupCompleted: startupCompleted)
+            ContentView(model: model, startupCompleted: startupCompleted)
                 .onAppear { delegate.model = model }
                 .frame(minWidth: 900, minHeight: 600 - chromeHeight)
                 .background(WindowChromeHeight(height: $chromeHeight, onWindow: configureMainWindow))

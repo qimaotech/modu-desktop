@@ -9,7 +9,7 @@ final class MockWorkspace {
     var directory: URL { fixture.directory }
     let defaults: UserDefaults
     let initialSelection = Resource.member("feature-store-pickup", "order-service")
-    private let suite: String
+    let suite: String
 
     init(scenario: Scenario, workspace: URL) throws {
         let fixture = try MockWorkspaceFixture(workspace: workspace)
@@ -20,7 +20,7 @@ final class MockWorkspace {
         }
         self.defaults = defaults
         defaults.set(fixture.root.path, forKey: "workspace")
-        defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage")
+        if defaults.string(forKey: "appLanguage") == nil { defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage") }
         for tool in ExternalTool.builtIn where ["codex", "fork", "vscode", "terminal"].contains(tool.id) { defaults.set(tool.id, forKey: "tool.\(tool.category)") }
     }
 

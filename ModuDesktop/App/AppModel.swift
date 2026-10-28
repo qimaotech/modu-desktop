@@ -10,6 +10,7 @@ final class AppModel {
     let preferences: AppPreferences
     let globalShortcut: GlobalShortcutModel
     let updates: AppUpdateModel
+    let relaunch: AppRelaunchModel
     let operations: OperationLifecycle
     let presentation: OperationPresentation
     let workspace: WorkspaceModel
@@ -37,7 +38,7 @@ final class AppModel {
     }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
-         updates: AppUpdateModel? = nil) {
+         updates: AppUpdateModel? = nil, relaunch: AppRelaunchModel? = nil) {
         self.service = service
         self.toolService = toolService ?? ExternalTools(git: service.git)
         let installer = installer ?? InstallationService(support: service.store.support)
@@ -46,11 +47,18 @@ final class AppModel {
         self.preferences = preferences
         globalShortcut = GlobalShortcutModel(preferences: preferences)
         self.updates = updates ?? AppUpdateModel(preferences: preferences)
+        self.relaunch = relaunch ?? AppRelaunchModel()
         let operations = OperationLifecycle()
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
         self.updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
+        self.relaunch.onFailure = { [weak presentation] error in
+            presentation?.quitPending = false
+            let text = preferences.text
+            presentation?.presentMessage(text.string(.uiLanguageSavedRestartManually) + "\n\n" + text.string(.uiDetails) + ":\n" + Git.sanitize(error.localizedDescription),
+                                         title: text.string(.uiCanTRestartModu), host: .settings)
+        }
         let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
         self.workspace = workspace
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
@@ -156,6 +164,16 @@ final class AppModel {
         let previousEdit = management.editPreviewTask
         management.cancelEditPreview()
         try await workspace.switchTo(root, loaded: loaded, waitingFor: previousEdit)
+    }
+
+    func changeLanguageAndRestart(_ language: AppLanguage) {
+        guard !presentation.quitPending, !relaunch.restartPending, !updates.installing, !updates.restartPending else { return }
+        preferences.appLanguage = language
+        var environment: [String: String] = [:]
+        #if DEBUG
+        if let mockWorkspace { environment["MODU_TEST_DEFAULTS"] = mockWorkspace.suite }
+        #endif
+        relaunch.restart(environment: environment)
     }
 
     func cancel() { operations.cancel() }

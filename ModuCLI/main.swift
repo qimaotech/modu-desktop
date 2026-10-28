@@ -9,6 +9,14 @@ struct Modu: AsyncParsableCommand {
 let original = Array(CommandLine.arguments.dropFirst())
 let task = Task {
     do {
+        if original.first == "--internal-relaunch" {
+            guard original.count >= 4, let pid = Int32(original[3]) else {
+                throw ModuError("invalid-input", "Invalid relaunch arguments.")
+            }
+            try await AppRelauncher().run(application: URL(fileURLWithPath: original[1]), directory: URL(fileURLWithPath: original[2]),
+                                        parentPID: pid, arguments: Array(original.dropFirst(4)))
+            return
+        }
         if original.first == "--internal-install-update" {
             guard original.count == 3, let pid = Int32(original[2]) else {
                 throw ModuError("invalid-input", "Invalid update installer arguments.")

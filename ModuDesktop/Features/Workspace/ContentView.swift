@@ -4,7 +4,6 @@ import ModuCore
 
 struct ContentView: View {
     @Bindable var model: AppModel
-    var chromeHeight: CGFloat = 40
     var startupCompleted = false
     @Environment(\.openWindow) private var openWindow
 
@@ -92,7 +91,7 @@ struct ContentView: View {
                         }
                     }
                 }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).offset(x: -12, y: -chromeHeight / 2)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).offset(x: -12, y: -24)
         } else { RepositoryDetailView(workspace: model.workspace, preferences: model.preferences, tools: model.tools, preferredToolIDs: model.preferredToolIDs, openTool: { model.openTool($0) }) }
     }
 }
