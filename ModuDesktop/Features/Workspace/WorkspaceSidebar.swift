@@ -134,7 +134,7 @@ struct WorkspaceSidebar: View {
             }.accessibilityLabel(title).accessibilityAddTraits(workspace.selection == resource ? [.isSelected] : [])
                 .accessibilityValue(resource.kind == .group ? (workspace.expandedGroups.contains(title) ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed)) : "")
         }
-        .padding(.leading, resource.kind == .group ? 16 : resource.kind == .member ? 38 : 22)
+        .padding(.leading, resource.kind == .member ? 32 : 16)
         .frame(height: 28)
         .modifier(SidebarRowBackground(selected: workspace.selection == resource))
         .id(resource.id).help(workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path)
