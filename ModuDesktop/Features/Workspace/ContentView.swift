@@ -79,16 +79,16 @@ struct ContentView: View {
         } else if model.workspace.record == nil {
             ContentUnavailableView { Label(model.text.string(.uiNoWorkspaceSelected), systemImage: "folder") } actions: { Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") } }
         } else if model.workspace.selection == nil {
-            VStack(spacing: 24) {
+            VStack(spacing: 32) {
                 Text(model.text.string(.uiLetSStart)).font(DesignStyle.welcomeTitle).frame(height: 32)
                 HStack(spacing: 12) {
                     Button(model.text.string(.uiAddRepository2)) { model.management.sheet = .add }
                     Button(model.text.string(.uiCreateGroup)) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)
-                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 112 : 136)).disabled(model.busy)
+                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 120 : 128)).disabled(model.busy)
                 HStack(spacing: 12) {
-                    ForEach(["Agent", "Editor"], id: \.self) { category in
+                    ForEach(["Git GUI", "Editor", "Agent"], id: \.self) { category in
                         if model.tools.contains(where: { $0.category == category }) {
-                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.states[$0.id]?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 160)
+                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.states[$0.id]?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136)
                         }
                     }
                 }

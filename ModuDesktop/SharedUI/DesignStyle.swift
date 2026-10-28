@@ -111,7 +111,7 @@ struct StartButtonStyle: ButtonStyle {
     let width: CGFloat
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 14)).padding(.horizontal, 16).frame(width: width, height: 36)
+        configuration.label.font(.system(size: 14)).lineLimit(1).padding(.horizontal, 8).frame(width: width, height: 36)
             .modifier(ButtonHoverBackground(shape: RoundedRectangle(cornerRadius: 8)))
             .background(configuration.isPressed ? DesignStyle.selection : DesignStyle.background, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(DesignStyle.border, lineWidth: 1))

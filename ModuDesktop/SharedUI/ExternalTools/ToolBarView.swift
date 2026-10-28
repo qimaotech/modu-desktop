@@ -13,7 +13,7 @@ struct ToolBarView: View {
     var availableWidth: CGFloat?
     var fixedButtonWidth: CGFloat?
     private var selectedTools: [ExternalTool] {
-        (category.map { [$0] } ?? ["Agent", "Git GUI", "Editor", "Terminal"]).compactMap { category in
+        (category.map { [$0] } ?? ["Git GUI", "Terminal", "Editor", "Agent"]).compactMap { category in
             let available = tools.filter { $0.category == category }
             return available.first { $0.id == preferredToolIDs[category] } ?? available.first
         }

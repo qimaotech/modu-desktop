@@ -9,16 +9,16 @@ public struct ExternalTool: Identifiable, Sendable, Equatable {
     public var bundleID: String?
     public var icon: String
     public static let builtIn: [ExternalTool] = [
-        .init(id: "codex", name: "Codex", category: "Agent", bundleID: "com.openai.codex", icon: "Codex"),
-        .init(id: "claude", name: "Claude Code", category: "Agent", bundleID: "com.anthropic.claudefordesktop", icon: "ClaudeCode"),
         .init(id: "fork", name: "Fork", category: "Git GUI", bundleID: "com.DanPristupov.Fork", icon: "Fork"),
         .init(id: "github-desktop", name: "GitHub Desktop", category: "Git GUI", bundleID: "com.github.GitHubClient", icon: "GitHubDesktop"),
+        .init(id: "warp", name: "Warp", category: "Terminal", bundleID: "dev.warp.Warp-Stable", icon: "Warp"),
+        .init(id: "iterm2", name: "iTerm2", category: "Terminal", bundleID: "com.googlecode.iterm2", icon: "iTerm2"),
+        .init(id: "terminal", name: "Terminal", category: "Terminal", bundleID: "com.apple.Terminal", icon: "Terminal"),
         .init(id: "vscode", name: "VS Code", category: "Editor", bundleID: "com.microsoft.VSCode", icon: "VSCode"),
         .init(id: "cursor", name: "Cursor", category: "Editor", bundleID: "com.todesktop.230313mzl4w4u92", icon: "Cursor"),
         .init(id: "xcode", name: "Xcode", category: "Editor", bundleID: "com.apple.dt.Xcode", icon: "Xcode"),
-        .init(id: "warp", name: "Warp", category: "Terminal", bundleID: "dev.warp.Warp-Stable", icon: "Warp"),
-        .init(id: "iterm2", name: "iTerm2", category: "Terminal", bundleID: "com.googlecode.iterm2", icon: "iTerm2"),
-        .init(id: "terminal", name: "Terminal", category: "Terminal", bundleID: "com.apple.Terminal", icon: "Terminal")
+        .init(id: "codex", name: "Codex", category: "Agent", bundleID: "com.openai.codex", icon: "Codex"),
+        .init(id: "claude", name: "Claude Code", category: "Agent", bundleID: "com.anthropic.claudefordesktop", icon: "ClaudeCode")
     ]
 }
 
