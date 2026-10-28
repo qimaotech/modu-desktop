@@ -4,7 +4,7 @@ import Testing
 
 struct WorkspaceCommitTests {
     @Test func unchangedManagedFilesKeepStagedEditsAndSkipStagingAndCommit() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
         let ignore = f.root.appending(path: ".gitignore")
         let original = try Data(contentsOf: ignore)
@@ -66,7 +66,7 @@ struct WorkspaceCommitTests {
 
     @Test(arguments: [false, true])
     func skillPolicyUpdatePreservesWorkspaceChangesAndCommitsOnlyManagedFiles(_ existingPolicy: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
         try Data("# Workflow\n".utf8).write(to: source)
         let policy = f.directory.appending(path: "agents/openai.yaml")
@@ -94,7 +94,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func conflictingSkillIsKeptAndExcludedFromAutomaticCommit() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let path = ".agents/skills/modu-workflow"
         let skill = f.root.appending(path: path)
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -108,7 +108,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func legacySkillLinkIsMigratedAndCommittedWithoutChangingItsTarget() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
         let installer = InstallationService(support: f.service.store.support)
         try Data("old skill\n".utf8).write(to: source)
@@ -129,7 +129,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func skillUpdateRestoresDirtyWorkspaceAndPreservesExistingStashes() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = try await prepareSkillUpdate(f)
         let savedFile = f.root.appending(path: "already-stashed.txt")
         try Data("previous stash\n".utf8).write(to: savedFile)
@@ -171,7 +171,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func failedSkillCommitStillRestoresWorkspaceChanges() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = try await prepareSkillUpdate(f)
         let notes = f.root.appending(path: "notes.txt")
         try Data("staged\n".utf8).write(to: notes)
@@ -194,7 +194,7 @@ struct WorkspaceCommitTests {
 
     @Test(arguments: ["staged-only", "deleted", "added", "untracked"])
     func managedSkillChangesAreDiscardedWithoutCreatingStash(_ scenario: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
         let policy = f.directory.appending(path: "agents/openai.yaml")
         try Data("bundled skill\n".utf8).write(to: source)
@@ -236,7 +236,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func failedStashDoesNotOverwriteSkill() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = try await prepareSkillUpdate(f)
         try Data("untracked\n".utf8).write(to: f.root.appending(path: "new.txt"))
         let lock = f.root.appending(path: ".git/index.lock")
@@ -249,7 +249,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func differingSkillWithoutHeadUsesIsolatedInitialCommit() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = f.directory.appending(path: "SKILL.md")
         let path = ".agents/skills/modu-workflow/SKILL.md"
         let skill = f.root.appending(path: path)
@@ -267,7 +267,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func cancellationDuringSkillUpdateStillCommitsAndRestoresStash() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         let source = try await prepareSkillUpdate(f)
         let notes = f.root.appending(path: "notes.txt")
         try Data("user change\n".utf8).write(to: notes)
@@ -283,7 +283,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func initializationCommitFailureKeepsFilesAndCanBeRetried() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         _ = try await f.service.git.run(["init"], at: f.root)
         try await failSigning(f)
         let source = f.directory.appending(path: "SKILL.md")
@@ -410,7 +410,7 @@ struct WorkspaceCommitTests {
     }
 
     @Test func automaticCommitsDoNotRunHooksThatCouldAddOtherFiles() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         _ = try await f.service.git.run(["init"], at: f.root)
         let hook = f.root.appending(path: ".git/hooks/pre-commit")
         try Data("#!/bin/sh\nprintf 'extra' > extra.txt\ngit add extra.txt\n".utf8).write(to: hook)

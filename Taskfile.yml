@@ -49,9 +49,9 @@ tasks:
       - /usr/bin/swift -module-cache-path "${TMPDIR%/}/modu-verification-module-cache" script/quit_app.swift {{.PID | shellQuote}}
 
   test:
-    desc: 隔离运行并清理单元测试，零用例失败（可用 TEST_FILTER 指定测试类或方法）
+    desc: 隔离运行并清理单元测试，零用例失败（TEST_FILTER 筛选或 TEST_SHARD=1..4 分组）
     cmds:
-      - /usr/bin/python3 script/run_tests.py --filter {{.TEST_FILTER | default "ModuDesktopTests" | shellQuote}} --{{.SCRIPT_ARGS}}
+      - /usr/bin/python3 script/run_tests.py {{if .TEST_SHARD}}--shard {{.TEST_SHARD | shellQuote}}{{if .TEST_FILTER}} --filter {{.TEST_FILTER | shellQuote}}{{end}}{{else}}--filter {{.TEST_FILTER | default "ModuDesktopTests" | shellQuote}}{{end}} --{{.SCRIPT_ARGS}}
 
   package:
     desc: 构建、检查并打包 arm64 发布版 DMG，本地完成后自动打开

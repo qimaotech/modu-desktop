@@ -56,7 +56,6 @@ struct ModuCoreTests {
         case "recorded": try fixture.service.store.save(WorkspaceRecord(root: PathSafety.canonical(root).path))
         case "missing-metadata":
             #expect(await fixture.service.openWorkspace(root).status == .success)
-            try await fixture.commitWorkspace()
             try FileManager.default.removeItem(at: root.appending(path: ".git"))
         default: break
         }
@@ -127,7 +126,7 @@ struct ModuCoreTests {
     }
     @Test(arguments: ["nested", "bare", "corrupt", "worktree"])
     func openingWorkspaceDoesNotInitializeUnsupportedGitLayouts(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(createRemote: kind == "worktree"); defer { fixture.remove() }
         switch kind {
         case "nested": _ = try await fixture.service.git.run(["init"], at: fixture.directory)
         case "bare": _ = try await fixture.service.git.run(["init", "--bare"], at: fixture.root)
@@ -161,6 +160,7 @@ struct ModuCoreTests {
         #expect(try await fixture.service.git.registrations(at: record.repositoryURL("repo")).count == 2)
         let preview = try await fixture.service.previewDelete(.member(group: "feature-test", repo: "repo"), at: fixture.root)
         #expect(preview[0].branch == "feature-test")
+        #expect(await fixture.service.editGroup("feature-test", repositories: [], at: fixture.root).status == .confirmationRequired)
         let removed = await fixture.service.remove(.member(group: "feature-test", repo: "repo"), at: fixture.root, authorization: preview)
         #expect(removed.status == .success, "\(removed.items)")
         #expect(try await fixture.service.load(fixture.root).groups["feature-test"]?.repositories == [])

@@ -62,12 +62,14 @@
 | 任务 | 命令 |
 | --- | --- |
 | 最小范围测试 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>'` |
+| 运行一个发布测试分组 | `task test TEST_SHARD=1`（1–4，与 `TEST_FILTER` 互斥） |
 | 枚举测试方法标识（Swift Testing 含括号） | `task test -- -enumerate-tests` |
 | 保留测试结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
 | 明确需要时运行全量测试 | `task test` |
 
 - 在 Codex 沙箱中运行测试前，核对用户级 SwiftPM 缓存的写入权限。若缓存不在可写范围，且已有日志确认该测试入口需要提权，首次执行即申请所需权限，不重复尝试已知会失败的普通执行；权限配置变化后重新评估。
 - [run_tests.py](script/run_tests.py) 隔离并清理本次测试环境，默认删除结果包；检查实际执行数量与清理结果，退出或清理无法确认时保留环境并返回失败。
+- 发布测试按 suite 分成四组，组内串行，在独立 runner 上并行；分组配置位于 `run_tests.py`，第四组包含前三组之外的全部测试，新增 suite 自动纳入。调整分组时参考 CI 日志中的 suite 耗时。
 - 零用例或全跳过不算通过，`-enumerate-tests` 除外；筛选失败时先核对方法标识与 `TEST_FILTER`。
 - Mock 测试聚焦场景加载、外部工具目标及安装、删除、目录和网络隔离；完整刷新、分组管理与 YAML 流程复用 [业务测试](ModuDesktopTests/)，避免重复覆盖。
 
@@ -95,7 +97,8 @@
 
 ### CI 与安装包契约
 
-- [CI](.github/workflows/ci.yml) 在 tag 构建中依次校验版本与 CHANGELOG、运行全量测试、打包并创建 GitHub Release；测试失败时上传 `.xcresult`。main 分支 push、PR 和手动触发仅构建打包。
+- [CI](.github/workflows/ci.yml) 在 tag 构建中校验版本与 CHANGELOG，四组全量测试与 Release 打包并行；打包和全部测试通过后才创建 GitHub Release。任一组失败不取消其他组，各失败组上传独立命名的 `.xcresult`。main 分支 push、PR 和手动触发仅构建打包。
+- Swift Package 源码缓存按系统、架构、Xcode 和 `Package.resolved` 区分，仅 main 分支 push 构建成功后保存，发布和 PR 可读取。缓存不包含 Debug/Release 编译产物；首次运行或缓存失效时照常解析锁定依赖。
 - [release_notes.py](script/release_notes.py) 校验 tag 与产品版本一致、当前版本章节格式正确且唯一非空，并提取该章节供 Release 使用；CI 附加系统要求与签名说明。章节格式见发布流程，普通分支构建无需发布章节，Unreleased 与其他版本内容不会混入本次发布。
 - 发布 tag、产品版本与 DMG 附件名必须匹配；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只提供更高产品版本的最新正式 Release，并要求包含 `Modu-<版本号>-arm64.dmg`。
 - [自动安装](ModuCore/Infrastructure/AppUpdateInstaller.swift) 还要求 Release 附件元数据提供有效的 SHA-256 `digest`，并通过文件大小与摘要校验；缺失或不匹配时拒绝安装。

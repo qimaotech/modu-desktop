@@ -46,7 +46,6 @@ struct RepositoryUpdateTests {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        try await f.commitWorkspace()
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         let member = f.root.appending(path: "worktrees/feature/repo")

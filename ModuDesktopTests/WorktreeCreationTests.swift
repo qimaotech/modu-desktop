@@ -121,34 +121,35 @@ struct WorktreeCreationTests {
         #expect(try await f.service.git.oid("HEAD", at: record.memberURL("feature", "repo")) == oid)
     }
 
-    @Test(arguments: [false, true])
-    func cliCreationReportsBranchWarningsWithoutChangingTheSuccessExitCode(_ json: Bool) async throws {
+    @Test func cliCreationReportsBranchWarningsWithoutChangingTheSuccessExitCode() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let record = try await prepare(f)
         let original = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let base = try await commit(after: original, message: "Base change", at: f.root, git: f.service.git)
-        _ = try await f.service.git.run(["update-ref", "refs/heads/feature", original], at: f.root)
         _ = try await f.service.git.run(["update-ref", "refs/heads/main", base], at: f.root)
         let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
         var runner = f.service.git.runner
         runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
-        let arguments = ["worktree", "create", "feature", "--repo", "repo", "--workspace", f.root.path] + (json ? ["--json"] : [])
-        let output = try await runner.run(executable.path, arguments)
-        #expect(output.status == 0, "\(output.text)")
-        if json {
-            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
-            #expect(result.status == .success && result.hasWarnings)
-            #expect(result.items.first?.data?["behind-count"] == "1")
-        } else {
-            #expect(output.text.contains("worktree.create: success") && output.text.contains("1 commit behind 'workspace HEAD'"))
+        for json in [false, true] {
+            let group = json ? "feature-json" : "feature-text"
+            _ = try await f.service.git.run(["update-ref", "refs/heads/\(group)", original], at: f.root)
+            let arguments = ["worktree", "create", group, "--repo", "repo", "--workspace", f.root.path] + (json ? ["--json"] : [])
+            let output = try await runner.run(executable.path, arguments)
+            #expect(output.status == 0, "\(output.text)")
+            if json {
+                let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+                #expect(result.status == .success && result.hasWarnings)
+                #expect(result.items.first?.data?["behind-count"] == "1")
+            } else {
+                #expect(output.text.contains("worktree.create: success") && output.text.contains("1 commit behind 'workspace HEAD'"))
+            }
+            #expect(try await f.service.git.oid("HEAD", at: record.groupURL(group)) == original)
         }
-        #expect(try await f.service.git.oid("HEAD", at: record.groupURL("feature")) == original)
     }
 
     private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
         #expect(await f.service.openWorkspace(f.root).status == .success)
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        try await f.commitWorkspace()
         return try f.service.store.load(f.root)
     }
 

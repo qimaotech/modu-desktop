@@ -48,6 +48,38 @@ struct TestTaskTests {
         #expect(!PathSafety.exists(try fixture.invocation().directory))
     }
 
+    @Test func shardsCoverEachSelectedSuiteOnceAndKeepFutureSuites() async throws {
+        let fixture = try TestTaskFixture(outcome: "passed")
+        defer { fixture.remove() }
+        var selections: [([String], [String])] = []
+        for shard in 1...4 {
+            let output = try await fixture.run(shard: shard)
+            #expect(output.status == 0)
+            let invocation = try fixture.invocation()
+            let included = invocation.arguments.filter { $0.hasPrefix("-only-testing:") }.map { String($0.dropFirst("-only-testing:".count)) }
+            let excluded = invocation.arguments.filter { $0.hasPrefix("-skip-testing:") }.map { String($0.dropFirst("-skip-testing:".count)) }
+            #expect(!included.isEmpty && !PathSafety.exists(invocation.directory))
+            selections.append((included, excluded))
+        }
+        let suites = selections.flatMap { $0.0 }.filter { $0 != "ModuDesktopTests" } + ["ModuDesktopTests/FutureTests"]
+        for suite in suites {
+            let matches = selections.filter { included, excluded in
+                (included.contains(suite) || included.contains("ModuDesktopTests")) && !excluded.contains(suite)
+            }
+            #expect(matches.count == 1, "\(suite) must run in exactly one shard")
+        }
+        #expect(selections.last?.0 == ["ModuDesktopTests"])
+    }
+
+    @Test(arguments: [["--shard", "0"], ["--shard", "5"], ["--shard", "1", "--filter", "ModuDesktopTests/VersionTests"]])
+    func invalidShardSelectionFailsBeforeStartingTests(_ arguments: [String]) async throws {
+        let fixture = try TestTaskFixture(outcome: "passed")
+        defer { fixture.remove() }
+        let output = try await fixture.run(selection: arguments)
+        #expect(output.status == 2)
+        #expect(!PathSafety.exists(fixture.directory.appending(path: "invocation.json")))
+    }
+
     @Test func unconfirmedHostCleanupFailsAndPreservesItsEnvironment() async throws {
         let fixture = try TestTaskFixture(outcome: "cleanup-failed")
         defer { fixture.remove() }
@@ -140,8 +172,9 @@ private struct TestTaskFixture {
         runner = CommandRunner(environment: environment)
     }
 
-    func run(filter: String = "ModuDesktopTests", arguments: [String] = []) async throws -> CommandOutput {
-        try await runner.run("/usr/bin/python3", [Self.root.appending(path: "script/run_tests.py").path, "--filter", filter, "--"] + arguments)
+    func run(filter: String = "ModuDesktopTests", shard: Int? = nil, selection: [String]? = nil, arguments: [String] = []) async throws -> CommandOutput {
+        let selection = selection ?? shard.map { ["--shard", String($0)] } ?? ["--filter", filter]
+        return try await runner.run("/usr/bin/python3", [Self.root.appending(path: "script/run_tests.py").path] + selection + ["--"] + arguments)
     }
 
     func invocation() throws -> TestTaskInvocation {

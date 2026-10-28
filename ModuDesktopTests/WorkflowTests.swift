@@ -132,9 +132,7 @@ struct WorkflowTests {
     }
     @Test func yamlRoundTripAndEmptyImportBoundary() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
-        #expect(await f.service.editGroup("feature", repositories: [], at: f.root).status == .confirmationRequired)
-        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
+        try await f.prepareEmptyGroup("feature")
         let yaml = try await f.service.exportYAML(at: f.root)
         #expect(!yaml.contains("root:")); #expect(!yaml.contains("branch:"))
         let rejected = await f.service.importWorkspaceYAML(yaml, at: f.root)
@@ -201,7 +199,6 @@ struct WorkflowTests {
         #expect(await f.service.openWorkspace(f.root).status == .failed)
         try FileManager.default.removeItem(at: f.root.appending(path: "repositories"))
         _ = await f.service.openWorkspace(f.root)
-        try await f.commitWorkspace()
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         _ = try await f.service.git.run(["branch", "feature", "HEAD~1"], at: f.root)
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)

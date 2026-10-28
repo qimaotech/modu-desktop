@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       dmg_name: ${{ steps.package.outputs.dmg_name }}
-    env:
+    env: &macos_env
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     defaults:
       run:
@@ -44,30 +44,28 @@ jobs:
           xcodebuild -version
           sw_vers
 
+      - name: Restore Swift packages
+        id: packages
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with: &package_cache
+          path: ${{ runner.temp }}/DerivedData/SourcePackages
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-26.6-swiftpm-${{ hashFiles('ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
       - name: Install Task
         uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
         with:
           version: '3.48.0'
-
-      - name: Test before release
-        id: tests
-        if: *is_release
-        run: task test -- -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult"
-
-      - name: Upload failed test results
-        if: failure() && steps.tests.outcome == 'failure'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-results
-          path: ${{ runner.temp }}/TestResults.xcresult
-          if-no-files-found: warn
-          retention-days: 14
 
       - name: Build and package arm64 app
         id: package
         env:
           MODU_PACKAGE_DIR: ${{ runner.temp }}/package
         run: task package
+
+      - name: Save Swift packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with: *package_cache
 
       - name: Upload app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -77,9 +75,53 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  test:
+    name: Test (${{ matrix.shard }}/4)
+    if: *is_release
+    runs-on: macos-26
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env: *macos_env
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: |
+          echo "MODU_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
+          xcodebuild -version
+          sw_vers
+
+      - name: Restore Swift packages
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with: *package_cache
+
+      - name: Install Task
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: '3.48.0'
+
+      - name: Test before release
+        id: tests
+        run: task test TEST_SHARD=${{ matrix.shard }} -- -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult"
+
+      - name: Upload failed test results
+        if: failure() && steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/TestResults.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
   release:
     if: *is_release
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

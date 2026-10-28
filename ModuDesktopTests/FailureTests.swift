@@ -118,7 +118,7 @@ struct FailureTests {
     }
 
     @Test func invalidRepositoryInputIsRejectedBeforeWorkspaceOrGitAccess() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
         var runner = f.service.git.runner
         let trace = f.directory.appending(path: "invalid-input-trace")
         runner.environment["GIT_TRACE"] = trace.path
@@ -613,7 +613,6 @@ struct FailureTests {
     private func prepare(_ f: Fixture) async throws {
         #expect(await f.service.openWorkspace(f.root).status == .success)
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        try await f.commitWorkspace()
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
     }
 }

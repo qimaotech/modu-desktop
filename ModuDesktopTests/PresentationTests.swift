@@ -43,7 +43,6 @@ import Testing
         let fixture = try await Fixture(); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        try await fixture.commitWorkspace()
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))

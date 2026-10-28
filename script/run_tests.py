@@ -14,11 +14,19 @@ sys.dont_write_bytecode = True
 from prepare_mock_workspace import Cancelled, Jobs, interrupt
 
 ROOT = Path(__file__).resolve().parent.parent
+# Balance the slow Git suites; the final shard includes all remaining and future suites.
+TEST_SHARDS = (
+    ("WorkflowTests", "DeletionPreviewTests", "MockWorkspaceTests", "GitSSHTests"),
+    ("DeletionCancellationTests", "WorktreeCreationTests", "ImportCancellationTests", "ModuCoreTests"),
+    ("WorkspaceLoadingTests", "DetailCacheTests", "FailureTests", "AppUpdateInstallerTests"),
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run Xcode tests in an isolated, automatically cleaned environment.")
-    parser.add_argument("--filter", default="ModuDesktopTests")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--filter", default="ModuDesktopTests")
+    selection.add_argument("--shard", type=int, choices=range(1, len(TEST_SHARDS) + 2))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     arguments = parser.parse_args()
     extra = arguments.arguments
@@ -26,10 +34,10 @@ def main():
         extra = extra[1:]
     for number in (signal.SIGINT, signal.SIGTERM):
         signal.signal(number, interrupt)
-    return run_tests(arguments.filter, extra)
+    return run_tests(test_selection(arguments.filter, arguments.shard), extra)
 
 
-def run_tests(test_filter, extra):
+def run_tests(selection, extra):
     derived = Path(os.environ.get("MODU_DERIVED_DATA_PATH", str(Path(tempfile.gettempdir()) / "modu-desktop-derived-data")))
     directory = Path(tempfile.mkdtemp(prefix="modu-test-run-"))
     suite = f"ModuTests.{uuid.uuid4()}"
@@ -43,7 +51,7 @@ def run_tests(test_filter, extra):
         command = ["xcodebuild", "-project", str(ROOT / "ModuDesktop.xcodeproj"), "-scheme", "ModuDesktop",
                    "-configuration", "Debug", "-destination", "platform=macOS,arch=arm64",
                    "-derivedDataPath", str(derived), "-onlyUsePackageVersionsFromResolvedFile",
-                   f"-only-testing:{test_filter}", "-parallel-testing-enabled", "NO",
+                   *selection, "-parallel-testing-enabled", "NO",
                    "CODE_SIGN_STYLE=Manual", "CODE_SIGN_IDENTITY=-", "DEVELOPMENT_TEAM=", "ENABLE_CODE_COVERAGE=NO", "test"]
         if not explicit_results:
             command += ["-resultBundlePath", str(results)]
@@ -61,7 +69,7 @@ def run_tests(test_filter, extra):
             total = summary.get("totalTestCount")
             skipped = summary.get("skippedTests", 0)
             if type(total) is not int or type(skipped) is not int or total - skipped <= 0:
-                raise RuntimeError("No tests executed. Check TEST_FILTER; Swift Testing method identifiers include parentheses, such as method(_:).")
+                raise RuntimeError("No tests executed. Check TEST_FILTER or TEST_SHARD; Swift Testing method identifiers include parentheses, such as method(_:).")
             print(f"Tests executed: {total - skipped}; skipped: {skipped}.", flush=True)
         if explicit_results:
             print(f"Test results: {results}", flush=True)
@@ -89,6 +97,17 @@ def run_tests(test_filter, extra):
             if status == 0:
                 status = 1
     return status
+
+
+def test_selection(test_filter, shard):
+    if shard is None:
+        return [f"-only-testing:{test_filter}"]
+    print(f"Test shard: {shard}/{len(TEST_SHARDS) + 1}", flush=True)
+    if shard <= len(TEST_SHARDS):
+        return [f"-only-testing:ModuDesktopTests/{suite}" for suite in TEST_SHARDS[shard - 1]]
+    return ["-only-testing:ModuDesktopTests"] + [
+        f"-skip-testing:ModuDesktopTests/{suite}" for group in TEST_SHARDS for suite in group
+    ]
 
 
 def test_environment(directory, suite):
