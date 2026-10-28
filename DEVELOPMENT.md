@@ -8,13 +8,16 @@
 | `ManagementModel` | 管理表单、预览与增删操作 |
 | `RepositoryDetailModel` | Git 详情读取、缓存、预加载与分页 |
 | `GlobalShortcutModel` | 全局快捷键配置与录制 |
-| `AppUpdateModel` | 检查更新、准备安装、请求取消与重启交接 |
+| `AppUpdateModel` | 手动与自动检查更新、准备安装、请求取消与重启交接 |
 
 - 工作区与管理操作复用 `OperationLifecycle` 和 `OperationPresentation`，通过操作标识与功能上下文阻止过期结果覆盖当前状态。
 - 详情读取与更新检查各自维护任务取消、缓存或请求上下文，不并入管理操作的生命周期。
 
 ### 自动更新
 
+- 自动检查默认开启，开关与最近一次检查尝试时间由 `AppPreferences` 持久化。启动完成或 App 重新激活时触发，距上次检查（含手动检查、失败或取消）至少 24 小时才发起后台请求；已有待安装版本或更新窗口可见时不重复自动检查。mock 与单元测试宿主不触发真实自动检查。
+- 后台检查无新版或失败时不弹窗，发现新版后由 App 层等待启动窗口就绪、App 处于前台、业务操作与结果提示结束，再打开更新窗口。手动检查不受开关或间隔限制，并接替进行中的后台检查；关闭自动检查会取消本次后台请求，过期结果不能发布。自动检查不下载或安装，安装仍由用户确认。
+- 更新窗口左下角为“自动检查更新”复选框；发现新版后，版本变化中的目标版本号作为链接打开该版本的发布说明。
 - DMG 缓存在 `~/Library/Caches/fun.armantang.ModuDesktop/Updates/` 下的独立目录。准备安装成功后立即清理，后续替换和重启不再依赖 DMG；下载完整性校验失败（`update-integrity-failed`）、取消、重新检查或退出时清理本次缓存，其余准备失败可保留供重试。
 - 自动更新由 Core 准备并校验 DMG 中的应用，在当前应用旁暂存；退出准备期间先拒绝当前退出请求，异步清理完成并启动内置 CLI 的独立安装进程、确认就绪后，再次请求退出，避免 AppKit 的延迟退出模态循环阻塞主线程任务。安装器最多等待原进程退出 60 秒，超时通过本次安装的结果文件回传错误，原应用清除待退出状态并允许重试。
 - 安装器验证应用身份后原子替换应用，清理被替换的旧应用，再通过系统 `open` 请求启动新版；成功后删除暂存目录。替换或启动请求失败时保留已完成的效果和诊断文件，安装后的应用不自动还原。
@@ -42,7 +45,7 @@
 
 ### 偏好与工作区选择
 
-- Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，独立保存工作区选择、语言、快捷键和工具选择，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
+- Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，独立保存工作区选择、语言、快捷键、更新检查和工具选择，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
 - 工作区记录和锁位于 `~/Library/Application Support/Modu/`；`~/.local/bin/modu-cli` 直接链接当前 App 的 `Contents/Resources/modu-cli`，更新 App 无需重新安装 CLI。旧版 CLI 链接在重新安装时迁移，保留原版本目录；不带 mock 的 verify 使用当前开发偏好所选的工作区。
 - `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复选择。
 

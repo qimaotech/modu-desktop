@@ -23,6 +23,9 @@ final class AppUpdateModel {
     private(set) var error: String?
     private(set) var errorDetails: String?
     private(set) var downloadFailed = false
+    private(set) var automaticUpdatePending = false
+    @ObservationIgnored private var automaticCheck = false
+    @ObservationIgnored private var windowIsVisible = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var cleanupTask: Task<Void, Never>?
     @ObservationIgnored private var handoffTask: Task<Void, Never>?
@@ -43,6 +46,16 @@ final class AppUpdateModel {
     }
 
     var text: InterfaceText { preferences.text }
+    var automaticallyChecksForUpdates: Bool {
+        get { preferences.automaticallyChecksForUpdates }
+        set {
+            preferences.automaticallyChecksForUpdates = newValue
+            if !newValue {
+                automaticUpdatePending = false
+                if automaticCheck { cancel() }
+            }
+        }
+    }
 
     init(preferences: AppPreferences, service: AppUpdateService = .init(), installer: AppUpdateInstaller = .init(),
          application: URL = Bundle.main.bundleURL, helper: URL? = Bundle.main.url(forResource: "modu-cli", withExtension: nil),
@@ -56,22 +69,24 @@ final class AppUpdateModel {
     }
 
     func check() {
-        guard !working else { return }
-        discardInstaller()
-        update = nil; error = nil; errorDetails = nil; downloadFailed = false; checked = false; checking = true
-        let id = UUID()
-        requestID = id
-        task = Task {
-            defer { if requestID == id { checking = false; task = nil } }
-            do {
-                let result = try await service.check()
-                guard !Task.isCancelled, requestID == id else { return }
-                update = result; checked = true
-            } catch {
-                guard !Task.isCancelled, requestID == id else { return }
-                self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
-            }
-        }
+        if automaticCheck { cancel() }
+        check(automatically: false, now: Date())
+    }
+
+    func checkAutomatically(now: Date = Date()) {
+        guard automaticallyChecksForUpdates, !windowIsVisible, update == nil,
+              preferences.lastUpdateCheck.map({ now.timeIntervalSince($0) >= 24 * 60 * 60 }) ?? true else { return }
+        check(automatically: true, now: now)
+    }
+
+    func windowOpened() {
+        windowIsVisible = true
+        automaticUpdatePending = false
+    }
+
+    func windowClosed() {
+        windowIsVisible = false
+        cancel()
     }
 
     func installAndRestart() {
@@ -159,6 +174,7 @@ final class AppUpdateModel {
             }
         }
         task = nil; installerURL = nil
+        automaticCheck = false; automaticUpdatePending = false
         checking = false; downloading = false; downloadProgress = nil; installing = false
     }
 
@@ -187,6 +203,30 @@ final class AppUpdateModel {
         self.prepared = prepared
         restartPending = true
         requestRestart()
+    }
+
+    private func check(automatically: Bool, now: Date) {
+        guard !working else { return }
+        discardInstaller()
+        update = nil; error = nil; errorDetails = nil; downloadFailed = false; checked = false; checking = true
+        automaticUpdatePending = false
+        automaticCheck = automatically
+        preferences.lastUpdateCheck = now
+        let id = UUID()
+        requestID = id
+        task = Task {
+            defer { if requestID == id { checking = false; automaticCheck = false; task = nil } }
+            do {
+                let result = try await service.check()
+                guard !Task.isCancelled, requestID == id else { return }
+                update = result; checked = true
+                automaticUpdatePending = automatically && result != nil
+            } catch {
+                guard !Task.isCancelled, requestID == id else { return }
+                guard !automatically else { return }
+                self.error = errorText(error); errorDetails = Git.sanitize(error.localizedDescription)
+            }
+        }
     }
 
     private func monitorHandoff(_ prepared: PreparedAppUpdate) {

@@ -5,6 +5,8 @@ import Observation
 final class AppPreferences {
     let defaults: UserDefaults
     var appLanguage: AppLanguage { didSet { defaults.set(appLanguage.rawValue, forKey: "appLanguage") } }
+    var automaticallyChecksForUpdates: Bool { didSet { defaults.set(automaticallyChecksForUpdates, forKey: "automaticallyChecksForUpdates") } }
+    var lastUpdateCheck: Date? { didSet { defaults.set(lastUpdateCheck, forKey: "lastUpdateCheck") } }
     let activeLocale: AppLocale
     private let preferredLanguages: [String]
     var text: InterfaceText { InterfaceText(locale: activeLocale) }
@@ -20,6 +22,8 @@ final class AppPreferences {
     init(defaults: UserDefaults, preferredLanguages: [String] = AppLocalization.systemPreferredLanguages) {
         self.defaults = defaults
         self.preferredLanguages = preferredLanguages
+        automaticallyChecksForUpdates = defaults.object(forKey: "automaticallyChecksForUpdates") as? Bool ?? true
+        lastUpdateCheck = defaults.object(forKey: "lastUpdateCheck") as? Date
         let appLanguage = AppLanguage(rawValue: defaults.string(forKey: "appLanguage") ?? "") ?? .system
         self.appLanguage = appLanguage
         activeLocale = appLanguage.resolve(preferredLanguages: preferredLanguages)

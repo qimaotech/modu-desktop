@@ -11,7 +11,19 @@ struct AppUpdateView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title).font(DesignStyle.windowTitle).accessibilityAddTraits(.isHeader)
-                Text(versionText).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if let update = model.update {
+                        Text(model.text.string(.uiUpdateVersionPrefix(ModuVersion.current)))
+                            .foregroundStyle(DesignStyle.secondary)
+                        Link(update.version, destination: update.releaseURL)
+                            .help(model.text.string(.uiReleaseNotes))
+                            .accessibilityHint(model.text.string(.uiReleaseNotes))
+                    } else {
+                        Text(model.text.string(.uiInstalledVersion(ModuVersion.current)))
+                            .foregroundStyle(DesignStyle.secondary)
+                    }
+                }
+                .font(DialogTypography.auxiliary)
             }
             .frame(minHeight: 44, alignment: .topLeading)
 
@@ -19,8 +31,13 @@ struct AppUpdateView: View {
                 .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
 
             HStack(spacing: 12) {
-                Link(model.text.string(.uiReleaseNotes), destination: model.update?.releaseURL ?? AppUpdateService.releasesURL)
+                Toggle(model.text.string(.uiAutomaticallyCheckForUpdates), isOn: Binding(
+                    get: { model.automaticallyChecksForUpdates }, set: { model.automaticallyChecksForUpdates = $0 }
+                ))
+                    .toggleStyle(.checkbox)
                     .font(DialogTypography.auxiliary)
+                    .help(model.text.string(.uiAutomaticallyCheckForUpdatesHelp))
+                    .disabled(model.restartPending)
                 Spacer(minLength: 16)
                 Button(model.text.string(.uiClose)) { dismissWindow(id: "updates") }
                     .keyboardShortcut(.cancelAction)
@@ -42,30 +59,31 @@ struct AppUpdateView: View {
             showingErrorDetails = false
             AccessibilityNotification.Announcement(title).post()
         }
-        .onDisappear { model.cancel() }
+        .onAppear { model.windowOpened() }
+        .onDisappear { model.windowClosed() }
     }
 
     @ViewBuilder private var status: some View {
-        if let error = model.error {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                if let details = model.errorDetails, !details.isEmpty, details != error {
-                    DisclosureGroup(model.text.string(.uiDetails), isExpanded: $showingErrorDetails) {
-                        ScrollView {
-                            Text(details).font(DialogTypography.path)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }.frame(height: 96)
+        VStack(alignment: .leading, spacing: 12) {
+            if let error = model.error {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    if let details = model.errorDetails, !details.isEmpty, details != error {
+                        DisclosureGroup(model.text.string(.uiDetails), isExpanded: $showingErrorDetails) {
+                            ScrollView {
+                                Text(details).font(DialogTypography.path)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(height: 96)
+                        }
+                        .foregroundStyle(DesignStyle.secondary)
                     }
-                    .foregroundStyle(DesignStyle.secondary)
                 }
-            }
-            .textSelection(.enabled)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
+                .textSelection(.enabled)
+            } else {
                 Text(statusDescription).foregroundStyle(DesignStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if model.working { progress }
             }
+            if model.working { progress }
         }
     }
 
@@ -104,16 +122,11 @@ struct AppUpdateView: View {
         return model.text.string(resource)
     }
 
-    private var versionText: String {
-        if let update = model.update { return model.text.string(.uiUpdateVersionChange(ModuVersion.current, update.version)) }
-        return model.text.string(.uiInstalledVersion(ModuVersion.current))
-    }
-
     private var statusDescription: String {
         let resource: LocalizedStringResource
         switch model.phase {
         case .checking: resource = .uiCheckingGitHubReleases
-        case .available: resource = .uiInstallUpdateAndAutomaticallyRestartModuWorkspacesAre
+        case .available: resource = .uiUpdateAvailableDescription
         case .upToDate: resource = .uiYouReRunningLatestVersionOfModu
         case .downloading: resource = .uiUpdateWorkspacesPreserved
         case .verifying: resource = .uiDownloadCompleteVerifyingInstaller

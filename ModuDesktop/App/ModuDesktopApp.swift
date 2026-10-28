@@ -28,6 +28,7 @@ struct ModuDesktopApp: App {
         .onChange(of: scenePhase, initial: true) { _, _ in
             delegate.model = model
             guard !TestHost.isEnabled() else { return }
+            if startupCompleted, scenePhase == .active { checkForUpdatesAutomatically() }
             delegate.reopenWindow = {
                 guard startupWindowReady else { return }
                 openWindow(id: model.workspace.record != nil || model.workspace.blocked != nil ? "main" : "setup")
@@ -39,12 +40,18 @@ struct ModuDesktopApp: App {
             }, onFinished: { needsCLISetup in
                 startupCompleted = true
                 if needsCLISetup || !model.hasSavedWorkspace { startupNeedsSetup = true }
+                checkForUpdatesAutomatically()
             })
         }
         .onChange(of: canPresentStartupSetup) { _, present in
             guard present else { return }
             startupNeedsSetup = false; startupWindowReady = true
             openWindow(id: "setup"); dismissWindow(id: "main")
+        }
+        .onChange(of: canPresentAutomaticUpdate) { _, present in
+            guard present else { return }
+            model.updates.windowOpened()
+            openWindow(id: "updates")
         }
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
@@ -78,6 +85,20 @@ struct ModuDesktopApp: App {
     }
     private var canPresentStartupSetup: Bool {
         startupNeedsSetup && !model.busy && model.management.sheet == nil && model.presentation.result == nil && model.presentation.message == nil && !model.presentation.quitPending
+    }
+
+    private var canPresentAutomaticUpdate: Bool {
+        startupWindowReady && scenePhase == .active && model.updates.automaticUpdatePending && !model.updates.working
+            && !model.busy && model.management.sheet == nil && model.presentation.result == nil
+            && model.presentation.message == nil && !model.presentation.quitPending
+    }
+
+    private func checkForUpdatesAutomatically() {
+        guard !model.presentation.quitPending else { return }
+        #if DEBUG
+        guard model.mockWorkspace == nil else { return }
+        #endif
+        model.updates.checkAutomatically()
     }
 
     private func configureMainWindow(_ window: NSWindow) {

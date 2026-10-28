@@ -3387,6 +3387,40 @@
         }
       }
     },
+    "ui.automaticallyCheckForUpdates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically check for updates"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动检查更新"
+          }
+        }
+      }
+    },
+    "ui.automaticallyCheckForUpdatesHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check on launch or when Modu becomes active, at most once a day. Download and install only when you choose."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动或重新激活 Modu 时检查，每天最多一次。下载和安装由你确认。"
+          }
+        }
+      }
+    },
     "ui.back": {
       "extractionState": "manual",
       "localizations": {
@@ -5291,23 +5325,6 @@
         }
       }
     },
-    "ui.installUpdateAndAutomaticallyRestartModuWorkspacesAre": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Install the update and automatically restart Modu. Your workspaces are preserved."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "安装更新后将自动重新启动 Modu，工作区数据会保留。"
-          }
-        }
-      }
-    },
     "ui.installed": {
       "extractionState": "manual",
       "localizations": {
@@ -7140,6 +7157,23 @@
         }
       }
     },
+    "ui.updateAvailableDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose “Install and Restart” to download and install the update, then restart Modu. Your workspaces are preserved."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“安装并重启”后将下载、安装更新并重启 Modu，工作区数据会保留。"
+          }
+        }
+      }
+    },
     "ui.updateFailed": {
       "extractionState": "manual",
       "localizations": {
@@ -7225,19 +7259,19 @@
         }
       }
     },
-    "ui.updateVersionChange": {
+    "ui.updateVersionPrefix": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modu %1$@ → %2$@"
+            "value": "Modu %@ →"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modu %1$@ → %2$@"
+            "value": "Modu %@ →"
           }
         }
       }
