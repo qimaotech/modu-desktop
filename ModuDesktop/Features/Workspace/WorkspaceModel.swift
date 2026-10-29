@@ -34,7 +34,6 @@ final class WorkspaceModel {
     }
     var blocked: String?
     var blockedDetails: String?
-    var waiting = false
     var notice: String?
     var noticeDetails: String?
     var selection: Resource? {
@@ -51,7 +50,8 @@ final class WorkspaceModel {
         }
     }
     private(set) var showsReloadProgress = true
-    private var workspaceLoad: (path: String, generation: Int, task: Task<Void, Never>)?
+    private(set) var isReloading = false
+    private var workspaceLoad: (path: String, generation: Int, maintainingWorkspace: Bool, task: Task<Void, Never>)?
     private var refreshGeneration = 0
     private var defaults: UserDefaults { preferences.defaults }
     private var busy: Bool { operations.busy }
@@ -108,37 +108,38 @@ final class WorkspaceModel {
     }
     func reload() async {
         presentation.completionMessage = nil
-        await reload(afterLoad: nil)
+        await reload(maintainingWorkspace: true, afterLoad: nil)
     }
-    func reload(showProgress: Bool = true, afterLoad: (() -> Void)?) async {
+    func reload(showProgress: Bool = true, maintainingWorkspace: Bool = false, afterLoad: (() -> Void)?) async {
         guard !presentation.quitPending, let path = defaults.string(forKey: "workspace") else { return }
         if let load = workspaceLoad, load.path == path, load.generation == refreshGeneration {
             await load.task.value
-            return
+            guard !Task.isCancelled, !load.task.isCancelled,
+                  maintainingWorkspace, !load.maintainingWorkspace, load.generation == refreshGeneration,
+                  defaults.string(forKey: "workspace") == path, !presentation.quitPending else { return }
         }
         guard !busy else { return }
         let previous = workspaceLoad?.task
         previous?.cancel()
         cancelDetailPreload()
         refreshGeneration += 1; let generation = refreshGeneration
-        waiting = false
         let task = Task(priority: .utility) {
             // Release the previous read's workspace lock before starting another generation.
             await previous?.value
             guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
-            await loadWorkspace(path, generation: generation, showProgress: showProgress, afterLoad: afterLoad)
+            await loadWorkspace(path, generation: generation, showProgress: showProgress, maintainingWorkspace: maintainingWorkspace, afterLoad: afterLoad)
         }
-        workspaceLoad = (path, generation, task)
+        workspaceLoad = (path, generation, maintainingWorkspace, task)
         await task.value
         if workspaceLoad?.generation == generation { workspaceLoad = nil; startDetailPreload() }
     }
-    private func loadWorkspace(_ path: String, generation: Int, showProgress: Bool, afterLoad: (() -> Void)?) async {
+    private func loadWorkspace(_ path: String, generation: Int, showProgress: Bool, maintainingWorkspace: Bool, afterLoad: (() -> Void)?) async {
         do {
             let root = URL(fileURLWithPath: path)
-            guard let record = try await initializeForReload(root, generation: generation, showProgress: showProgress) else { return }
-            guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
+            guard let record = try await recordForReload(root, generation: generation, showProgress: showProgress, maintainingWorkspace: maintainingWorkspace) else { return }
+            guard generation == refreshGeneration, !busy, !Task.isCancelled, !presentation.quitPending else { return }
             if self.record != record { invalidateDetailCache() }
-            self.record = record; blocked = nil
+            self.record = record; blocked = nil; blockedDetails = nil
             let previousSelection = selection
             afterLoad?()
             if let selection, !service.resources(record).contains(selection) { self.selection = nil }
@@ -152,7 +153,6 @@ final class WorkspaceModel {
                 details.cache(snapshot)
             }
             guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
-            if inspection.reasonCode == "workspace-busy" { waiting = true; cancelDetailPreload(); return }
             let resourceIDs = Set(service.resources(record).map(\.id))
             var states = self.states.filter { resourceIDs.contains($0.key) }
             for item in inspection.items {
@@ -161,19 +161,30 @@ final class WorkspaceModel {
             }
             self.states = states
         } catch {
-            guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
-            if (error as? ModuError)?.code == "workspace-busy" { waiting = true; blocked = nil; return }
+            guard generation == refreshGeneration, !busy, !Task.isCancelled, !presentation.quitPending else { return }
+            if (error as? ModuError)?.code == "workspace-lock-timeout", record != nil {
+                presentation.presentMessage(error, title: text.string(.uiWorkspaceDataCouldnTBeLoaded))
+                return
+            }
             invalidateDetailCache()
             record = nil; selection = nil; blocked = text.message(error); blockedDetails = Git.sanitize(error.localizedDescription)
         }
     }
-    private func initializeForReload(_ root: URL, generation: Int, showProgress: Bool) async throws -> WorkspaceRecord? {
+    private func recordForReload(_ root: URL, generation: Int, showProgress: Bool, maintainingWorkspace: Bool) async throws -> WorkspaceRecord? {
         showsReloadProgress = showProgress
-        guard let operationID = operations.begin(.workspace) else { return nil }
+        guard let operationID = operations.begin(.workspace, cancellable: false) else { return nil }
+        isReloading = true
         operations.attach(workspaceLoad?.task, to: operationID)
         defer {
+            isReloading = false
             operations.finish(operationID)
             showsReloadProgress = true
+            if !maintainingWorkspace { presentation.finishQuitIfPossible() }
+        }
+        if !maintainingWorkspace {
+            let record = try await service.read(root)
+            try await service.git.checkRepository(root, main: true)
+            return record
         }
         let report: ProgressHandler = { value in Task { @MainActor [self] in
             guard self.refreshGeneration == generation, self.operations.isCurrent(operationID) else { return }
@@ -222,7 +233,7 @@ final class WorkspaceModel {
         guard token == refreshGeneration else { throw CancellationError() }
         invalidateDetailCache()
         defaults.set(record.root, forKey: "workspace")
-        self.record = record; blocked = nil; waiting = false; notice = nil
+        self.record = record; blocked = nil; notice = nil
         states = [:]
         selection = nil; refreshDetail()
     }
@@ -236,7 +247,7 @@ final class WorkspaceModel {
     }
 
     func startDetailPreload() {
-        guard workspaceLoad == nil, !waiting, !busy, let record else { return }
+        guard workspaceLoad == nil, !busy, !presentation.quitPending, let record else { return }
         details.preload(in: record)
     }
 

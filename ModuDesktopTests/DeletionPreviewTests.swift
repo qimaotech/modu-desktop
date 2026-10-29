@@ -54,7 +54,7 @@ import Testing
         #expect(PathSafety.exists(record.repositoryURL("repo")) && PathSafety.exists(record.memberURL("feature", "repo")))
     }
 
-    @Test func editPreflightDiscardsCancelledRequestsAndReleasesItsLock() async throws {
+    @Test func editPreflightDiscardsCancelledRequestsWithoutHoldingTheWorkspaceLock() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
         #expect(await fixture.service.createGroup("other", repositories: ["repo"], at: fixture.root).status == .success)
@@ -88,6 +88,7 @@ import Testing
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
             while !PathSafety.exists(started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
             try #require(PathSafety.exists(started))
+            let lease = try fixture.service.store.tryLock(fixture.root); lease.unlock()
             switch action {
             case "cancel": model.management.sheet = nil
             case "reopen": model.management.sheet = nil; model.management.sheet = .edit
@@ -123,7 +124,6 @@ import Testing
             }
             #expect(try fixture.service.store.load(fixture.root) == record)
             #expect(PathSafety.exists(record.memberURL("feature", "repo")) && PathSafety.exists(record.memberURL("other", "repo")))
-            let lease = try fixture.service.store.lock(fixture.root); lease.unlock()
             let preload = model.workspace.detailPreloadTask
             model.workspace.record = nil; model.workspace.selection = nil
             await preload?.value
@@ -268,6 +268,7 @@ import Testing
                     try await Task.sleep(for: .milliseconds(20))
                 }
                 try #require(PathSafety.exists(probe.appending(path: "started")))
+                let lease = try service.store.tryLock(fixture.root); lease.unlock()
                 switch action {
                 case "cancel": model.management.sheet = nil
                 case "replace": model.management.prepareDelete(.member(group: "feature", repo: "repo"))
@@ -284,7 +285,6 @@ import Testing
                 #expect(!model.management.deletionLoading && model.management.formError == nil && model.presentation.message == nil)
                 if action == "cancel" || action == "workspace" {
                     #expect(model.management.sheet == nil && model.management.deletion.isEmpty && !model.management.canConfirmDelete)
-                    let lease = try service.store.lock(fixture.root); lease.unlock()
                 } else {
                     #expect(model.management.sheet == .delete && model.management.canConfirmDelete)
                     let expected: [Resource] = action == "replace" || action == "reopen" ? [.member("feature", "repo")] : [.member("feature", "repo"), .group("feature")]

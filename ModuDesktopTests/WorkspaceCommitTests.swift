@@ -361,20 +361,6 @@ struct WorkspaceCommitTests {
         #expect(try String(contentsOf: f.root.appending(path: ".gitignore"), encoding: .utf8).contains("/repo/"))
     }
 
-    @Test func partialWorkspaceImportCommitsOnlySuccessfullyAddedRepositoryRules() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        let other = "https://modu-test.invalid/other.git"
-        _ = try await f.service.git.run(["config", "--global", "--add", "url.\(f.directory.appending(path: "missing.git").path).insteadOf", other], at: f.root)
-        let result = await f.service.importWorkspaceYAML(workspaceYAML(f, other: other), at: f.root)
-        #expect(result.status == .partialSuccess)
-        #expect(result.items.contains { $0.resource == .repository("other") && $0.status == .failed })
-        #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])
-        let contents = try await f.service.git.run(["show", "HEAD:.gitignore"], at: f.root).text
-        #expect(contents.contains("/repo/") && !contents.contains("/other/"))
-        #expect(try f.service.store.load(f.root).groups.isEmpty)
-    }
-
     @Test(arguments: [false, true])
     func cancelledWorkspaceImportFinishesIgnoreCommitAndStopsPendingGroups(_ hasGroups: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }

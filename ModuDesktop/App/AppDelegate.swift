@@ -48,6 +48,10 @@ import Observation
         if terminationTask != nil { return .terminateCancel }
         if let model, model.busy {
             if model.updates.restartPending || model.relaunch.restartPending { model.presentation.quitPending = true }
+            if model.workspace.isReloading {
+                model.presentation.quitPending = true
+                return .terminateCancel
+            }
             guard model.operations.canCancel || model.cancelling else { return .terminateCancel }
             model.presentation.quitPending = true; model.cancel()
             return .terminateCancel

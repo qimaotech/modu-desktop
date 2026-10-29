@@ -21,19 +21,21 @@ extension WorkspaceService {
     private func changeGroup(_ name: String, repositories: [String], root: URL, replace: Bool, authorization: [DeletionTarget]?, progress: ProgressHandler) async -> OperationResult {
         let command = replace ? "worktree.update" : "worktree.create"
         var result = OperationResult(command: command, workspace: root.path)
+        if replace, authorization == nil {
+            let preview = await editGroupPreview(name, repositories: repositories, at: root)
+            guard preview.status == .success else { return preview }
+        }
         do {
-            let lease = try store.lock(root); defer { lease.unlock() }
+            let lease = try await store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
             try await validateMembers(name, repositories: repositories, record: record)
             if replace && record.groups[name] == nil { throw ModuError("target-not-configured", .groupIsNotConfigured) }
             if !replace && repositories.isEmpty { throw ModuError("invalid-input", .chooseAtLeastOneRepository) }
             let existing = record.groups[name]?.repositories ?? []
             let removals = replace ? existing.filter { !repositories.contains($0) }.map { Resource.member(name, $0) } : []
-            let deletion = try await deletionTargets(removals, record: record, readRisks: authorization == nil)
-            if !deletion.isEmpty {
-                guard let authorization else { result.status = .confirmationRequired; result.reasonCode = "confirmation-required"; result.plan = deletion; return result }
-                try verifyAuthorization(authorization, actual: deletion)
-            }
+            guard removals.isEmpty || authorization != nil else { throw ModuError("confirmation-changed", .deletionTargetsOrCheckedOutBranchesChangedNothing) }
+            let deletion = try await deletionTargets(removals, record: record, readRisks: false)
+            if !deletion.isEmpty, let authorization { try verifyAuthorization(authorization, actual: deletion) }
             let additions = repositories.filter { !existing.contains($0) }
             if !replace {
                 for repo in repositories where existing.contains(repo) { _ = try await checked(.member(name, repo), in: record) }
@@ -222,12 +224,12 @@ extension WorkspaceService {
 extension WorkspaceService {
     public func editGroupPreview(_ name: String, repositories: [String], at root: URL) async -> OperationResult {
         do {
-            let lease = try store.lock(root); defer { lease.unlock() }
-            let record = try store.load(root)
-            try await validateMembers(name, repositories: repositories, record: record)
+            let record = try await read(root)
+            let reader = inspectionService(for: .localOnly)
+            try await reader.validateMembers(name, repositories: repositories, record: record)
             guard let group = record.groups[name] else { throw ModuError("target-not-configured", .groupIsNotConfigured) }
             let removals = group.repositories.filter { !repositories.contains($0) }.map { Resource.member(name, $0) }
-            let targets = try await deletionTargets(removals, record: record)
+            let targets = try await reader.deletionTargets(removals, record: record)
             var result = OperationResult(command: "worktree.update", workspace: root.path, status: targets.isEmpty ? .success : .confirmationRequired)
             result.plan = targets; return result
         } catch { return .init(command: "worktree.update", workspace: root.path, status: .failed, error: .wrap(error)) }

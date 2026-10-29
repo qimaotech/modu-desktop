@@ -114,7 +114,7 @@ struct FailureTests {
             #expect(result.items.last?.reasonCode == "not-processed")
             #expect(!PathSafety.exists(record.repositoryURL("later")))
         }
-        let lease = try f.service.store.lock(f.root); lease.unlock()
+        let lease = try f.service.store.tryLock(f.root); lease.unlock()
     }
 
     @Test func invalidRepositoryInputIsRejectedBeforeWorkspaceOrGitAccess() async throws {

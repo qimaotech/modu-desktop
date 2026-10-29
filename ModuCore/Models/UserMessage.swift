@@ -19,6 +19,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case remoteDefaultBranchIsInvalid
     case repositoryRemoteMustResolveLocalPathInsideTemporary(String)
     case repositoryDirectoryIsMissing
+    case repositoryChangedDuringUpdate
     case workingTreeHasChanges
     case detachedHEAD
     case couldNotReadCurrentBranch
@@ -180,6 +181,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case installed
     case workspaceIsInUseByAnotherModuOperation
     case couldNotAcquireWorkspaceLock
+    case workspaceLockTimedOut
     case mainRepositoryWillBeMovedTrash
     case onlyRepositoryDeclarationWillBeRemoved
     case workingTreeIsClean
@@ -214,6 +216,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .remoteDefaultBranchIsInvalid: return "Remote default branch is invalid."
         case .repositoryRemoteMustResolveLocalPathInsideTemporary(let arg1): return "Repository remote must resolve to a local path inside the temporary directory: \(arg1)"
         case .repositoryDirectoryIsMissing: return "Repository directory is missing."
+        case .repositoryChangedDuringUpdate: return "The repository changed or became unavailable during the update. Completed effects were kept. Review its current state and retry."
         case .workingTreeHasChanges: return "Working tree has changes."
         case .detachedHEAD: return "Detached HEAD."
         case .couldNotReadCurrentBranch: return "Could not read the current branch."
@@ -375,6 +378,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .installed: return "Installed"
         case .workspaceIsInUseByAnotherModuOperation: return "This workspace is in use by another Modu operation."
         case .couldNotAcquireWorkspaceLock: return "Could not acquire workspace lock."
+        case .workspaceLockTimedOut: return "Timed out acquiring the workspace lock after 10 retries. Try again after the other Modu operation finishes."
         case .mainRepositoryWillBeMovedTrash: return "Main repository will be moved to Trash."
         case .onlyRepositoryDeclarationWillBeRemoved: return "Only the repository declaration will be removed."
         case .workingTreeIsClean: return "Working tree is clean."

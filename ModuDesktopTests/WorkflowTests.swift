@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import ModuCore
 
@@ -250,7 +251,82 @@ struct WorkflowTests {
         #expect(try f.service.store.load(f.root).repositories == [.init(url: f.remoteURL)])
     }
 
-    @Test(arguments: ["workspace", "repo", "worktree"])
+    @Test func cliWorkspaceTreeUsesThePhysicalHierarchyAndReadOnlyQueries() async throws {
+        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
+        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        let record = try f.service.store.load(f.root)
+        _ = try await f.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: record.repositoryURL("repo"))
+        let original = try Data(contentsOf: f.service.store.recordURL(f.root))
+        let trace = f.directory.appending(path: "tree-trace")
+        let arguments = ["workspace", "inspect", "--workspace", f.root.path]
+        let plain = try await runCLI(arguments, in: f, environment: ["GIT_TRACE": trace.path])
+        #expect(plain.status == 0)
+        #expect(plain.text == """
+        \(PathSafety.canonical(f.root).path)/
+        |-- repositories/
+        |   `-- repo/
+        `-- worktrees/
+            `-- feature/
+                `-- repo/
+        """)
+        let json = try await runCLI(arguments + ["--json"], in: f, environment: ["GIT_TRACE": trace.path])
+        #expect(json.status == 0)
+        let tree = try JSONDecoder().decode(WorkspaceTreeNode.self, from: json.stdout)
+        #expect(tree.children?.first?.children?.first?.path == "repo")
+        let document = try #require(JSONSerialization.jsonObject(with: json.stdout) as? [String: Any])
+        #expect(Set(document.keys) == ["type", "path", "children"])
+        #expect(document["type"] as? String == "workspace")
+        let children = try #require(document["children"] as? [[String: Any]])
+        let repositories = try #require(children.first?["children"] as? [[String: Any]])
+        #expect(repositories.first?["type"] as? String == "main-worktree")
+        #expect(repositories.first?["children"] is NSNull)
+        let commands = try String(contentsOf: trace, encoding: .utf8)
+        #expect(!commands.contains("built-in: git fetch ") && !commands.contains("built-in: git status "))
+        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == original)
+    }
+
+    @Test func cliWorkspaceTreeCancellationReturnsOnlyTheFailureDocument() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let fifo = f.directory.appending(path: "tree-config-gate")
+        try #require(fifo.path.withCString { mkfifo($0, 0o600) } == 0)
+        _ = try await f.service.git.run(["config", "--add", "include.path", fifo.path], at: f.root)
+        let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
+        var runner = f.service.git.runner
+        runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = f.service.store.support.path
+        let controller = """
+        import os, signal, subprocess, sys, time
+        process = subprocess.Popen([sys.argv[1], 'workspace', 'inspect', '--json', '--workspace', sys.argv[2]])
+        descriptor = None
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                try:
+                    descriptor = os.open(sys.argv[3], os.O_WRONLY | os.O_NONBLOCK)
+                    break
+                except OSError:
+                    if process.poll() is not None:
+                        raise RuntimeError('CLI exited before reading the Git configuration')
+                    time.sleep(0.01)
+            if descriptor is None:
+                raise RuntimeError('CLI did not reach the Git configuration gate')
+            os.kill(process.pid, signal.SIGINT)
+            status = process.wait(timeout=5)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        sys.exit(status)
+        """
+        let output = try await runner.run("/usr/bin/python3", ["-c", controller, executable.path, f.root.path, fifo.path], at: f.directory)
+        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+        #expect(output.status == 130 && result.status == .cancelled && result.reasonCode == "cancelled")
+        #expect(result.command == "workspace.inspect" && result.items.isEmpty)
+    }
+
+    @Test(arguments: ["repo", "worktree"])
     func cliInspectionCancellationReturnsExitCode130(_ command: String) async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
@@ -364,16 +440,31 @@ struct WorkflowTests {
         try f.service.store.save(saved)
     }
 
-    @Test(arguments: ["empty", "invalid-record", "missing-root", "busy"])
+    @Test(arguments: ["workspace", "repo", "worktree"])
+    func cliQueriesDoNotWaitForTheWorkspaceLock(_ command: String) async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let lease = try f.service.store.tryLock(f.root)
+        defer { lease.unlock() }
+        let operation = command == "workspace" ? "inspect" : "list"
+        let output = try await runCLI([command, operation, "--json", "--workspace", f.root.path], in: f)
+        #expect(output.status == 0)
+        if command == "workspace" {
+            let tree = try JSONDecoder().decode(WorkspaceTreeNode.self, from: output.stdout)
+            #expect(tree.path == PathSafety.canonical(f.root).path)
+        } else {
+            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(result.status == .success && result.command == "\(command).list")
+        }
+    }
+
+    @Test(arguments: ["empty", "invalid-record", "missing-root"])
     func cliListsKeepRequestErrorsAndHealthyEmptyResults(_ kind: String) async throws {
         let f = try await Fixture(createRemote: false); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)
-        var lease: WorkspaceLock?
-        defer { lease?.unlock() }
         switch kind {
         case "invalid-record": try Data("invalid".utf8).write(to: f.service.store.recordURL(f.root))
         case "missing-root": try FileManager.default.removeItem(at: f.root)
-        case "busy": lease = try f.service.store.lock(f.root)
         default: break
         }
         for command in ["repo", "worktree"] {
@@ -384,8 +475,8 @@ struct WorkflowTests {
                 #expect(output.status == 0 && result.status == .success)
                 #expect(result.reasonCode == nil && result.message == nil)
             } else {
-                #expect(output.status == (kind == "busy" ? 1 : 2) && result.status == .failed)
-                let reason = kind == "busy" ? "workspace-busy" : kind == "missing-root" ? "workspace-not-found" : "invalid-configuration"
+                #expect(output.status == 2 && result.status == .failed)
+                let reason = kind == "missing-root" ? "workspace-not-found" : "invalid-configuration"
                 #expect(result.reasonCode == reason && result.message != nil)
             }
         }

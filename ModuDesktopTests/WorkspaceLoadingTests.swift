@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin
 import Testing
 import SwiftUI
 @testable import ModuCore
@@ -44,7 +45,7 @@ import SwiftUI
 
     }
 
-    @Test func explicitAndImplicitReloadsShareInitializationWithoutExtraCommits() async throws {
+    @Test func activationReadsWithoutMaintenanceAndExplicitReloadStillRepairs() async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -52,21 +53,88 @@ import SwiftUI
         try FileManager.default.removeItem(at: fixture.root)
         try FileManager.default.createDirectory(at: fixture.root, withIntermediateDirectories: false)
         await model.activate()
-        #expect(PathSafety.exists(fixture.root.appending(path: ".git")))
-        #expect(PathSafety.exists(fixture.root.appending(path: ".gitignore")))
-        let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
+        #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
+        #expect(!PathSafety.exists(fixture.root.appending(path: ".gitignore")))
+        #expect(model.workspace.blocked != nil && model.presentation.result == nil)
 
+        await model.workspace.reload()
+        let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
+        let skill = fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")
+        try Data("user edit".utf8).write(to: skill)
         var record = try #require(model.workspace.record)
         record.groups["missing"] = WorktreeGroup()
         try fixture.service.store.save(record)
-        let refreshing = Task { await model.activate() }
-        try await waitForReadLock(fixture)
-        await model.workspace.reload()
-        await refreshing.value
-        #expect(model.workspace.record?.groups.isEmpty == true)
-        #expect(model.workspace.blocked == nil && model.presentation.result == nil && !model.workspace.waiting)
-        #expect(PathSafety.exists(fixture.root.appending(path: ".git")))
+        let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
+        await model.activate()
+        #expect(model.workspace.record == record)
+        #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
+        #expect(try String(contentsOf: skill, encoding: .utf8) == "user edit")
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
+    }
+
+    @Test func queuedMaintenanceReloadIgnoresCancellationAndCompletesAfterActivation() async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        await model.workspace.reload()
+        await model.workspace.detailPreloadTask?.value
+        let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
+        var record = try fixture.service.store.load(fixture.root)
+        record.groups["missing"] = WorktreeGroup()
+        try fixture.service.store.save(record)
+        let skill = fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")
+        let installedSkill = try Data(contentsOf: skill)
+        try Data("user edit".utf8).write(to: skill)
+        var gate = try ReloadValidationGate(fixture.root)
+        defer { try? gate.resume() }
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
+        let refreshing = Task { await model.activate() }
+        var maintaining: Task<Void, Never>?
+        do {
+            try await gate.waitUntilStarted()
+            let refreshingOperation = try #require(model.operation)
+            #expect(model.busy && model.openingWorkspace && !model.operations.canCancel)
+            model.cancel()
+            #expect(!model.cancelling && !refreshingOperation.isCancelled)
+            var maintenanceRequested = false
+            maintaining = Task {
+                maintenanceRequested = true
+                await model.workspace.reload()
+            }
+            while !maintenanceRequested { await Task.yield() }
+            model.cancel()
+            #expect(!model.cancelling && !refreshing.isCancelled && maintaining?.isCancelled == false)
+            #expect(try fixture.service.store.load(fixture.root).groups["missing"] != nil)
+            #expect(try String(contentsOf: skill, encoding: .utf8) == "user edit")
+
+            try gate.resume()
+            await refreshing.value
+            try await waitForWorkspaceOperation(model)
+            let operation = try #require(model.operation)
+            #expect(!model.operations.canCancel)
+            model.cancel()
+            await Task.yield()
+            #expect(model.busy && model.openingWorkspace && !model.cancelling && !operation.isCancelled)
+            lease.unlock()
+            await maintaining?.value
+            await model.workspace.detailPreloadTask?.value
+
+            #expect(!model.busy && model.operation == nil)
+            #expect(model.workspace.record?.groups.isEmpty == true)
+            #expect(try fixture.service.store.load(fixture.root).groups.isEmpty)
+            #expect(try Data(contentsOf: skill) == installedSkill)
+            #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
+            #expect(model.workspace.blocked == nil && model.presentation.result == nil && model.presentation.message == nil)
+        } catch {
+            try? gate.resume()
+            lease.unlock()
+            await refreshing.value
+            await maintaining?.value
+            await model.workspace.detailPreloadTask?.value
+            throw error
+        }
     }
 
     @Test(arguments: [false, true])
@@ -87,8 +155,10 @@ import SwiftUI
         var record = try #require(model.workspace.record)
         record.groups["missing"] = WorktreeGroup()
         try fixture.service.store.save(record)
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
         let refresh = Task { await model.activate() }
-        try await waitForReadLock(fixture)
+        try await waitForWorkspaceOperation(model)
         #expect(model.busy && model.openingWorkspace)
         #expect(presentation.wrappedValue)
         #expect(model.presentation.result?.reasonCode == "workspace-not-empty" && model.presentation.resultHost == .settings)
@@ -96,12 +166,13 @@ import SwiftUI
             presentation.wrappedValue = false
             #expect(!presentation.wrappedValue && model.presentation.result == nil)
         }
+        lease.unlock()
         await refresh.value
 
         #expect(!model.busy && !model.openingWorkspace)
         #expect(presentation.wrappedValue == !dismissDuringReload)
-        #expect(model.workspace.record?.groups.isEmpty == true)
-        #expect(try fixture.service.store.load(fixture.root).groups.isEmpty)
+        #expect(model.workspace.record?.groups["missing"] != nil)
+        #expect(try fixture.service.store.load(fixture.root).groups["missing"] != nil)
         #expect(try String(contentsOf: file, encoding: .utf8) == "keep me")
         if !dismissDuringReload {
             #expect(model.presentation.result?.reasonCode == "workspace-not-empty" && model.presentation.resultHost == .settings)
@@ -131,8 +202,7 @@ import SwiftUI
         else { #expect(try Data(contentsOf: file) == Data("broken".utf8)) }
     }
 
-    @Test(arguments: [false, true])
-    func reloadInitializationFailureReportsRetainedEffectsAndCanRetry(_ implicit: Bool) async throws {
+    @Test func reloadInitializationFailureReportsRetainedEffectsAndCanRetry() async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -140,7 +210,7 @@ import SwiftUI
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
         _ = try await fixture.service.git.run(["config", "commit.gpgSign", "true"], at: fixture.root)
         _ = try await fixture.service.git.run(["config", "gpg.program", "/usr/bin/false"], at: fixture.root)
-        if implicit { await model.activate() } else { await model.workspace.reload() }
+        await model.workspace.reload()
         #expect(model.workspace.record == nil && model.workspace.blocked != nil && !model.busy)
         #expect(model.presentation.result?.items.first?.reasonCode == "workspace-commit-failed")
         #expect(model.presentation.result?.items.first?.effects.contains { $0.action == "install-skill" } == true)
@@ -149,7 +219,7 @@ import SwiftUI
 
         _ = try await fixture.service.git.run(["config", "commit.gpgSign", "false"], at: fixture.root)
         model.presentation.dismissResult()
-        if implicit { await model.activate() } else { await model.workspace.reload() }
+        await model.workspace.reload()
         #expect(model.workspace.record != nil && model.workspace.blocked == nil && model.presentation.result == nil)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) != head)
         #expect(try await fixture.service.git.changes(at: fixture.root).isEmpty)
@@ -405,7 +475,7 @@ import SwiftUI
         }
         if kind == "invalid-record" { try Data("invalid".utf8).write(to: fixture.service.store.recordURL(fixture.root)) }
         if kind == "missing-root" { try FileManager.default.removeItem(at: fixture.root) }
-        let lease = kind == "busy" ? try fixture.service.store.lock(fixture.root) : nil
+        let lease = kind == "busy" ? try fixture.service.store.tryLock(fixture.root) : nil
         defer { lease?.unlock() }
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
         let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: try makeInstaller(fixture))
@@ -519,7 +589,8 @@ import SwiftUI
         #expect(inspection.status == .success && inspection.items.allSatisfy { $0.resource.repo == nil })
     }
 
-    @Test func workspaceEntryPointsPersistMissingResourceCleanup() async throws {
+    @Test(arguments: ["open", "inspect", "tree", "repo", "worktree", "export"])
+    func onlyMaintenanceRemovesMissingResourceRecords(_ entry: String) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
@@ -527,23 +598,32 @@ import SwiftUI
         var record = empty
         record.repositories = [.init(url: fixture.remoteURL)]
         record.groups["feature"] = WorktreeGroup(repositories: ["repo"])
-        for entry in ["open", "inspect", "cli"] {
-            try fixture.service.store.save(record)
-            switch entry {
-            case "open":
-                let opened = await fixture.service.openWorkspaceWithRecord(fixture.root)
-                #expect(opened.result.status == .success && opened.record == empty)
-            case "inspect": #expect(await fixture.service.inspect(fixture.root).status == .success)
-            default:
-                let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
-                var runner = fixture.service.git.runner
-                runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = fixture.service.store.support.path
-                let output = try await runner.run(executable.path, ["repo", "list", "--json", "--workspace", fixture.root.path])
-                #expect(output.status == 0)
-                #expect(try JSONDecoder().decode(OperationResult.self, from: output.stdout).items.isEmpty)
-            }
-            #expect(try fixture.service.store.load(fixture.root) == empty)
+        try fixture.service.store.save(record)
+        let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
+        switch entry {
+        case "open":
+            let opened = await fixture.service.openWorkspaceWithRecord(fixture.root)
+            #expect(opened.result.status == .success && opened.record == empty)
+        case "inspect":
+            let inspected = await fixture.service.inspect(fixture.root)
+            #expect(inspected.status == .partialSuccess && inspected.items.count == 4)
+        case "tree":
+            let tree = try await fixture.service.workspaceTree(fixture.root)
+            #expect(tree.children?.allSatisfy { $0.children == [] } == true)
+        case "export":
+            let yaml = try await fixture.service.exportYAML(at: fixture.root)
+            #expect(yaml.contains(fixture.remoteURL) && yaml.contains("feature"))
+        default:
+            let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
+            var runner = fixture.service.git.runner
+            runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = fixture.service.store.support.path
+            let output = try await runner.run(executable.path, [entry, "list", "--json", "--workspace", fixture.root.path])
+            let inspected = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(output.status == 1 && inspected.status == .failed)
+            #expect(inspected.items.contains { $0.status == .failed })
         }
+        if entry == "open" { #expect(try fixture.service.store.load(fixture.root) == empty) }
+        else { #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original) }
     }
 
     @Test(arguments: ["git", "file", "symlink", "permissions"])
@@ -627,7 +707,7 @@ import SwiftUI
         #expect(reopened.workspace.record?.rootURL.path == PathSafety.canonical(nextRoot).path && reopened.presentation.result == nil)
         #expect(reopened.workspace.expandedGroups.isEmpty)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
-        #expect(try fixture.service.store.locate(explicit: fixture.root.path, cwd: fixture.root).path == PathSafety.canonical(fixture.root).path)
+        #expect(try await fixture.service.store.locate(explicit: fixture.root.path, cwd: fixture.root).path == PathSafety.canonical(fixture.root).path)
         #expect(reopened.defaults.object(forKey: "sidebar.\(saved.root).repositoriesExpanded") as? Bool == false)
 
         reopened.changeWorkspace(fixture.root)
@@ -641,7 +721,7 @@ import SwiftUI
         #expect(PathSafety.exists(fixture.service.store.recordURL(nextRoot)))
         #expect(reopened.defaults.string(forKey: "appLanguage") == "zh_CN")
         #expect(reopened.defaults.string(forKey: "tool.Agent") == "codex")
-        #expect(try fixture.service.store.locate(explicit: nil, cwd: fixture.root.appending(path: "worktrees/feature/repo")).path == PathSafety.canonical(fixture.root).path)
+        #expect(try await fixture.service.store.locate(explicit: nil, cwd: fixture.root.appending(path: "worktrees/feature/repo")).path == PathSafety.canonical(fixture.root).path)
         #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")))
     }
 
@@ -653,7 +733,7 @@ import SwiftUI
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let history = fixture.directory.appending(path: "history")
         try fixture.service.store.save(WorkspaceRecord(root: PathSafety.canonical(history).path))
-        let lease = try fixture.service.store.lock(history)
+        let lease = try fixture.service.store.tryLock(history)
         defer { lease.unlock() }
         let historyRecord = try Data(contentsOf: fixture.service.store.recordURL(history))
         let next = fixture.directory.appending(path: "next")
@@ -685,7 +765,7 @@ import SwiftUI
         #expect(model.defaults.string(forKey: "workspace") == original.root)
         let opening = try #require(model.operation)
         if !cancellable {
-            model.cancel(); model.requestReload()
+            model.cancel(); model.cancel()
             let delegate = AppDelegate()
             delegate.model = model
             #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
@@ -726,7 +806,7 @@ import SwiftUI
         let next = fixture.directory.appending(path: "locked")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
         #expect(await fixture.service.openWorkspace(next).status == .success)
-        let lease = try fixture.service.store.lock(next)
+        let lease = try fixture.service.store.tryLock(next)
         let nested = fixture.root.appending(path: "nested")
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
         for target in [next, nested, fixture.directory.appending(path: "missing")] {
@@ -815,42 +895,77 @@ import SwiftUI
 
         #expect(model.workspace.record == next)
         #expect(model.workspace.blocked == nil)
-        #expect(!model.workspace.waiting)
     }
 
-    @Test func lockContentionCanRetryAndDoesNotBecomeAMissingWorkspace() async throws {
+    @Test(arguments: [false, true])
+    func lockTimeoutReportsAnErrorAndKeepsTheCurrentWorkspace(_ alreadyLoaded: Bool) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
-        let record = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
-        try fixture.service.store.save(record)
-        let suite = "ModuLoadingTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = AppModel(defaults: defaults, service: fixture.service)
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let record = try #require(model.workspace.record)
+        if !alreadyLoaded { model.workspace.record = nil }
+        let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
         await model.workspace.reload()
-        #expect(!model.hasSavedWorkspace)
-        #expect(model.workspace.blocked == nil && !model.workspace.waiting)
-
-        defaults.set(record.root, forKey: "workspace")
-        let lease = try fixture.service.store.lock(fixture.root)
-        await model.workspace.reload()
-        #expect(model.hasSavedWorkspace && model.workspace.waiting)
-        #expect(model.workspace.record == nil && model.workspace.blocked == nil)
+        #expect(!model.busy && model.hasSavedWorkspace)
+        #expect(model.workspace.record == (alreadyLoaded ? record : nil))
+        if alreadyLoaded {
+            #expect(model.workspace.blocked == nil && model.presentation.message != nil)
+        } else {
+            #expect(model.workspace.blocked != nil && model.workspace.blockedDetails?.contains("10 retries") == true)
+        }
+        #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
         lease.unlock()
 
         await model.workspace.reload()
-        #expect(model.workspace.record == record)
-        #expect(!model.workspace.waiting && model.workspace.blocked == nil)
-        let nextLease = try fixture.service.store.lock(fixture.root)
-        await model.workspace.reload()
-        #expect(model.workspace.record == record)
-        #expect(model.workspace.blocked == nil)
-        nextLease.unlock()
-
+        #expect(model.workspace.record == record && model.workspace.blocked == nil)
         try FileManager.default.removeItem(at: fixture.service.store.recordURL(fixture.root))
         await model.workspace.reload()
         #expect(model.workspace.record == nil && model.workspace.blocked != nil)
-        #expect(!model.workspace.waiting)
+    }
+
+    @Test func reloadingWhileWaitingForTheLockIgnoresCancellationAndDefersQuit() async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let record = model.workspace.record
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
+        let refresh = Task { await model.workspace.reload() }
+        do {
+            try await waitForWorkspaceOperation(model)
+            let operation = try #require(model.operation)
+            #expect(!model.operations.canCancel)
+            model.cancel()
+            let delegate = AppDelegate()
+            delegate.model = model
+            #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
+            await Task.yield()
+            #expect(model.busy && model.openingWorkspace && !model.cancelling && !operation.isCancelled)
+            #expect(model.presentation.quitPending)
+            model.presentation.quitPending = false
+            lease.unlock()
+            await refresh.value
+            await model.workspace.detailPreloadTask?.value
+        } catch {
+            model.presentation.quitPending = false
+            lease.unlock()
+            await refresh.value
+            await model.workspace.detailPreloadTask?.value
+            throw error
+        }
+        #expect(!model.busy && model.operation == nil)
+        #expect(model.workspace.record == record && model.workspace.blocked == nil)
+        #expect(model.presentation.result == nil && model.presentation.message == nil)
+    }
+
+    private func waitForWorkspaceOperation(_ model: AppModel) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !model.busy, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(1)) }
+        try #require(model.busy && model.openingWorkspace)
     }
 
     private func makeModel(_ fixture: Fixture) async throws -> AppModel {
@@ -880,10 +995,53 @@ import SwiftUI
     private func waitForReadLock(_ fixture: Fixture) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while ContinuousClock.now < deadline {
-            do { let lease = try fixture.service.store.lock(fixture.root); lease.unlock() }
+            do { let lease = try fixture.service.store.tryLock(fixture.root); lease.unlock() }
             catch let error as ModuError where error.code == "workspace-busy" { return }
             try await Task.sleep(for: .milliseconds(1))
         }
         throw ModuError("test-timeout", "Workspace reload did not acquire its read lock.")
+    }
+}
+
+@MainActor private struct ReloadValidationGate {
+    private let config: URL
+    private let original: Data
+    private var writer: Int32 = -1
+    private var restored = false
+
+    init(_ root: URL) throws {
+        config = root.appending(path: ".git/config")
+        original = try Data(contentsOf: config)
+        try FileManager.default.removeItem(at: config)
+        guard mkfifo(config.path, 0o600) == 0 else {
+            try original.write(to: config, options: .atomic)
+            throw ModuError("test-gate", "Could not pause Git repository validation.")
+        }
+    }
+
+    mutating func waitUntilStarted() async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while writer < 0, ContinuousClock.now < deadline {
+            writer = Darwin.open(config.path, O_WRONLY | O_NONBLOCK)
+            if writer < 0 { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        try #require(writer >= 0)
+    }
+
+    mutating func resume() throws {
+        guard !restored else { return }
+        if writer < 0 { writer = Darwin.open(config.path, O_RDWR | O_NONBLOCK) }
+        defer {
+            if writer >= 0 { close(writer) }
+            writer = -1
+        }
+        try FileManager.default.removeItem(at: config)
+        try original.write(to: config, options: .atomic)
+        restored = true
+        if writer >= 0 {
+            _ = fcntl(writer, F_SETNOSIGPIPE, 1)
+            let written = original.withUnsafeBytes { Darwin.write(writer, $0.baseAddress, $0.count) }
+            guard written == original.count else { throw ModuError("test-gate", "Could not resume Git repository validation.") }
+        }
     }
 }

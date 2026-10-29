@@ -38,3 +38,31 @@ func finish(_ value: OperationResult, json: Bool) -> Never {
     }
     exit(result.exitCode)
 }
+
+func finish(_ tree: WorkspaceTreeNode, json: Bool) throws -> Never {
+    let output: Data
+    if json {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        var encoded = try encoder.encode(tree)
+        encoded.append(10)
+        output = encoded
+    } else {
+        var lines = [directoryLabel(tree.path)]
+        appendTreeChildren(tree.children, prefix: "", to: &lines)
+        output = Data((lines.joined(separator: "\n") + "\n").utf8)
+    }
+    guard !Task.isCancelled else { throw ModuError("cancelled", .operationCancelled) }
+    FileHandle.standardOutput.write(output)
+    exit(0)
+}
+
+private func appendTreeChildren(_ children: [WorkspaceTreeNode]?, prefix: String, to lines: inout [String]) {
+    guard let children else { return }
+    for (index, child) in children.enumerated() {
+        let last = index == children.count - 1
+        lines.append(prefix + (last ? "`-- " : "|-- ") + directoryLabel(child.path))
+        appendTreeChildren(child.children, prefix: prefix + (last ? "    " : "|   "), to: &lines)
+    }
+}
+
+private func directoryLabel(_ path: String) -> String { path.hasSuffix("/") ? path : path + "/" }

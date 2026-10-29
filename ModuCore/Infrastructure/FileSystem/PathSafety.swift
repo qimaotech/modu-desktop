@@ -50,11 +50,12 @@ public enum PathSafety {
         }
         return current
     }
-    public static func emptyResourceDirectories(_ root: URL) throws {
+    public static func emptyResourceDirectories(_ root: URL, excluding excluded: [URL] = []) throws {
+        let excludedPaths = Set(excluded.map { $0.standardizedFileURL.path })
         for name in ["repositories", "worktrees"] {
             let url = root.appending(path: name)
             try directory(url, allowMissing: true)
-            if exists(url), try !FileManager.default.contentsOfDirectory(atPath: url.path).isEmpty {
+            if exists(url), try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil).contains(where: { !excludedPaths.contains($0.standardizedFileURL.path) }) {
                 throw ModuError("workspace-not-empty", .chooseFolderWithEmptyRepositoriesAndWorktrees(url.path))
             }
         }

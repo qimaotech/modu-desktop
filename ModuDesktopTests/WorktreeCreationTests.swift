@@ -31,7 +31,7 @@ struct WorktreeCreationTests {
             #expect(item.effects.contains { $0.action == "create-branch" && $0.target == "feature" && $0.state == "reverted" })
         }
         #expect(!item.effects.contains { $0.state == "unknown" })
-        let lease = try f.service.store.lock(f.root); lease.unlock()
+        let lease = try f.service.store.tryLock(f.root); lease.unlock()
     }
 
     @Test(arguments: ["root", "member"])

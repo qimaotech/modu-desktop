@@ -20,11 +20,13 @@ struct ContentView: View {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
                         Text(model.presentation.repositoryUpdateProgressText).monospacedDigit()
-                        Button { model.cancel() } label: { DesignIcon(name: "Cancel", size: 20) }
-                            .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
-                            .disabled(!model.operations.canCancel)
-                            .help(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
-                            .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
+                        if model.operations.canCancel || model.cancelling {
+                            Button { model.cancel() } label: { DesignIcon(name: "Cancel", size: 20) }
+                                .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
+                                .disabled(!model.operations.canCancel)
+                                .help(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
+                                .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
+                        }
                     }
                 } else if let completion = model.presentation.completionMessage {
                     Label(completion, systemImage: "checkmark.circle")
@@ -59,22 +61,13 @@ struct ContentView: View {
                 Label(model.text.string(.uiWorkspaceDataCouldnTBeLoaded), systemImage: "exclamationmark.triangle")
             } description: { IssueDescriptionView(message: blocked, details: model.workspace.blockedDetails, text: model.text) } actions: {
                 Button(model.text.string(.uiReload)) { Task { await model.workspace.reload() } }
+                    .disabled(model.busy)
                 Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") }
                 Button(model.text.string(.uiQuit)) { NSApp.terminate(nil) }
             }
         } else if model.workspace.record == nil, model.hasSavedWorkspace {
-            if model.workspace.waiting {
-                ContentUnavailableView {
-                    Label(model.text.string(.uiWorkspaceIsBusy), systemImage: "clock")
-                } description: {
-                    Text(model.text.string(.uiWorkspaceIsInUseReloadShortly))
-                } actions: {
-                    Button(model.text.string(.uiReload)) { model.requestReload() }
-                }
-            } else {
-                Color.clear.accessibilityElement()
-                    .accessibilityLabel(model.text.string(.uiLoadingWorkspace))
-            }
+            Color.clear.accessibilityElement()
+                .accessibilityLabel(model.text.string(.uiLoadingWorkspace))
         } else if model.workspace.record == nil {
             ContentUnavailableView { Label(model.text.string(.uiNoWorkspaceSelected), systemImage: "folder") } actions: { Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") } }
         } else if model.workspace.selection == nil {

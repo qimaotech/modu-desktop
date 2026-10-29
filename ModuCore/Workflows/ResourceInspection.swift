@@ -1,16 +1,27 @@
 import Foundation
 
+public enum InspectionPolicy: Sendable {
+    case localOnly, refreshMissingBase
+}
+
 extension WorkspaceService {
-    public func snapshot(_ resource: Resource, in record: WorkspaceRecord, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async throws -> ResourceSnapshot {
-        let path = try await checked(resource, in: record)
+    public func snapshot(_ resource: Resource, in record: WorkspaceRecord, policy: InspectionPolicy = .refreshMissingBase, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async throws -> ResourceSnapshot {
+        let reader = inspectionService(for: policy)
+        let path = try await reader.checked(resource, in: record)
         let origin = record.repositories.first(where: { $0.id == resource.repo })?.url
-        async let changes = snapshotRead { try await git.changes(at: path) }
-        async let summary = snapshotRead {
-            try await git.summary(at: path, origin: origin) {
-                let remote = try await git.run(["config", "--get", "remote.origin.url"], at: path).text
-                try await checkRemoteBoundary(remote, at: path)
-                _ = try await git.run(["fetch", "--no-recurse-submodules", "origin"], at: path)
+        let fetchMissingBase: (@Sendable () async throws -> Void)?
+        switch policy {
+        case .localOnly: fetchMissingBase = nil
+        case .refreshMissingBase:
+            fetchMissingBase = {
+                let remote = try await reader.git.run(["config", "--get", "remote.origin.url"], at: path).text
+                try await reader.checkRemoteBoundary(remote, at: path)
+                _ = try await reader.git.run(["fetch", "--no-recurse-submodules", "origin"], at: path)
             }
+        }
+        async let changes = snapshotRead { try await reader.git.changes(at: path) }
+        async let summary = snapshotRead {
+            try await reader.git.summary(at: path, origin: origin, fetchMissingBase: fetchMissingBase)
         }
         var snapshot = ResourceSnapshot(resource: resource)
         switch await changes {
@@ -25,6 +36,16 @@ extension WorkspaceService {
         }
         try checkCancellation()
         return snapshot
+    }
+
+    func inspectionService(for policy: InspectionPolicy) -> WorkspaceService {
+        switch policy {
+        case .refreshMissingBase: return self
+        case .localOnly:
+            var reader = git
+            reader.runner.environment["GIT_OPTIONAL_LOCKS"] = "0"
+            return WorkspaceService(store: store, git: reader, trash: trashDirectory)
+        }
     }
 }
 

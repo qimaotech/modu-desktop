@@ -207,8 +207,8 @@ struct ModuCoreTests {
     @Test func lockAndUnmanagedWorktreeBlockDeletion() async throws {
         let f = try await Fixture(); defer { f.remove() }
         _ = await f.service.openWorkspace(f.root)
-        let lease = try f.service.store.lock(f.root)
-        #expect(throws: ModuError.self) { try f.service.store.lock(f.root) }
+        let lease = try f.service.store.tryLock(f.root)
+        #expect(throws: ModuError.self) { try f.service.store.tryLock(f.root) }
         lease.unlock()
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let main = f.root.appending(path: "repositories/repo")

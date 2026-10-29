@@ -22,7 +22,20 @@ public struct WorkspaceStore: Sendable {
             try PathSafety.confined(path, to: directoryBoundary)
         }
     }
-    public func lock(_ root: URL) throws -> WorkspaceLock {
+    public func lock(_ root: URL) async throws -> WorkspaceLock {
+        var retries = 0
+        while true {
+            guard !Task.isCancelled else { throw ModuError("cancelled", .operationCancelled) }
+            do { return try tryLock(root) }
+            catch let error as ModuError where error.code == "workspace-busy" {
+                guard retries < 10 else { throw ModuError("workspace-lock-timeout", .workspaceLockTimedOut) }
+                retries += 1
+                do { try await Task.sleep(for: .milliseconds(500)) }
+                catch { throw ModuError("cancelled", .operationCancelled) }
+            }
+        }
+    }
+    func tryLock(_ root: URL) throws -> WorkspaceLock {
         try checkBoundary(root)
         try FileManager.default.createDirectory(at: support.appending(path: "locks"), withIntermediateDirectories: true)
         return try WorkspaceLock(support.appending(path: "locks/\(key(root)).lock"))
@@ -49,17 +62,17 @@ public struct WorkspaceStore: Sendable {
         do { try writer(encoder.encode(record), url) }
         catch { throw ModuError("configuration-write-failed", .couldNotSave(url.path, ModuError.wrap(error).userMessage)) }
     }
-    public func locate(explicit: String?, cwd: URL) throws -> URL {
+    public func locate(explicit: String?, cwd: URL) async throws -> URL {
+        guard !Task.isCancelled else { throw ModuError("cancelled", .operationCancelled) }
         if let explicit {
             let root = PathSafety.canonical(URL(fileURLWithPath: explicit, relativeTo: cwd))
             guard PathSafety.exists(root) else { throw ModuError("workspace-not-found", .workspaceNotFound(root.path)) }
-            let lease = try lock(root); defer { lease.unlock() }
             _ = try load(root); return root
         }
         var candidate = PathSafety.canonical(cwd)
         while true {
+            guard !Task.isCancelled else { throw ModuError("cancelled", .operationCancelled) }
             if PathSafety.exists(recordURL(candidate)) {
-                let lease = try lock(candidate); defer { lease.unlock() }
                 _ = try load(candidate); return candidate
             }
             if candidate.path == "/" { break }

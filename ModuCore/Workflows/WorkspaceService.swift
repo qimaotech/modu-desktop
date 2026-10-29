@@ -7,12 +7,11 @@ public struct WorkspaceService: Sendable {
     public init(store: WorkspaceStore = .init(), git: Git = .init(), trash: @escaping @Sendable (URL) throws -> URL = { try PathSafety.trash($0) }) { self.store = store; self.git = git; self.trashDirectory = trash }
 
     public func candidate(_ url: URL, requireExistingRecord: Bool = false) async throws -> URL {
+        try checkCancellation()
         let root = PathSafety.canonical(url)
         try store.checkBoundary(root)
         let existing = PathSafety.exists(store.recordURL(root))
         guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
-        let lease = try (existing ? store.lock(root) : nil)
-        defer { lease?.unlock() }
         if existing { _ = try store.load(root) }
         try await checkCandidate(root, hasRecord: existing)
         return root
@@ -29,7 +28,7 @@ public struct WorkspaceService: Sendable {
         var loaded: WorkspaceRecord?
         var skillError: ModuError?
         do {
-            let lease = try store.lock(root); defer { lease.unlock() }
+            let lease = try await store.lock(root); defer { lease.unlock() }
             let existing = PathSafety.exists(store.recordURL(root))
             guard existing || !requireExistingRecord else { throw ModuError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
             var record = existing ? try store.load(root) : WorkspaceRecord(root: root.path)
@@ -109,29 +108,38 @@ public struct WorkspaceService: Sendable {
         return (loaded, result, skillError)
     }
 
+    public func read(_ root: URL) async throws -> WorkspaceRecord {
+        try checkCancellation()
+        try PathSafety.directory(root)
+        let record = try store.load(root)
+        try checkCancellation()
+        return record
+    }
+
     public func load(_ root: URL) async throws -> WorkspaceRecord {
-        let lease = try store.lock(root); defer { lease.unlock() }
+        let lease = try await store.lock(root); defer { lease.unlock() }
         try PathSafety.directory(root)
         var record = try store.load(root)
         _ = try await validateAndClean(&record)
         return record
     }
     public func inspect(_ root: URL, scope: InspectionScope = .all, excluding excluded: Resource? = nil) async -> OperationResult {
-        do { return await inspect(try await load(root), scope: scope, excluding: excluded) }
+        do { return await inspect(try await read(root), scope: scope, excluding: excluded, policy: .localOnly) }
         catch { return .init(command: "workspace.inspect", workspace: root.path, status: .failed, error: .wrap(error)) }
     }
-    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
+    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, policy: InspectionPolicy = .refreshMissingBase, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
         let root = record.rootURL
+        let reader = inspectionService(for: policy)
         do { try store.checkBoundary(root) }
         catch { return .init(command: "workspace.inspect", workspace: root.path, status: .failed, error: .wrap(error)) }
         var result = OperationResult(command: "workspace.inspect", workspace: root.path)
         var workspace = ItemResult(.workspace())
-        do { try await git.checkRepository(root, main: true); workspace.data = ["root": record.root] } catch { fail(&workspace, error) }
+        do { try await reader.git.checkRepository(root, main: true); workspace.data = ["root": record.root] } catch { fail(&workspace, error) }
         result.items.append(workspace)
         for resource in resources(record) where resource != excluded && scope.includes(resource) {
             var item = ItemResult(resource)
             do {
-                let snapshot = try await snapshot(resource, in: record)
+                let snapshot = try await reader.snapshot(resource, in: record, policy: policy)
                 await publish(snapshot)
                 item.data = ["path": record.rootURL.appending(path: resource.path).path]
                 if let error = snapshot.changesError { throw error }

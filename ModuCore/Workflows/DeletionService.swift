@@ -17,22 +17,26 @@ public enum DeleteRequest: Sendable {
 
 extension WorkspaceService {
     public func previewDelete(_ request: DeleteRequest, at root: URL) async throws -> [DeletionTarget] {
-        let lease = try store.lock(root); defer { lease.unlock() }
-        let record = try store.load(root)
-        return try await deletionTargets(deleteResources(request, record: record), record: record)
+        let record = try await read(root)
+        let reader = inspectionService(for: .localOnly)
+        return try await reader.deletionTargets(deleteResources(request, record: record), record: record)
     }
     public func remove(_ request: DeleteRequest, at root: URL, authorization: [DeletionTarget]? = nil, execute: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
         let command: String
         if case .repository = request { command = "repo.remove" } else { command = "worktree.remove" }
         var result = OperationResult(command: command, workspace: root.path)
         do {
-            let lease = try store.lock(root); defer { lease.unlock() }
-            var record = try store.load(root)
-            let targets = try await deletionTargets(deleteResources(request, record: record), record: record, readRisks: execute || authorization == nil)
-            if !execute {
-                guard let authorization else { result.status = .confirmationRequired; result.reasonCode = "confirmation-required"; result.plan = targets; return result }
-                try verifyAuthorization(authorization, actual: targets)
+            if execute || authorization == nil {
+                let preview = try await previewDelete(request, at: root)
+                if !execute {
+                    result.plan = preview; result.status = .confirmationRequired; result.reasonCode = "confirmation-required"
+                    return result
+                }
             }
+            let lease = try await store.lock(root); defer { lease.unlock() }
+            var record = try store.load(root)
+            let targets = try await deletionTargets(deleteResources(request, record: record), record: record, readRisks: false)
+            if !execute, let authorization { try verifyAuthorization(authorization, actual: targets) }
             for (index, target) in targets.enumerated() {
                 let item = await delete(target, record: &record, progress: progress)
                 result.items.append(item)

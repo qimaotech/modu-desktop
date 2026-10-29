@@ -2452,6 +2452,23 @@
         }
       }
     },
+    "message.repositoryChangedDuringUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The repository changed or became unavailable during the update. Completed effects were kept. Review its current state and retry."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新期间仓库发生变化或已不可用。已完成的效果已保留，请核对当前状态后重试。"
+          }
+        }
+      }
+    },
     "message.repositoryDirectoryIsMissing": {
       "extractionState": "manual",
       "localizations": {
@@ -2975,6 +2992,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "工作区不可写入：%1$@"
+          }
+        }
+      }
+    },
+    "message.workspaceLockTimedOut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timed out acquiring the workspace lock after 10 retries. Try again after the other Modu operation finishes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "获取工作区锁超时，已重试 10 次。请在其他 Modu 操作完成后重试。"
           }
         }
       }
@@ -6307,23 +6341,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新加载"
-          }
-        }
-      }
-    },
-    "ui.reloadWorkspace": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reload Workspace"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新加载工作区"
           }
         }
       }

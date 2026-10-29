@@ -67,7 +67,7 @@ import Testing
         }
         if kind == "last" { #expect(saved.groups["feature"] == nil) }
         else { #expect(saved.groups["feature"]?.repositories == ["other"]) }
-        let lease = try fixture.service.store.lock(fixture.root); lease.unlock()
+        let lease = try fixture.service.store.tryLock(fixture.root); lease.unlock()
     }
 
     @Test(arguments: ["group", "repository", "member"], [OperationPhase.deleting, .deleted])

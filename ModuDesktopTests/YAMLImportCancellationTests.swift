@@ -51,7 +51,7 @@ struct YAMLImportCancellationTests {
         let committedIgnore = try await f.service.git.run(["show", "HEAD:.gitignore"], at: f.root).text
         #expect(committedIgnore.contains("/repo/") == !beforeFirst)
         #expect(!committedIgnore.contains("/other/"))
-        let lease = try f.service.store.lock(f.root); lease.unlock()
+        let lease = try f.service.store.tryLock(f.root); lease.unlock()
     }
 
     @Test(arguments: [false, true])

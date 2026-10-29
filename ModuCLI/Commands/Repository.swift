@@ -8,7 +8,7 @@ struct Repo: AsyncParsableCommand {
     struct List: AsyncParsableCommand {
         @OptionGroup var options: Options
         mutating func run() async throws {
-            let service = WorkspaceService(); let root = try options.root(service)
+            let service = WorkspaceService(); let root = try await options.root(service)
             var result = await service.inspect(root, scope: .repositories)
             result.command = "repo.list"
             result.items.removeAll { item in
@@ -25,7 +25,7 @@ struct Repo: AsyncParsableCommand {
         @Option(name: .long) var name: String?
         mutating func run() async throws {
             let service = WorkspaceService()
-            finish(await service.addRepository(.init(url: url, name: name), at: try options.root(service), progress: reportProgress), json: options.json)
+            finish(await service.addRepository(.init(url: url, name: name), at: try await options.root(service), progress: reportProgress), json: options.json)
         }
     }
     struct Remove: AsyncParsableCommand {
@@ -33,7 +33,7 @@ struct Repo: AsyncParsableCommand {
         @Argument var repoName: String
         @Flag(name: .long) var execute = false
         mutating func run() async throws {
-            let service = WorkspaceService(); let root = try options.root(service)
+            let service = WorkspaceService(); let root = try await options.root(service)
             var result = await service.remove(.repository(repoName), at: root, execute: execute, progress: reportProgress)
             if result.status == .confirmationRequired, !options.json, isatty(STDIN_FILENO) == 1, confirm(result.plan ?? []) {
                 result = await service.remove(.repository(repoName), at: root, authorization: result.plan, progress: reportProgress)

@@ -145,7 +145,7 @@ import Testing
             #expect(result.items.filter { $0.resource == .repository("other") }.allSatisfy { $0.effects.isEmpty && [.cancelled, .skipped].contains($0.status) })
             #expect(!result.items.contains { $0.status == .failed })
         }
-        let lease = try store.lock(fixture.root); lease.unlock()
+        let lease = try store.tryLock(fixture.root); lease.unlock()
     }
 
     @Test func workspaceImportRestoresCancellationBeforeGroupPreflight() async throws {

@@ -105,11 +105,6 @@ final class AppModel {
         await workspaceReload
     }
 
-    func requestReload() {
-        if busy { cancel() }
-        else { Task { await workspace.reload() } }
-    }
-
     @discardableResult func changeWorkspace(_ url: URL, requireExistingRecord: Bool = false, cancellable: Bool = true) -> Bool {
         guard !busy, presentation.result == nil else { return false }
         let root = PathSafety.canonical(url)
