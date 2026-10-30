@@ -15,6 +15,7 @@ final class RepositoryDetailModel {
     private var generation = 0
     private var detailCache: [Resource: RepositoryDetailState] = [:]
     private var commitCache: [String: CommitPage] = [:]
+    private var behindCommitCache: [String: [GitCommit]] = [:]
     // Inspection snapshots skip one background reread; selecting a resource always refreshes it.
     private var freshSnapshots: [Resource: ResourceSnapshot] = [:]
     @ObservationIgnored var onIdle: (() -> Void)?
@@ -110,7 +111,7 @@ final class RepositoryDetailModel {
     func invalidate() {
         cancelPreload()
         detailTask?.cancel(); generation += 1; detailLoading = false
-        detailCache = [:]; commitCache = [:]; freshSnapshots = [:]
+        detailCache = [:]; commitCache = [:]; behindCommitCache = [:]; freshSnapshots = [:]
     }
 
     private func readDetail(_ resource: Resource, in workspace: WorkspaceRecord, cached: RepositoryDetailState? = nil, snapshot fresh: ResourceSnapshot? = nil, publish: @Sendable (RepositoryDetailState) async -> Void = { _ in }) async -> RepositoryDetailState? {
@@ -119,7 +120,7 @@ final class RepositoryDetailModel {
         do {
             if let fresh { snapshot = fresh }
             else {
-                snapshot = try await service.snapshot(resource, in: workspace) { partial in
+                snapshot = try await service.snapshot(resource, in: workspace, policy: .localOnly) { partial in
                     await publish(RepositoryDetailState(snapshot: partial, cached: cached))
                 }
             }
@@ -137,6 +138,7 @@ final class RepositoryDetailModel {
                 if let cached = commitCache[key] {
                     loaded.commits = cached.commits; loaded.canLoadMore = cached.canLoadMore; loaded.commitsError = nil
                 } else {
+                    loaded.commits = nil; loaded.canLoadMore = false; loaded.commitsError = nil
                     await publish(loaded)
                     do {
                         let values = try await service.git.commits(at: path, head: value.headOID, base: base)
@@ -144,6 +146,17 @@ final class RepositoryDetailModel {
                         let page = CommitPage(commits: values, canLoadMore: values.count == 30)
                         commitCache[key] = page; loaded.commits = page.commits; loaded.canLoadMore = page.canLoadMore; loaded.commitsError = nil
                     } catch { loaded.commitsError = .wrap(error) }
+                }
+                guard !Task.isCancelled else { return nil }
+                loaded.behindCommits = nil; loaded.comparisonError = nil
+                let comparisonKey = "\(workspace.root)|\(resource.repo ?? "")|\(base)|\(value.headOID)"
+                if let cached = behindCommitCache[comparisonKey] { loaded.behindCommits = cached }
+                else {
+                    do {
+                        let commits = try await service.git.commits(at: path, head: base, base: value.headOID, limit: nil)
+                        guard !Task.isCancelled else { return nil }
+                        behindCommitCache[comparisonKey] = commits; loaded.behindCommits = commits
+                    } catch { loaded.comparisonError = .wrap(error) }
                 }
             } else { loaded.commits = value.hasRemotes ? nil : []; loaded.canLoadMore = false; loaded.commitsError = value.baseError.map { ModuError("base-unavailable", $0, userMessage: value.baseMessage) } }
         } else {
@@ -165,6 +178,8 @@ struct RepositoryDetailState: Sendable {
     var commits: [GitCommit]?
     var commitsError: ModuError?
     var canLoadMore = false
+    var behindCommits: [GitCommit]?
+    var comparisonError: ModuError?
 }
 
 extension RepositoryDetailState {
@@ -172,6 +187,10 @@ extension RepositoryDetailState {
         self = cached ?? .init()
         changes = snapshot.changes; changesError = snapshot.changesError
         if snapshot.summary != nil || snapshot.summaryError != nil {
+            if summary?.headOID != snapshot.summary?.headOID || summary?.baseOID != snapshot.summary?.baseOID || snapshot.summaryError != nil {
+                commits = nil; commitsError = nil; canLoadMore = false
+                behindCommits = nil; comparisonError = nil
+            }
             summary = snapshot.summary; summaryError = snapshot.summaryError
         }
     }

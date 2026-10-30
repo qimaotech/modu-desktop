@@ -11,7 +11,9 @@ import Testing
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let base = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
-        for arguments in [["remote", "add", "origin", fixture.remoteURL], ["update-ref", "refs/remotes/origin/main", base], ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]] {
+        let workspaceRemote = fixture.directory.appending(path: "workspace.git")
+        _ = try await fixture.service.git.run(["clone", "--bare", fixture.root.path, workspaceRemote.path], at: fixture.directory)
+        for arguments in [["remote", "add", "origin", workspaceRemote.absoluteString], ["update-ref", "refs/remotes/origin/main", base], ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]] {
             _ = try await fixture.service.git.run(arguments, at: fixture.root)
         }
         for name in ["a", "b"] {
@@ -182,8 +184,8 @@ import Testing
         model.workspace.refreshDetail()
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
         try await waitForDetail(model)
-        #expect(model.workspace.detail.summary?.base == "origin/main" && model.workspace.detail.summary?.baseError == nil)
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.summary?.baseOID == nil && model.workspace.detail.summary?.baseError != nil)
+        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
 
         try FileManager.default.removeItem(at: path)
@@ -196,14 +198,125 @@ import Testing
         #expect(model.workspace.states[repository.id]?.dirty == nil)
     }
 
-    @Test func reloadPreloadsSeparateSnapshotsForRepositoriesGroupsAndMembers() async throws {
+    @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
+    func selectionReadsLocalBaseWithoutFetchingAndRefreshesCachedCommits(_ resource: Resource) async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        let initial = try await makeModel(fixture)
+        defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        let record = try fixture.service.store.load(fixture.root)
+        let trace = fixture.directory.appending(path: "selection-trace")
+        var runner = fixture.service.git.runner
+        runner.environment["GIT_TRACE"] = trace.path
+        let model = AppModel(defaults: initial.defaults, service: WorkspaceService(store: fixture.service.store, git: Git(runner: runner)))
+        model.workspace.record = record
+        let path = record.rootURL.appending(path: resource.path)
+        let base = try #require(await fixture.service.git.oid("refs/remotes/origin/main", at: path))
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "first change"], at: path)
+        let first = try #require(await fixture.service.git.oid("HEAD", at: path))
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "second change"], at: path)
+        let head = try #require(await fixture.service.git.oid("HEAD", at: path))
+        try Data("pending".utf8).write(to: path.appending(path: "pending.txt"))
+        model.workspace.selection = resource
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.behindCommits?.count == 0)
+        model.workspace.selection = nil
+        await model.workspace.detailPreloadTask?.value
+
+        let source = fixture.directory.appending(path: "source")
+        _ = try await fixture.service.git.run(["fetch", path.path, first], at: source)
+        _ = try await fixture.service.git.run(["checkout", "-B", "main", first], at: source)
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "remote change"], at: source)
+        let remote = try #require(await fixture.service.git.oid("HEAD", at: source))
+        _ = try await fixture.service.git.run(["push", fixture.remoteURL, "\(remote):refs/heads/main"], at: source)
+        #expect(try await fixture.service.git.oid("refs/remotes/origin/main", at: path) == base)
+        let lease = try fixture.service.store.tryLock(fixture.root); defer { lease.unlock() }
+        model.workspace.selection = resource
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID == base)
+        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.behindCommits?.isEmpty == true)
+
+        _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
+        model.workspace.refreshDetail()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID == remote)
+        #expect(model.workspace.detail.commits?.map(\.id) == [head])
+        #expect(model.workspace.detail.behindCommits?.count == 1)
+        #expect(model.workspace.detail.behindCommits?.map(\.id) == [remote])
+        #expect(model.workspace.detail.changes?.map(\.path) == ["pending.txt"])
+        #expect(try await fixture.service.git.oid("HEAD", at: path) == head)
+
+        _ = try await fixture.service.git.run(["push", "--force", fixture.remoteURL, "\(base):refs/heads/main"], at: source)
+        _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
+        model.workspace.selection = nil
+        model.workspace.selection = resource
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID == base)
+        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.behindCommits?.count == 0)
+        model.workspace.selection = nil
+        await model.workspace.detailPreloadTask?.value
+        let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
+        #expect(!commands.contains { $0.contains("built-in: git fetch ") })
+    }
+
+    @Test func behindCommitsLoadAllAndDiscardStaleComparisons() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let source = fixture.directory.appending(path: "source")
+        let base = try #require(await fixture.service.git.oid("HEAD", at: source))
+        for index in 0..<31 {
+            _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "remote change \(index)"], at: source)
+        }
+        _ = try await fixture.service.git.run(["push", fixture.remoteURL, "HEAD:refs/heads/main"], at: source)
+        let path = try #require(model.workspace.record?.repositoryURL("repo"))
+        _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
+        model.workspace.selection = .repository("repo")
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.behindCommits?.count == 31)
+        model.workspace.selection = nil
+        model.workspace.selection = .repository("repo")
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.behindCommits?.count == 31)
+
+        _ = try await fixture.service.git.run(["config", "remote.origin.uploadpack", "/usr/bin/false"], at: path)
+        model.workspace.refreshDetail()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.behindCommits?.count == 31)
+
+        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
+        model.workspace.refreshDetail()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID == nil && model.workspace.detail.behindCommits == nil)
+        _ = try await fixture.service.git.run(["config", "--unset", "remote.origin.uploadpack"], at: path)
+        _ = try await fixture.service.git.run(["push", "--force", fixture.remoteURL, "\(base):refs/heads/main"], at: source)
+        _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
+        _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: path)
+        model.workspace.refreshDetail()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.behindCommits?.count == 0 && model.workspace.detail.behindCommits?.isEmpty == true)
+    }
+
+    @Test func reloadPreloadsSeparateSnapshotsForRepositoriesGroupsAndMembers() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        let initial = try await makeModel(fixture)
+        defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        let trace = fixture.directory.appending(path: "reload-trace")
+        var runner = fixture.service.git.runner
+        runner.environment["GIT_TRACE"] = trace.path
+        let model = AppModel(defaults: initial.defaults, service: WorkspaceService(store: fixture.service.store, git: Git(runner: runner)))
         model.workspace.record = try fixture.service.store.load(fixture.root)
         let record = try #require(model.workspace.record)
+        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: record.repositoryURL("repo"))
         try Data("main".utf8).write(to: record.repositoryURL("repo").appending(path: "main.txt"))
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
@@ -223,6 +336,9 @@ import Testing
             #expect(model.workspace.detail.changes?.map(\.path) == [file])
             #expect(model.workspace.states[resource.id]?.dirty == true)
         }
+        await model.workspace.detailPreloadTask?.value
+        let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
+        #expect(!commands.contains { $0.contains("built-in: git fetch ") })
     }
 
     @Test func groupDetailsRefreshWhenRemotesAreAddedAndRemoved() async throws {
@@ -246,6 +362,12 @@ import Testing
         _ = try await fixture.service.git.run(["remote", "add", "origin", fixture.remoteURL], at: fixture.root)
         _ = try await fixture.service.git.run(["push", "-u", "origin", "HEAD"], at: fixture.root)
         #expect(try await fixture.service.git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true).status == 1)
+        model.workspace.refreshDetail()
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.summary?.baseOID == nil && model.workspace.detail.summary?.baseError != nil)
+        #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
+
+        _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: path)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")

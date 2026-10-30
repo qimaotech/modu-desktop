@@ -3506,6 +3506,52 @@
         }
       }
     },
+    "ui.baseHasNewCommits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@ has %2$lld new commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$@ has %2$lld new commits"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 有 %2$lld 个新提交"
+          }
+        }
+      }
+    },
+    "ui.branchComparisonUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparison unavailable"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法比较基准分支"
+          }
+        }
+      }
+    },
     "ui.bundledUpdateInstallerIsMissingReinstallModuAnd": {
       "extractionState": "manual",
       "localizations": {
@@ -3801,13 +3847,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changes"
+            "value": "local changes"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改"
+            "value": "本地更改"
           }
         }
       }
@@ -4158,13 +4204,42 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Commits"
+            "value": "unique commits"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "提交"
+            "value": "独有提交"
+          }
+        }
+      }
+    },
+    "ui.commitsBehind": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Behind %1$lld commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Behind %1$lld commits"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "落后 %1$lld 个提交"
           }
         }
       }
@@ -7017,23 +7092,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已暂存"
-          }
-        }
-      }
-    },
-    "ui.stagedUnstaged": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Staged / Unstaged"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已暂存 / 未暂存"
           }
         }
       }

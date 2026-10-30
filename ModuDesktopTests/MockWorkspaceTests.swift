@@ -18,6 +18,10 @@ import Testing
         #expect(!needsSetup && model.started && model.workspace.blocked == nil)
         #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
         #expect(model.workspace.detail.changes?.isEmpty == false && model.workspace.detail.commits?.isEmpty == false)
+        #expect(model.workspace.detail.commits?.count == 3)
+        let behind = try #require(model.workspace.detail.behindCommits)
+        #expect(behind.count == 36)
+        #expect(behind.prefix(3).allSatisfy { $0.subject.count > 100 })
         let resources = model.service.resources(record)
         #expect(resources.allSatisfy { record.rootURL.appending(path: $0.path).path.hasPrefix(mock.directory.path + "/") })
         for path in [record.rootURL, record.repositoryURL("order-service"), record.memberURL("feature-store-pickup", "order-service")] {

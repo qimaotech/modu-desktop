@@ -148,7 +148,7 @@ final class WorkspaceModel {
                 await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
                 guard generation == refreshGeneration, !busy, !Task.isCancelled else { return }
             }
-            let inspection = await service.inspect(record, excluding: selection) { @MainActor [self] snapshot in
+            let inspection = await service.inspect(record, excluding: selection, policy: .localOnly) { @MainActor [self] snapshot in
                 guard generation == refreshGeneration, !busy, !Task.isCancelled, self.record == record else { return }
                 details.cache(snapshot)
             }

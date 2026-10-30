@@ -72,7 +72,7 @@ extension Git {
         }
         return result.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
-    public func summary(at path: URL, origin: String? = nil, fetchMissingBase: (@Sendable () async throws -> Void)? = nil) async throws -> GitSummary {
+    public func summary(at path: URL, origin: String? = nil, refreshBase: (@Sendable (String?) async throws -> Void)? = nil) async throws -> GitSummary {
         guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
         let branch = try await run(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path, allowFailure: true)
         var summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
@@ -81,8 +81,9 @@ extension Git {
             summary.hasRemotes = !(try await run(["remote"], at: path).text.isEmpty)
             guard summary.hasRemotes else { return summary }
             var ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
-            if ref.status == 1, let fetchMissingBase {
-                try await fetchMissingBase()
+            guard ref.status == 1 || (ref.status == 0 && ref.text.hasPrefix("refs/remotes/origin/")) else { throw ModuError("base-unavailable", .originHEADDoesNotIdentifyCommit) }
+            if let refreshBase {
+                try await refreshBase(ref.status == 0 ? ref.text : nil)
                 ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
             }
             guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref.text, at: path) else { throw ModuError("base-unavailable", .originHEADDoesNotIdentifyCommit) }
@@ -90,9 +91,10 @@ extension Git {
         } catch { let failure = ModuError.wrap(error); summary.baseError = failure.message; summary.baseMessage = failure.userMessage }
         return summary
     }
-    public func commits(at path: URL, head: String, base: String, skip: Int = 0) async throws -> [GitCommit] {
+    public func commits(at path: URL, head: String, base: String, skip: Int = 0, limit: Int? = 30) async throws -> [GitCommit] {
         guard [head, base].allSatisfy({ $0.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil }) else { throw ModuError("invalid-input", .invalidCommitObjectID) }
-        let output = try await run(["log", "-z", "--format=%H%x00%s%x00%an%x00%aI", "--max-count=30", "--skip=\(max(0, skip))", "\(base)..\(head)", "--"], at: path)
+        let count = limit.map { ["--max-count=\(max(0, $0))"] } ?? []
+        let output = try await run(["log", "-z", "--format=%H%x00%s%x00%an%x00%aI"] + count + ["--skip=\(max(0, skip))", "\(base)..\(head)", "--"], at: path)
         let fields = output.stdout.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
         var result: [GitCommit] = []
         var index = 0

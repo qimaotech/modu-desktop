@@ -90,7 +90,7 @@ struct WorkspaceSidebar: View {
         HStack(spacing: 4) {
             Button { expanded.wrappedValue.toggle() } label: {
                 HStack(spacing: 6) {
-                    SidebarDisclosureIcon(expanded: expanded.wrappedValue)
+                    DisclosureIcon(expanded: expanded.wrappedValue)
                     SidebarFolderIcon()
                     Text(title).font(.system(size: 13, weight: .medium))
                     Spacer(minLength: 0)
@@ -114,7 +114,7 @@ struct WorkspaceSidebar: View {
         HStack(spacing: 6) {
             if resource.kind == .group {
                 Button { workspace.toggleGroup(title); sidebarFocused = true } label: {
-                    SidebarDisclosureIcon(expanded: workspace.expandedGroups.contains(title))
+                    DisclosureIcon(expanded: workspace.expandedGroups.contains(title))
                 }.accessibilityLabel(preferences.text.string(.uiExpandOrCollapse) + " " + title)
             }
             Button { workspace.selectSidebarRow(resource); sidebarFocused = true } label: {
@@ -147,19 +147,6 @@ struct WorkspaceSidebar: View {
         let current = workspace.selection.flatMap { resources.firstIndex(of: $0) } ?? (offset > 0 ? -1 : resources.count)
         workspace.selection = resources[min(resources.count - 1, max(0, current + offset))]
         return .handled
-    }
-}
-
-private struct SidebarDisclosureIcon: View {
-    let expanded: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Image(systemName: "chevron.right").font(.system(size: 9, weight: .heavy))
-            .foregroundStyle(.secondary)
-            .rotationEffect(.degrees(expanded ? 90 : 0))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: expanded)
-            .frame(width: 10, height: 16).accessibilityHidden(true)
     }
 }
 

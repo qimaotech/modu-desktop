@@ -13,6 +13,7 @@ enum DesignStyle {
     static let field = adaptive(light: 0xf5f5f5, dark: 0x303030)
     static let selection = adaptive(light: 0xe0efff, dark: 0x294966)
     static let secondary = adaptive(light: 0x7c7c80, dark: 0xa5a5aa)
+    static let branchBehind = adaptive(light: 0x995400, dark: 0xffb340)
     static let buttonHover = LinearGradient(colors: [
         Color(.sRGB, red: 225.0 / 255, green: 227.0 / 255, blue: 229.0 / 255, opacity: 1),
         Color(.sRGB, red: 241.0 / 255, green: 242.0 / 255, blue: 242.0 / 255, opacity: 1)
@@ -28,8 +29,8 @@ enum DesignStyle {
 
 extension View {
     func detailCard() -> some View {
-        background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(DesignStyle.cardBorder, lineWidth: 1))
+        background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DesignStyle.border, lineWidth: 1))
     }
 
     func formPlate() -> some View {

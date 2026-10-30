@@ -3,8 +3,8 @@ import Testing
 @testable import ModuCore
 
 struct ResourceSnapshotTests {
-    @Test(arguments: ["fetch-failed", "base-still-missing"])
-    func missingBaseRecoveryFetchesOnceAndPreservesChanges(_ outcome: String) async throws {
+    @Test(arguments: ["fetch-failed", "base-still-missing", "existing-base-fetch-failed"])
+    func baseRefreshFetchesOnceAndPreservesChangesOnFailure(_ outcome: String) async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
@@ -12,8 +12,10 @@ struct ResourceSnapshotTests {
         let record = try fixture.service.store.load(fixture.root)
         let path = record.repositoryURL("repo")
         let head = try #require(await fixture.service.git.oid("HEAD", at: path))
-        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
-        if outcome == "fetch-failed" {
+        if outcome != "existing-base-fetch-failed" {
+            _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
+        }
+        if outcome != "base-still-missing" {
             _ = try await fixture.service.git.run(["config", "remote.origin.uploadpack", "/usr/bin/false"], at: path)
         } else {
             _ = try await fixture.service.git.run(["config", "remote.origin.followRemoteHEAD", "never"], at: path)
@@ -24,7 +26,8 @@ struct ResourceSnapshotTests {
         runner.environment["GIT_TRACE"] = trace.path
         let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
 
-        let snapshot = try await service.snapshot(.repository("repo"), in: record)
+        let policy: InspectionPolicy = outcome == "existing-base-fetch-failed" ? .refreshBase : .refreshMissingBase
+        let snapshot = try await service.snapshot(.repository("repo"), in: record, policy: policy)
 
         #expect(snapshot.changes?.map(\.path) == ["new.txt"] && snapshot.changesError == nil)
         #expect(snapshot.summary?.headOID == head && snapshot.summaryError == nil)

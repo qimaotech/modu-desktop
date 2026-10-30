@@ -147,6 +147,7 @@ def generate(directory, jobs):
         for name in members:
             git(root / "repositories" / name, "worktree", "add", "--quiet", "-b", group, str(destination / name), "origin/main")
     order_changes(root / "worktrees/feature-store-pickup/order-service", git, commit)
+    order_base_updates(directory, git)
     write(root / "worktrees/feature-store-pickup/storefront-web/src/pickup.ts",
           "export function pickupMessage(location: string): string {\n  return `Ready for pickup at ${location}`;\n}\n")
     record = {"version": 1, "root": str(root), "repositories": [{"url": f"https://example.invalid/{name}.git"} for name in REPOSITORIES],
@@ -172,6 +173,19 @@ def order_changes(path, git, commit):
     write(path / "internal/order/domain/order.go", "package order\n\ntype Order struct {\n    ID string\n    PickupLocationID string\n}\n")
     (path / "internal/order/infrastructure/persistence/legacy_pickup_repository.go").unlink()
     git(path, "mv", "--", "internal/order/interfaces/http/order_handler.go", "internal/order/interfaces/http/pickup_handler.go")
+
+
+def order_base_updates(directory, git):
+    source = directory / "sources/order-service"
+    subjects = [f"fix(order): validate orders and synchronize inventory (base update {index + 1:02d})" for index in range(33)] + [
+        "fix(order): resolve consistency issues between inventory reservations, payment confirmation, timeout cancellation, and asynchronous compensation across store pickup, delivery changes, duplicate callbacks, batch retries, and order status synchronization across time zones",
+        "test(order): cover concurrent inventory reservations, duplicate payment callbacks, delayed fulfillment events, cancellation retries, reconciliation after partial failures, and deterministic recovery across multiple repositories without expanding the commit popover beyond its maximum width",
+        "refactor(order): unify fulfillment state transitions, inventory deductions and restocking, idempotent payment callbacks, failure retries, and audit trails in internal/order/application/fulfillment/synchronization/reconciliation/async_compensation_handler.go",
+    ]
+    for index, subject in enumerate(subjects):
+        git(source, "commit", "--quiet", "--allow-empty", "-m", subject, date=f"2026-08-31T09:{index:02d}:00Z")
+    git(source, "push", "--quiet", str(directory / "remotes/order-service.git"), "HEAD:refs/heads/main")
+    git(directory / "example-workspace/repositories/order-service", "fetch", "--quiet", "--no-recurse-submodules", "origin")
 
 
 def baseline_files(name):
