@@ -8,7 +8,6 @@ struct ToolMenuButton: NSViewRepresentable {
     let label: String
     let open: (ExternalTool) -> Void
     @Environment(\.isEnabled) private var enabled
-    @Environment(\.buttonHovered) private var hovered
 
     func makeNSView(context: Context) -> ToolMenuControl { ToolMenuControl() }
     static func dismantleNSView(_ button: ToolMenuControl, coordinator: ()) { button.dismissMenu() }
@@ -17,7 +16,7 @@ struct ToolMenuButton: NSViewRepresentable {
         button.menuWidth = width
         button.open = open
         button.isEnabled = enabled
-        button.contentTintColor = hovered ? .black : .labelColor
+        button.contentTintColor = NSColor(DesignStyle.secondary)
         if !enabled { button.dismissMenu() }
         button.setAccessibilityLabel(label)
     }
@@ -32,8 +31,8 @@ final class ToolMenuControl: NSButton, NSMenuDelegate {
     init() {
         super.init(frame: .zero)
         title = ""
-        image = NSImage(named: "DesignIcons/Chevron")?.copy() as? NSImage
-        image?.size = NSSize(width: 18, height: 18)
+        image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 9, weight: .heavy))
         imagePosition = .imageOnly
         isBordered = false
         focusRingType = .none

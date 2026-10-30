@@ -111,7 +111,7 @@ struct RepositoryDetailView: View {
                 if let change = node.change {
                     status(change.index, conflict: change.conflict, staged: true)
                     status(change.workingTree, conflict: change.conflict, staged: false)
-                } else { DesignIcon(name: "FolderClosed") }
+                } else { DesignIcon(name: "ChangeTreeFolder") }
                 Text(node.name).font(.system(size: 13)).lineLimit(1)
                     .help(node.change?.originalPath.map { "\($0) → \(node.id)" } ?? node.id)
                 Spacer(minLength: 0)

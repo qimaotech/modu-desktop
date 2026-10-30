@@ -44,7 +44,6 @@ struct DesignIcon: View {
     var size: CGFloat = 16
     var body: some View {
         Image("DesignIcons/\(name)").resizable().scaledToFit()
-            .frame(width: name == "Disclosure" ? 10 : size, height: name == "Disclosure" ? 6 : size)
             .frame(width: size, height: size).accessibilityHidden(true)
     }
 }
@@ -71,27 +70,17 @@ struct SidebarRowBackground: ViewModifier {
     }
 }
 
-private struct ButtonHoverKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var buttonHovered: Bool {
-        get { self[ButtonHoverKey.self] }
-        set { self[ButtonHoverKey.self] = newValue }
-    }
-}
-
 struct ButtonHoverBackground<Background: Shape>: ViewModifier {
     let shape: Background
+    var foreground: Color = .primary
+    var hoverForeground: Color = .black
     @Environment(\.isEnabled) private var enabled
     @State var hovered = false
 
     func body(content: Content) -> some View {
         let highlighted = enabled && hovered
         content
-            .foregroundStyle(highlighted ? Color.black : Color.primary)
-            .environment(\.buttonHovered, highlighted)
+            .foregroundStyle(highlighted ? hoverForeground : foreground)
             .background(DesignStyle.buttonHover.opacity(highlighted ? 1 : 0), in: shape)
             .onHover { hovered = $0 }
     }
@@ -99,11 +88,13 @@ struct ButtonHoverBackground<Background: Shape>: ViewModifier {
 
 struct HoverPlainButtonStyle<Background: Shape>: ButtonStyle {
     let shape: Background
+    var foreground: Color = .primary
+    var hoverForeground: Color = .black
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .modifier(ButtonHoverBackground(shape: shape))
+            .modifier(ButtonHoverBackground(shape: shape, foreground: foreground, hoverForeground: hoverForeground))
             .opacity(enabled ? 1 : 0.4)
     }
 }

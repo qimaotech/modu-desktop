@@ -97,13 +97,19 @@ struct WorkspaceSidebar: View {
                 }.contentShape(Rectangle())
             }.accessibilityLabel(title).accessibilityValue(expanded.wrappedValue ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed))
             if add == .add {
-                Button { management.update() } label: { DesignIcon(name: "Update").frame(width: 24, height: 24) }
-                    .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
+                Button { management.update() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .semibold)).frame(width: 24, height: 24).accessibilityHidden(true)
+                }
+                    .buttonStyle(HoverPlainButtonStyle(shape: Circle(), foreground: DesignStyle.secondary, hoverForeground: DesignStyle.secondary))
                     .help(preferences.text.string(.uiUpdateRepositories)).accessibilityLabel(preferences.text.string(.uiUpdateRepositories))
                     .disabled(operations.busy || workspace.sortedRepositories.isEmpty)
             }
-            Button { management.sheet = add } label: { DesignIcon(name: "Plus").frame(width: 24, height: 24) }
-                .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
+            Button { management.sheet = add } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .semibold)).frame(width: 24, height: 24).accessibilityHidden(true)
+            }
+                .buttonStyle(HoverPlainButtonStyle(shape: Circle(), foreground: DesignStyle.secondary, hoverForeground: DesignStyle.secondary))
                 .help(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
                 .accessibilityLabel(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
                 .disabled(operations.busy || workspace.record == nil || (add == .create && workspace.sortedRepositories.isEmpty))
@@ -127,7 +133,7 @@ struct WorkspaceSidebar: View {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary).frame(width: 24)
                             .help(workspace.states[resource.id]?.reasonMessage.map(preferences.text.message) ?? preferences.text.string(.uiUnavailable)).accessibilityLabel(preferences.text.string(.uiUnavailable))
                     } else if workspace.states[resource.id]?.dirty == true {
-                        DesignIcon(name: "Unset", size: 20).frame(width: 24).accessibilityHidden(false)
+                        Circle().fill(.tertiary).frame(width: 7, height: 7).frame(width: 24, height: 20)
                             .accessibilityLabel(preferences.text.string(.uiWorkingTreeHasChanges))
                     }
                 }.frame(height: 28).contentShape(Rectangle())

@@ -21,8 +21,13 @@ struct ContentView: View {
                         ProgressView().controlSize(.small)
                         Text(model.presentation.repositoryUpdateProgressText).monospacedDigit()
                         if model.operations.canCancel || model.cancelling {
-                            Button { model.cancel() } label: { DesignIcon(name: "Cancel", size: 20) }
-                                .buttonStyle(HoverPlainButtonStyle(shape: Circle()))
+                            Button { model.cancel() } label: {
+                                Image(systemName: "xmark.circle.fill").resizable().scaledToFit()
+                                    .symbolRenderingMode(.palette).foregroundStyle(.white, DesignStyle.secondary)
+                                    .frame(width: 13, height: 13).frame(width: 14, height: 14, alignment: .bottom)
+                                    .contentShape(Rectangle())
+                            }
+                                .buttonStyle(.plain)
                                 .disabled(!model.operations.canCancel)
                                 .help(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
                                 .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
