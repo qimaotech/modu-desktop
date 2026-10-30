@@ -5,8 +5,16 @@ import Observation
 @MainActor @Observable
 final class RepositoryDetailModel {
     private let service: WorkspaceService
+    private let defaults: UserDefaults
     private var workspace: WorkspaceRecord?
     private var selection: Resource?
+    var collapsedPaths = Set<String>() {
+        didSet {
+            guard let key = collapsedPathsPreferenceKey else { return }
+            let paths = collapsedPaths.sorted()
+            if defaults.stringArray(forKey: key) != paths { defaults.set(paths, forKey: key) }
+        }
+    }
     private(set) var detail = RepositoryDetailState()
     private(set) var detailLoading = false
     var states: [String: ResourceState] = [:]
@@ -25,10 +33,16 @@ final class RepositoryDetailModel {
         return try? PathSafety.child(selection.path, of: workspace.rootURL, allowMissing: false)
     }
 
-    init(service: WorkspaceService) { self.service = service }
+    private var collapsedPathsPreferenceKey: String? {
+        guard let workspace, let selection else { return nil }
+        return "detail.\(workspace.root).\(selection.id).collapsedPaths"
+    }
+
+    init(service: WorkspaceService, defaults: UserDefaults) { self.service = service; self.defaults = defaults }
 
     func refresh(_ selection: Resource?, in workspace: WorkspaceRecord?) {
         self.selection = selection; self.workspace = workspace
+        collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? [])
         cancelPreload()
         detailTask?.cancel(); generation += 1
         detail = selection.flatMap { detailCache[$0] } ?? RepositoryDetailState()

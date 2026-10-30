@@ -68,7 +68,7 @@ struct WorkspaceSidebar: View {
                         }.accessibilityLabel(preferences.text.string(.uiShowWorkspace))
                     }
                 }
-                .onChange(of: workspace.selection) { _, selection in if let selection { proxy.scrollTo(selection.id) } }
+                .onChange(of: workspace.selection, initial: true) { _, selection in if let selection { proxy.scrollTo(selection.id) } }
             }
         }
         .background(DesignStyle.sidebar)

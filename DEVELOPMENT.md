@@ -31,7 +31,7 @@
 
 | 任务 | 命令 |
 | --- | --- |
-| 普通开发启动，恢复开发工作区 | `task run` |
+| 普通开发启动，恢复上次工作区与页面选择 | `task run` |
 | 重新选择开发工作区 | `task run -- --reset` |
 | 构建并激活隔离 Git 场景，验证启动并输出 PID | `task mock` |
 | 隔离工作区数据的构建与启动验证，不停止已有实例；输出 PID 后保持后台运行 | `task verify -- --mock linked-worktree-selected` |
@@ -46,9 +46,11 @@
 
 ### 偏好与工作区选择
 
-- Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，独立保存工作区选择、语言、快捷键、更新检查和工具选择，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
+- Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，与正式版隔离且不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
+- 正式版与开发版使用相同的[页面恢复规则](README.md#开始使用)。页面选择和侧栏展开状态按工作区保存，文件树折叠状态再按资源区分；侧栏宽度和 Git 面板比例在同一偏好域内共用。临时加载失败不覆盖已保存的页面选择。
+- 带 `--mock` 的启动任务每次创建新场景并预选示例成员；同一场景因切换语言重启时恢复已保存的页面与展开状态。场景与偏好的退出清理见[临时实例收尾](#临时实例收尾)。
 - 工作区记录和锁位于 `~/Library/Application Support/Modu/`；`~/.local/bin/modu-cli` 直接链接当前 App 的 `Contents/Resources/modu-cli`，更新 App 无需重新安装 CLI。旧版 CLI 链接在重新安装时迁移，保留原版本目录；不带 mock 的 verify 使用当前开发偏好所选的工作区。
-- `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复选择。
+- `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留各工作区的浏览状态、其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的工作区选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复工作区选择。
 
 ### 构建与日志诊断
 

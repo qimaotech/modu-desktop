@@ -479,6 +479,7 @@ import Testing
         await initialPreload.value
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.head == "main")
+        model.workspace.details.collapsedPaths = ["Sources"]
 
         let next = fixture.directory.appending(path: "next-workspace")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
@@ -491,18 +492,29 @@ import Testing
         model.workspace.selection = .repository("repo")
         #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
         try await waitForDetail(model)
+        #expect(model.workspace.details.collapsedPaths.isEmpty)
+        model.workspace.details.collapsedPaths = ["Tests"]
+
+        try await model.switchTo(fixture.root)
+        #expect(model.workspace.selection == .repository("repo") && model.workspace.details.collapsedPaths == ["Sources"])
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.changes?.isEmpty == true)
+        try await model.switchTo(next)
+        #expect(model.workspace.selection == .repository("repo") && model.workspace.details.collapsedPaths == ["Tests"])
+        try await waitForDetail(model)
+        #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
 
         let switching = AppModel(defaults: model.defaults, service: fixture.service)
         switching.workspace.record = try fixture.service.store.load(fixture.root)
+        switching.workspace.selection = nil
         switching.workspace.refreshDetail()
         let stalePreload = try #require(switching.workspace.detailPreloadTask)
         try await switching.switchTo(next)
         #expect(stalePreload.isCancelled)
         await stalePreload.value
-        await switching.workspace.detailPreloadTask?.value
-        switching.workspace.selection = .repository("repo")
-        #expect(switching.workspace.detail.changes?.map(\.path) == ["next.txt"])
+        #expect(switching.workspace.selection == .repository("repo"))
         try await waitForDetail(switching)
+        #expect(switching.workspace.detail.changes?.map(\.path) == ["next.txt"])
     }
 
     private func makeModel(_ fixture: Fixture, repository: Bool = true) async throws -> AppModel {

@@ -220,10 +220,8 @@ final class AppModel {
             try Task.checkCancellation()
             guard !presentation.quitPending else { throw CancellationError() }
             workspace.record = record
-            workspace.expandedGroups = Set(record.groups.keys)
+            if workspace.selection == nil { workspace.refreshDetail() }
             tools = await toolService.available()
-            workspace.selection = mock.initialSelection
-            workspace.refreshDetail()
             await workspace.details.detailTask?.value
             try Task.checkCancellation()
             guard !presentation.quitPending else { throw CancellationError() }

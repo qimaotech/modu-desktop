@@ -8,7 +8,6 @@ struct RepositoryDetailView: View {
     var tools: [ExternalTool]
     var preferredToolIDs: [String: String]
     var openTool: (ExternalTool) -> Void
-    @State private var collapsed = Set<String>()
 
     var body: some View {
         GeometryReader { geometry in
@@ -35,7 +34,6 @@ struct RepositoryDetailView: View {
                 }
             }.allowsHitTesting(false)
         }.textSelection(.enabled)
-            .onChange(of: workspace.selection) { collapsed.removeAll() }
     }
 
     var showsChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
@@ -83,7 +81,7 @@ struct RepositoryDetailView: View {
             Text(preferences.text.string(.uiChanges)).font(.system(size: 13)).frame(height: 22)
             if let error = workspace.detail.changesError { unavailable(error) }
             else if let changes = workspace.detail.changes {
-                let rows = ChangeNode.tree(changes).flatMap { $0.visibleRows(collapsed: collapsed) }
+                let rows = ChangeNode.tree(changes).flatMap { $0.visibleRows(collapsed: workspace.details.collapsedPaths) }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(rows) { row in
@@ -100,9 +98,9 @@ struct RepositoryDetailView: View {
         HStack(spacing: 0) {
             if node.children != nil {
                 Button {
-                    if !collapsed.insert(node.id).inserted { collapsed.remove(node.id) }
+                    if !workspace.details.collapsedPaths.insert(node.id).inserted { workspace.details.collapsedPaths.remove(node.id) }
                 } label: {
-                    DisclosureIcon(expanded: !collapsed.contains(node.id))
+                    DisclosureIcon(expanded: !workspace.details.collapsedPaths.contains(node.id))
                         .frame(width: 20, height: 20).contentShape(Rectangle())
                 }
                     .buttonStyle(.plain).accessibilityLabel(preferences.text.string(.uiExpandOrCollapse) + " " + node.name)

@@ -681,6 +681,9 @@ import SwiftUI
         try await fixture.prepareEmptyGroup("closed")
         model.workspace.record = try fixture.service.store.load(fixture.root)
         model.workspace.toggleGroup("closed")
+        model.workspace.selection = .member("feature", "repo")
+        model.workspace.details.collapsedPaths = ["Sources"]
+        await model.workspace.details.detailTask?.value
         if legacyPreferences { model.defaults.removeObject(forKey: model.workspace.sidebarPreferenceKey("knownGroups")) }
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("repositoriesExpanded"))
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("groupsExpanded"))
@@ -690,7 +693,10 @@ import SwiftUI
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
 
         let reopened = AppModel(defaults: model.defaults, service: fixture.service, installer: try makeInstaller(fixture))
-        #expect(await reopened.start() == false)
+        var readySelection: Resource?
+        #expect(await reopened.start { readySelection = reopened.workspace.selection } == false)
+        #expect(readySelection == .member("feature", "repo"))
+        #expect(reopened.workspace.details.collapsedPaths == ["Sources"])
         #expect(reopened.workspace.blocked == nil && !reopened.busy)
         #expect(reopened.workspace.expandedGroups == ["feature"])
         #expect(reopened.defaults.object(forKey: reopened.workspace.sidebarPreferenceKey("repositoriesExpanded")) as? Bool == false)
@@ -706,6 +712,7 @@ import SwiftUI
         await reopened.operation?.value
         #expect(reopened.workspace.record?.rootURL.path == PathSafety.canonical(nextRoot).path && reopened.presentation.result == nil)
         #expect(reopened.workspace.expandedGroups.isEmpty)
+        #expect(reopened.workspace.selection == nil && reopened.workspace.details.collapsedPaths.isEmpty)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
         #expect(try await fixture.service.store.locate(explicit: fixture.root.path, cwd: fixture.root).path == PathSafety.canonical(fixture.root).path)
         #expect(reopened.defaults.object(forKey: "sidebar.\(saved.root).repositoriesExpanded") as? Bool == false)
@@ -715,7 +722,8 @@ import SwiftUI
         #expect(reopened.workspace.record?.rootURL.path == PathSafety.canonical(fixture.root).path && reopened.presentation.result == nil)
         #expect(reopened.workspace.record?.groups["feature"]?.repositories == ["repo"])
         #expect(reopened.workspace.record?.groups["closed"]?.repositories == [])
-        #expect(reopened.workspace.expandedGroups == ["feature"] && reopened.workspace.selection == nil)
+        #expect(reopened.workspace.expandedGroups == ["feature"] && reopened.workspace.selection == .member("feature", "repo"))
+        #expect(reopened.workspace.details.collapsedPaths == ["Sources"])
         #expect(reopened.workspace.record == saved)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
         #expect(PathSafety.exists(fixture.service.store.recordURL(nextRoot)))
@@ -723,6 +731,57 @@ import SwiftUI
         #expect(reopened.defaults.string(forKey: "tool.Agent") == "codex")
         #expect(try await fixture.service.store.locate(explicit: nil, cwd: fixture.root.appending(path: "worktrees/feature/repo")).path == PathSafety.canonical(fixture.root).path)
         #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")))
+        reopened.workspace.selection = nil
+        await reopened.workspace.detailPreloadTask?.value
+        let welcome = AppModel(defaults: model.defaults, service: fixture.service, installer: try makeInstaller(fixture))
+        #expect(await welcome.start() == false)
+        #expect(welcome.workspace.selection == nil)
+        await welcome.workspace.detailPreloadTask?.value
+    }
+
+    @Test func savedSelectionRejectsMissingResourcesAndMalformedPreferences() async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let record = try #require(model.workspace.record)
+        let key = model.workspace.sidebarPreferenceKey("selection")
+        let invalidSelections: [Resource] = [.repository("missing"), .group("missing"), .member("missing", "repo"), .workspace(), .cli(path: "modu-cli")]
+        let savedValues = try invalidSelections.map { try JSONEncoder().encode($0) } + [Data("invalid".utf8)]
+        for value in savedValues {
+            model.defaults.set(value, forKey: key)
+            let reopened = AppModel(defaults: model.defaults, service: fixture.service)
+            try await reopened.switchTo(fixture.root, loaded: record)
+            #expect(reopened.workspace.selection == nil && reopened.workspace.detail.summary == nil)
+            #expect(try JSONDecoder().decode(Resource?.self, from: #require(model.defaults.data(forKey: key))) == nil)
+        }
+    }
+
+    @Test func temporaryReadFailurePreservesTheSavedPageAndFileTreeState() async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        try await fixture.prepareEmptyGroup("feature")
+        model.workspace.record = try fixture.service.store.load(fixture.root)
+        model.workspace.selection = .group("feature")
+        model.workspace.details.collapsedPaths = ["Sources"]
+        await model.workspace.details.detailTask?.value
+        await model.workspace.detailPreloadTask?.value
+        let recordURL = fixture.service.store.recordURL(fixture.root)
+        let original = try Data(contentsOf: recordURL)
+        try Data("invalid".utf8).write(to: recordURL)
+
+        await model.activate()
+        #expect(model.workspace.record == nil && model.workspace.selection == nil && model.workspace.blocked != nil)
+        let saved = try #require(model.defaults.data(forKey: model.workspace.sidebarPreferenceKey("selection")))
+        #expect(try JSONDecoder().decode(Resource.self, from: saved) == .group("feature"))
+
+        try original.write(to: recordURL)
+        await model.activate()
+        #expect(model.workspace.blocked == nil && model.workspace.selection == .group("feature"))
+        #expect(model.workspace.details.collapsedPaths == ["Sources"])
+        await model.workspace.detailPreloadTask?.value
     }
 
     @Test func lockedHistoryDoesNotPreventSwitchingAndIsKept() async throws {

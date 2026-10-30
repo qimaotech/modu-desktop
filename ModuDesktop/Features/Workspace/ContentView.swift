@@ -9,7 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WorkspaceSplitView(sidebar: WorkspaceSidebar(workspace: model.workspace, management: model.management, operations: model.operations, preferences: model.preferences).id(model.workspace.record?.root), detail: detail.frame(maxWidth: .infinity, maxHeight: .infinity))
+            WorkspaceSplitView(sidebar: WorkspaceSidebar(workspace: model.workspace, management: model.management, operations: model.operations, preferences: model.preferences).id(model.workspace.record?.root), detail: detail.frame(maxWidth: .infinity, maxHeight: .infinity), defaults: model.preferences.defaults)
         }
         .background(DesignStyle.background)
         .navigationTitle(model.workspace.record?.rootURL.lastPathComponent ?? "Modu")

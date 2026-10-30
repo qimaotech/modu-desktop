@@ -20,6 +20,8 @@ final class MockWorkspace {
         }
         self.defaults = defaults
         defaults.set(fixture.root.path, forKey: "workspace")
+        let selectionKey = "sidebar.\(fixture.root.path).selection"
+        if defaults.object(forKey: selectionKey) == nil { defaults.set(try JSONEncoder().encode(initialSelection), forKey: selectionKey) }
         if defaults.string(forKey: "appLanguage") == nil { defaults.set(AppLanguage.english.rawValue, forKey: "appLanguage") }
         for tool in ExternalTool.builtIn where ["codex", "fork", "vscode", "terminal"].contains(tool.id) { defaults.set(tool.id, forKey: "tool.\(tool.category)") }
     }

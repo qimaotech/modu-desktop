@@ -30,6 +30,7 @@ final class WorkspaceModel {
             }
             expandedGroups = expanded.union(groups.subtracting(previousGroups)).intersection(groups)
             defaults.set(groups.sorted(), forKey: sidebarPreferenceKey("knownGroups"))
+            if rootChanged { restoreSelection(in: record) }
         }
     }
     var blocked: String?
@@ -38,6 +39,10 @@ final class WorkspaceModel {
     var noticeDetails: String?
     var selection: Resource? {
         didSet {
+            if record != nil, let data = try? JSONEncoder().encode(selection) {
+                // An explicit nil distinguishes the home page from a workspace without saved navigation.
+                defaults.set(data, forKey: sidebarPreferenceKey("selection"))
+            }
             if oldValue != selection { onContextChange?(false); refreshDetail() }
         }
     }
@@ -78,7 +83,7 @@ final class WorkspaceModel {
         self.preferences = preferences
         self.operations = operations
         self.presentation = presentation
-        details = RepositoryDetailModel(service: service)
+        details = RepositoryDetailModel(service: service, defaults: preferences.defaults)
         details.onIdle = { [weak self] in self?.startDetailPreload() }
         details.onCommitsError = { [weak self] error in
             guard let self, !self.presentation.quitPending else { return }
@@ -139,8 +144,8 @@ final class WorkspaceModel {
             guard let record = try await recordForReload(root, generation: generation, showProgress: showProgress, maintainingWorkspace: maintainingWorkspace) else { return }
             guard generation == refreshGeneration, !busy, !Task.isCancelled, !presentation.quitPending else { return }
             if self.record != record { invalidateDetailCache() }
-            self.record = record; blocked = nil; blockedDetails = nil
             let previousSelection = selection
+            self.record = record; blocked = nil; blockedDetails = nil
             afterLoad?()
             if let selection, !service.resources(record).contains(selection) { self.selection = nil }
             if selection == previousSelection { refreshDetail() }
@@ -233,9 +238,10 @@ final class WorkspaceModel {
         guard token == refreshGeneration else { throw CancellationError() }
         invalidateDetailCache()
         defaults.set(record.root, forKey: "workspace")
+        let previousSelection = selection
         self.record = record; blocked = nil; notice = nil
         states = [:]
-        selection = nil; refreshDetail()
+        if selection == previousSelection { refreshDetail() }
     }
     func refreshDetail() { details.refresh(selection, in: record) }
     func loadMore() { details.loadMore() }
@@ -259,6 +265,11 @@ final class WorkspaceModel {
         if let repo = resource.repo, previous.repositories.first(where: { $0.id == repo })?.url != current.repositories.first(where: { $0.id == repo })?.url { return false }
         if let group = resource.group, previous.groups[group]?.createdAt != current.groups[group]?.createdAt { return false }
         return true
+    }
+
+    private func restoreSelection(in record: WorkspaceRecord) {
+        let saved = defaults.data(forKey: sidebarPreferenceKey("selection")).flatMap { try? JSONDecoder().decode(Resource.self, from: $0) }
+        selection = saved.flatMap { service.resources(record).contains($0) ? $0 : nil }
     }
 
 }

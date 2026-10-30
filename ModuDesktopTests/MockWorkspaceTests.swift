@@ -74,7 +74,21 @@ import Testing
         #expect(mock.defaults.string(forKey: "appLanguage") == "zh_CN")
         let reopened = try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: mock.fixture.root)
         #expect(reopened.defaults.string(forKey: "appLanguage") == "zh_CN")
-        #expect(reopened.makeModel().preferences.activeLocale == .simplifiedChinese)
+        model.workspace.record = try await mock.fixture.load()
+        model.workspace.selection = .repository("catalog-service")
+        model.workspace.expandedGroups = []
+        await model.workspace.details.detailTask?.value
+        await model.workspace.detailPreloadTask?.value
+        let restored = reopened.makeModel()
+        #expect(restored.preferences.activeLocale == .simplifiedChinese)
+        #expect(!(await restored.start()))
+        #expect(restored.workspace.selection == .repository("catalog-service") && restored.workspace.expandedGroups.isEmpty)
+        restored.workspace.selection = nil
+        await restored.workspace.detailPreloadTask?.value
+        let welcome = try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: mock.fixture.root).makeModel()
+        #expect(!(await welcome.start()))
+        #expect(welcome.workspace.selection == nil && welcome.workspace.expandedGroups.isEmpty)
+        await welcome.workspace.detailPreloadTask?.value
         #expect(UserDefaults.standard.string(forKey: "workspace") == savedWorkspace)
         #expect(UserDefaults.standard.string(forKey: "appLanguage") == savedLanguage)
         mock.remove()

@@ -11,7 +11,8 @@ struct GitSplitView<Upper: View, Lower: View>: View {
 struct WorkspaceSplitView<Sidebar: View, Detail: View>: View {
     var sidebar: Sidebar
     var detail: Detail
-    var body: some View { NativeSplitView(first: sidebar, second: detail, vertical: true, defaults: nil) }
+    let defaults: UserDefaults
+    var body: some View { NativeSplitView(first: sidebar, second: detail, vertical: true, defaults: defaults) }
 }
 
 private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
@@ -111,7 +112,9 @@ final class ModuSplitView: NSSplitView {
             }
             window?.invalidateCursorRects(for: self)
         } else {
-            let preferred = !positioned || previous <= 0 ? (total < 1100 ? 240 : 338) : current + (total - previous) * 98 / 300
+            let preferred = !positioned || previous <= 0
+                ? defaults?.object(forKey: "sidebarWidth") as? Double ?? (total < 1100 ? 240 : 338)
+                : current + (total - previous) * 98 / 300
             size = constrained(preferred)
             lowerHeight = max(0, total - size - dividerThickness)
         }
@@ -127,8 +130,9 @@ final class ModuSplitView: NSSplitView {
     }
 
     fileprivate func saveDividerPosition() {
-        guard !isVertical, canResize, positioned, !resizing, bounds.height > 0, NSApp.currentEvent?.type == .leftMouseDragged else { return }
-        defaults?.set(arrangedSubviews[0].frame.height / bounds.height, forKey: "gitSplitRatio")
+        guard positioned, !resizing, NSApp.currentEvent?.type == .leftMouseDragged else { return }
+        if isVertical { defaults?.set(arrangedSubviews[0].frame.width, forKey: "sidebarWidth") }
+        else if canResize, bounds.height > 0 { defaults?.set(arrangedSubviews[0].frame.height / bounds.height, forKey: "gitSplitRatio") }
     }
 
     private func constrained(_ value: CGFloat) -> CGFloat {
