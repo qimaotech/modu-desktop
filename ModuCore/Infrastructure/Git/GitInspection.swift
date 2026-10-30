@@ -22,10 +22,12 @@ extension Git {
         guard !values.isEmpty else { throw ModuError("git-failed", .gitReturnedNoWorktreeRegistrations) }
         return values
     }
-    func checkBranchNotInUse(_ branch: String, registrations: [WorktreeRegistration], at repository: URL, excluding worktreePath: String? = nil) async throws {
+    func checkBranchNotInUse(_ branch: String, registrations: [WorktreeRegistration], at repository: URL, excluding worktreePath: String? = nil, commonDirectory: String? = nil) async throws {
         let occupied = registrations.filter { $0.path != worktreePath }.compactMap(\.branch)
         guard !occupied.isEmpty else { return }
-        let common = try await run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: repository).text
+        let common: String
+        if let commonDirectory { common = commonDirectory }
+        else { common = try await run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: repository).text }
         let heads = URL(fileURLWithPath: common).appending(path: "refs/heads")
         // Differently cased branch names can share one loose ref on case-insensitive volumes.
         let identity = PathSafety.identity(heads.appending(path: branch))
@@ -52,25 +54,43 @@ extension Git {
         return output.status == 0 ? output.text : nil
     }
     public func changes(at path: URL) async throws -> [FileChange] {
-        let output = try await run(["status", "--porcelain=v1", "-z", "--untracked-files=all"], at: path)
-        return try Self.parseChanges(output.stdout)
+        try Self.parseChanges(await changeStatus(at: path))
+    }
+    func changeCount(at path: URL) async throws -> Int {
+        try Self.countChanges(await changeStatus(at: path))
+    }
+    private func changeStatus(at path: URL) async throws -> Data {
+        try await run(["status", "--porcelain=v1", "-z", "--untracked-files=all"], at: path).stdout
     }
     public static func parseChanges(_ data: Data) throws -> [FileChange] {
-        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
-        var index = 0, result: [FileChange] = []
-        while index < fields.count {
-            let bytes = Array(fields[index]); index += 1
-            guard bytes.count >= 4, bytes[2] == 32 else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
-            let x = String(UnicodeScalar(bytes[0])), y = String(UnicodeScalar(bytes[1]))
-            let path = String(decoding: bytes.dropFirst(3), as: UTF8.self)
-            var original: String?
-            if x == "R" || x == "C" || y == "R" || y == "C" {
-                guard index < fields.count else { throw ModuError("git-output-invalid", .missingRenameSourcePath) }
-                original = String(decoding: fields[index], as: UTF8.self); index += 1
-            }
+        var result: [FileChange] = []
+        _ = try readChanges(data) { field, originalField in
+            let x = String(UnicodeScalar(field[field.startIndex])), y = String(UnicodeScalar(field[field.startIndex + 1]))
+            let path = String(decoding: field.dropFirst(3), as: UTF8.self)
+            let original = originalField.map { String(decoding: $0, as: UTF8.self) }
             result.append(.init(path: path, originalPath: original, index: x == "?" ? " " : x, workingTree: y))
         }
         return result.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+    static func countChanges(_ data: Data) throws -> Int {
+        try readChanges(data) { _, _ in }
+    }
+    private static func readChanges(_ data: Data, consume: (Data.SubSequence, Data.SubSequence?) -> Void) throws -> Int {
+        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
+        var index = 0, count = 0
+        while index < fields.count {
+            let field = fields[index]; index += 1
+            guard field.count >= 4, field[field.startIndex + 2] == 32 else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+            let x = field[field.startIndex], y = field[field.startIndex + 1]
+            var original: Data.SubSequence?
+            if x == UInt8(ascii: "R") || x == UInt8(ascii: "C") || y == UInt8(ascii: "R") || y == UInt8(ascii: "C") {
+                guard index < fields.count else { throw ModuError("git-output-invalid", .missingRenameSourcePath) }
+                original = fields[index]; index += 1
+            }
+            consume(field, original)
+            count += 1
+        }
+        return count
     }
     public func summary(at path: URL, origin: String? = nil, refreshBase: (@Sendable (String?) async throws -> Void)? = nil) async throws -> GitSummary {
         guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }

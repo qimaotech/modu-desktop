@@ -365,35 +365,6 @@
         }
       }
     },
-    "message.commitsAreNotReachableFromLocallyKnownRemote": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld commit is not reachable from locally known remote-tracking refs."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%1$lld commits are not reachable from locally known remote-tracking refs."
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地已知的远端跟踪引用无法到达 %1$lld 个提交。"
-          }
-        }
-      }
-    },
     "message.configurationSaveAndVerificationFailedResourcesWereKept": {
       "extractionState": "manual",
       "localizations": {
@@ -612,23 +583,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法识别待清理的测试宿主。"
-          }
-        }
-      }
-    },
-    "message.couldNotInspectGroupDirectory": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not inspect group directory."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法检查分组目录。"
           }
         }
       }
@@ -1364,40 +1318,6 @@
         }
       }
     },
-    "message.groupContainsUnmanagedBareGitRepository": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Group contains an unmanaged bare Git repository: %1$@"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "分组中包含未受管理的裸 Git 仓库：%1$@"
-          }
-        }
-      }
-    },
-    "message.groupContainsUnmanagedGitRepository": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Group contains an unmanaged Git repository: %1$@"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "分组中包含未受管理的 Git 仓库：%1$@"
-          }
-        }
-      }
-    },
     "message.groupIsNotConfigured": {
       "extractionState": "manual",
       "localizations": {
@@ -1598,23 +1518,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "HEAD 不可用。"
-          }
-        }
-      }
-    },
-    "message.ignoredFilesWillBePermanentlyDeleted": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ignored files will be permanently deleted."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "被忽略的文件将被永久删除。"
           }
         }
       }

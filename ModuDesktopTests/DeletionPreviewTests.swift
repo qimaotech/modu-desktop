@@ -228,7 +228,7 @@ import Testing
         let fixture = try await Fixture(); defer { fixture.remove() }
         try await prepare(fixture)
         let record = try fixture.service.store.load(fixture.root)
-        for action in ["complete", "cancel", "replace", "reopen", "workspace"] {
+        for action in ["complete", "cancel", "replace", "reopen", "workspace", "failure"] {
             try? FileManager.default.removeItem(at: fixture.directory.appending(path: "delete-preview-probe"))
             let probe = fixture.directory.appending(path: "delete-preview-probe")
             try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
@@ -238,6 +238,7 @@ import Testing
             : > "$MODU_DELETE_PREVIEW_PROBE/started"
             trap 'exit 143' TERM INT
             while [ ! -e "$MODU_DELETE_PREVIEW_PROBE/release" ]; do sleep 0.02; done
+            if [ -e "$MODU_DELETE_PREVIEW_PROBE/fail" ]; then kill -TERM "$PPID"; exit 1; fi
             printf 'test-token\\000/\\000'
             """.utf8).write(to: monitor)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
@@ -264,16 +265,22 @@ import Testing
             #expect(!model.busy && model.operation == nil)
             do {
                 let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-                while !PathSafety.exists(probe.appending(path: "started")), ContinuousClock.now < deadline {
+                while (!PathSafety.exists(probe.appending(path: "started")) || model.management.deletion.isEmpty), ContinuousClock.now < deadline {
                     try await Task.sleep(for: .milliseconds(20))
                 }
                 try #require(PathSafety.exists(probe.appending(path: "started")))
+                let completed = try #require(model.management.deletion.first)
+                #expect(completed.resource == .group("feature") && completed.dirty == false)
+                #expect(model.management.deletionLoading && !model.management.canConfirmDelete)
+                #expect(model.management.deletionResources == [member, .group("feature")])
+                #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionDisplayResources == [.group("feature"), member])
                 let lease = try service.store.tryLock(fixture.root); lease.unlock()
                 switch action {
                 case "cancel": model.management.sheet = nil
                 case "replace": model.management.prepareDelete(.member(group: "feature", repo: "repo"))
                 case "reopen": model.management.sheet = nil; model.management.prepareDelete(.member(group: "feature", repo: "repo"))
                 case "workspace": model.workspace.record = nil
+                case "failure": try Data().write(to: probe.appending(path: "fail"))
                 default: break
                 }
                 if action == "replace" || action == "reopen" {
@@ -282,9 +289,14 @@ import Testing
                 try Data().write(to: probe.appending(path: "release"))
                 await preview.value
                 await model.management.deletePreviewTask?.value
-                #expect(!model.management.deletionLoading && model.management.formError == nil && model.presentation.message == nil)
+                #expect(!model.management.deletionLoading && model.presentation.message == nil)
+                #expect((model.management.formError != nil) == (action == "failure"))
                 if action == "cancel" || action == "workspace" {
                     #expect(model.management.sheet == nil && model.management.deletion.isEmpty && !model.management.canConfirmDelete)
+                } else if action == "failure" {
+                    #expect(model.management.sheet == .delete && model.management.deletion.isEmpty && !model.management.canConfirmDelete)
+                    model.management.confirmDelete()
+                    #expect(model.operation == nil && !model.busy)
                 } else {
                     #expect(model.management.sheet == .delete && model.management.canConfirmDelete)
                     let expected: [Resource] = action == "replace" || action == "reopen" ? [.member("feature", "repo")] : [.member("feature", "repo"), .group("feature")]
@@ -362,7 +374,9 @@ import Testing
         let record = try fixture.service.store.load(fixture.root)
         let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
         let member = record.memberURL("feature", "repo")
-        for change in ["branch", "lock", "nested"] {
+        let metadata = member.appending(path: ".git")
+        let originalMetadata = try Data(contentsOf: metadata)
+        for change in ["branch", "lock", "repository"] {
             let reason: String
             switch change {
             case "branch":
@@ -372,10 +386,10 @@ import Testing
                 _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
                 reason = "worktree-locked"
             default:
-                let nested = record.groupURL("feature").appending(path: "unmanaged")
-                try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
-                _ = try await fixture.service.git.run(["init"], at: nested)
-                reason = "unmanaged-worktree"
+                let other = fixture.directory.appending(path: "source")
+                _ = try await fixture.service.git.run(["config", "remote.origin.url", fixture.remoteURL], at: other)
+                try Data("gitdir: \(other.appending(path: ".git").path)\n".utf8).write(to: metadata)
+                reason = "resource-unavailable"
             }
             let result = await fixture.service.remove(.group("feature"), at: fixture.root, authorization: targets)
             #expect(result.reasonCode == reason && result.items.allSatisfy { $0.effects.isEmpty })
@@ -386,7 +400,7 @@ import Testing
                 _ = try await fixture.service.git.run(["switch", "feature"], at: member)
                 _ = try await fixture.service.git.run(["branch", "-D", "changed"], at: member)
             case "lock": _ = try await fixture.service.git.run(["worktree", "unlock", member.path], at: record.repositoryURL("repo"))
-            default: try FileManager.default.removeItem(at: record.groupURL("feature").appending(path: "unmanaged"))
+            default: try originalMetadata.write(to: metadata)
             }
         }
     }

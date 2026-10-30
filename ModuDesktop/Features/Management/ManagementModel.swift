@@ -169,22 +169,29 @@ final class ManagementModel {
             await previousEdit?.value
             await previous?.value
             guard !Task.isCancelled, deletePreviewGeneration == context, session.record?.rootURL == root, sheet == .delete, !busy else { return }
-            let preview = await Result(catching: { try await service.previewDelete(request, at: root) })
+            let preview = await Result(catching: {
+                try await service.previewDelete(request, at: root) { [self] target in
+                    await MainActor.run {
+                        guard !Task.isCancelled, deletePreviewGeneration == context, session.record?.rootURL == root, sheet == .delete, !busy else { return }
+                        deletion.append(target)
+                    }
+                }
+            })
             guard !Task.isCancelled, deletePreviewGeneration == context, session.record?.rootURL == root, sheet == .delete, !busy else { return }
             switch preview {
             case .success(let targets): deletion = targets
-            case .failure(let error): presentError(error)
+            case .failure(let error): deletion = []; presentError(error)
             }
             deletionLoading = false; deletePreviewTask = nil
         }
     }
     var deletionResources: [Resource] {
-        if !deletion.isEmpty { return deletion.map(\.resource) }
-        guard let workspace = session.record, let deleteRequest else { return [] }
-        return (try? service.deleteResources(deleteRequest, record: workspace)) ?? []
+        if let workspace = session.record, let deleteRequest,
+           let resources = try? service.deleteResources(deleteRequest, record: workspace) { return resources }
+        return deletion.map(\.resource)
     }
     var deletionPresentation: DeletionPresentation {
-        dismissedDeletion ?? .init(request: deleteRequest, editingGroup: pendingEdit != nil, targets: deletion, resources: deletionResources, loading: deletionLoading)
+        dismissedDeletion ?? .init(request: deleteRequest, editingGroup: pendingEdit != nil, targets: deletion, resources: deletionResources)
     }
     var canConfirmDelete: Bool { sheet == .delete && !busy && !deletionLoading && !deletion.isEmpty }
     func confirmDelete() {
@@ -254,6 +261,7 @@ final class ManagementModel {
     }
 
     private func cancelDeletePreview() {
+        if deletionLoading { deletion = [] }
         deletePreviewTask?.cancel(); deletePreviewGeneration += 1; deletionLoading = false
     }
 
@@ -280,7 +288,6 @@ struct DeletionPresentation {
     let editingGroup: Bool
     let targets: [DeletionTarget]
     let resources: [Resource]
-    let loading: Bool
 }
 extension Result where Failure == Error {
     init(catching body: () async throws -> Success) async { do { self = .success(try await body()) } catch { self = .failure(error) } }

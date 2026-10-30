@@ -548,14 +548,16 @@ struct FailureTests {
         #expect(result.reasonCode == "unmanaged-worktree")
         #expect(PathSafety.exists(f.root.appending(path: "worktrees/feature/repo")))
     }
-    @Test func groupDeletionRejectsNestedBareRepository() async throws {
+    @Test(arguments: [false, true])
+    func groupDeletionIncludesUnmanagedRepositories(_ bare: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         let nested = f.root.appending(path: "worktrees/feature/unmanaged.git")
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
-        _ = try await f.service.git.run(["init", "--bare"], at: nested)
+        _ = try await f.service.git.run(bare ? ["init", "--bare"] : ["init"], at: nested)
         let result = await f.service.remove(.group("feature"), at: f.root, execute: true)
-        #expect(result.reasonCode == "unmanaged-worktree")
-        #expect(PathSafety.exists(f.root.appending(path: "worktrees/feature/repo")))
+        #expect(result.status == .success, "\(result.items)")
+        #expect(!PathSafety.exists(nested.deletingLastPathComponent()))
+        #expect(try f.service.store.load(f.root).groups["feature"] == nil)
     }
     @Test(arguments: [0, 7])
     func fastCommandsPreserveOutputAndExitStatus(_ status: Int) async throws {

@@ -4,18 +4,21 @@ import Testing
 @testable import ModuCore
 
 struct WorkflowTests {
-    @Test func deletionPreviewChecksMembersConcurrentlyAndPreservesOrderAndRisks() async throws {
+    @Test func deletionPreviewKeepsSixChecksRunningAndPreservesOrderAndRisks() async throws {
         let f = try await Fixture(); defer { f.remove() }
         try await prepare(f)
         var record = try f.service.store.load(f.root)
-        let other = Repository(url: "https://modu-test.invalid/other.git")
-        try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(other.id))
-        _ = try await f.service.git.run(["config", "remote.origin.url", other.url], at: record.repositoryURL(other.id))
-        record.repositories.append(other)
+        let others = (1...6).map { Repository(url: "https://modu-test.invalid/other\($0).git") }
+        for other in others {
+            try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(other.id))
+            _ = try await f.service.git.run(["config", "remote.origin.url", other.url], at: record.repositoryURL(other.id))
+            record.repositories.append(other)
+        }
         try f.service.store.save(record)
-        _ = try await f.service.git.ensureIgnore([other.id], at: f.root)
+        _ = try await f.service.git.ensureIgnore(others.map(\.id), at: f.root)
         try await f.commitWorkspace()
-        #expect(await f.service.createGroup("feature", repositories: ["repo", other.id], at: f.root).status == .success)
+        let members = ["repo"] + others.map(\.id)
+        #expect(await f.service.createGroup("feature", repositories: members, at: f.root).status == .success)
         record = try f.service.store.load(f.root)
         let member = record.memberURL("feature", "repo")
         try Data("/ignored/\n/ignored.txt\n".utf8).write(to: record.repositoryURL("repo").appending(path: ".git/info/exclude"))
@@ -23,20 +26,21 @@ struct WorkflowTests {
         try FileManager.default.createDirectory(at: ignored, withIntermediateDirectories: true)
         try Data("ignored".utf8).write(to: ignored.appending(path: "file.txt"))
         try Data("ignored".utf8).write(to: member.appending(path: "ignored.txt"))
-        try Data("changed".utf8).write(to: record.memberURL("feature", other.id).appending(path: "README"))
+        try Data("changed".utf8).write(to: record.memberURL("feature", "other1").appending(path: "README"))
 
         let probe = f.directory.appending(path: "delete-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
         let monitor = probe.appending(path: "fsmonitor")
         try Data("""
         #!/bin/sh
-        : > "$MODU_DELETE_PROBE/$(basename "$PWD")"
+        member=$(basename "$PWD")
+        : > "$MODU_DELETE_PROBE/$member"
         trap 'exit 143' TERM INT
-        while [ ! -e "$MODU_DELETE_PROBE/release" ]; do sleep 0.02; done
+        while [ ! -e "$MODU_DELETE_PROBE/release" ] && [ ! -e "$MODU_DELETE_PROBE/release-$member" ]; do sleep 0.02; done
         printf 'test-token\\000/\\000'
         """.utf8).write(to: monitor)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        for repo in ["repo", other.id] {
+        for repo in members {
             for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
                 _ = try await f.service.git.run(arguments, at: record.repositoryURL(repo))
             }
@@ -47,24 +51,25 @@ struct WorkflowTests {
         let preview = Task { try await service.previewDelete(.group("feature"), at: f.root) }
         do {
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-            while (!PathSafety.exists(probe.appending(path: "repo")) || !PathSafety.exists(probe.appending(path: other.id))), ContinuousClock.now < deadline {
+            while !members.prefix(6).allSatisfy({ PathSafety.exists(probe.appending(path: $0)) }), ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(20))
             }
-            try #require(PathSafety.exists(probe.appending(path: "repo")) && PathSafety.exists(probe.appending(path: other.id)))
+            try #require(members.prefix(6).allSatisfy { PathSafety.exists(probe.appending(path: $0)) })
+            #expect(!PathSafety.exists(probe.appending(path: "other6")))
+            try Data().write(to: probe.appending(path: "release-other1"))
+            let nextDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(probe.appending(path: "other6")), ContinuousClock.now < nextDeadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            try #require(PathSafety.exists(probe.appending(path: "other6")))
             try Data().write(to: probe.appending(path: "release"))
             let targets = try await preview.value
-            #expect(targets.map(\.resource) == [.member("feature", "repo"), .member("feature", other.id), .group("feature")])
+            #expect(targets.map(\.resource) == members.map { Resource.member("feature", $0) } + [.group("feature")])
             #expect(targets.allSatisfy { $0.branch == "feature" && $0.exists && $0.registered })
             #expect(targets[0].risks.contains("Working tree is clean."))
-            #expect(targets[0].risks.contains("Ignored files will be permanently deleted."))
+            #expect(!targets[0].risks.contains("Ignored files will be permanently deleted."))
             #expect(targets[1].risks.contains("1 changed paths will be permanently deleted."))
-            #expect(targets[2].risks.contains { $0.contains("commits are not reachable") })
-            try FileManager.default.removeItem(at: ignored.appending(path: "file.txt"))
-            let fileOnly = try await service.previewDelete(.member(group: "feature", repo: "repo"), at: f.root)
-            #expect(fileOnly[0].risks.contains("Ignored files will be permanently deleted."))
-            try FileManager.default.removeItem(at: member.appending(path: "ignored.txt"))
-            let empty = try await service.previewDelete(.member(group: "feature", repo: "repo"), at: f.root)
-            #expect(!empty[0].risks.contains("Ignored files will be permanently deleted."))
+            #expect(!targets.last!.risks.contains { $0.contains("commits are not reachable") })
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
             preview.cancel()

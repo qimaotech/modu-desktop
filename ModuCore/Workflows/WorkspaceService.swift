@@ -161,30 +161,41 @@ public struct WorkspaceService: Sendable {
         }
     }
     public func checked(_ resource: Resource, in record: WorkspaceRecord) async throws -> URL {
+        let repository = try await checkedRepository(for: resource, in: record)
+        let path = try PathSafety.child(resource.path, of: record.rootURL, allowMissing: false)
+        try await checkWorktree(resource, at: path, repository: repository)
+        return path
+    }
+    func checkedRepository(for resource: Resource, in record: WorkspaceRecord) async throws -> RepositoryInspection {
         try store.checkBoundary(record.rootURL)
         guard resources(record).contains(resource) else { throw ModuError("target-not-configured", .resourceIsNotConfigured) }
-        let path = try PathSafety.child(resource.path, of: record.rootURL, allowMissing: false)
+        let main: URL
+        let origin: String?
         if let repo = resource.repo {
             guard let repository = record.repositories.first(where: { $0.id == repo }) else { throw ModuError("target-not-configured", .repositoryIsNotConfigured) }
-            let main = try PathSafety.child("repositories/\(repo)", of: record.rootURL, allowMissing: false)
-            try await git.checkRepository(main, origin: repository.url, main: true)
-            try await git.checkRepository(path, origin: repository.url)
-            let registered = try await git.registrations(at: main)
-            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", .worktreeRegistrationIsMissing(path.path)) }
-            let expected = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
-            let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
-            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", .worktreeBelongsAnotherRepository) }
+            main = try PathSafety.child("repositories/\(repo)", of: record.rootURL, allowMissing: false)
+            origin = repository.url
         } else {
-            try await git.checkRepository(record.rootURL, main: true)
-            let registered = try await git.registrations(at: record.rootURL)
-            guard registered.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else { throw ModuError("resource-unavailable", .groupRootRegistrationIsMissing) }
-            try await git.checkRepository(path)
-            let expected = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: record.rootURL).text
+            main = record.rootURL
+            origin = nil
+        }
+        try await git.checkRepository(main, origin: origin, main: true)
+        let registrations = try await git.registrations(at: main)
+        let common = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
+        return .init(path: main, origin: origin, registrations: registrations, commonDirectory: common)
+    }
+    func checkWorktree(_ resource: Resource, at path: URL, repository: RepositoryInspection) async throws {
+        guard repository.registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else {
+            throw ModuError("resource-unavailable", resource.repo == nil ? .groupRootRegistrationIsMissing : .worktreeRegistrationIsMissing(path.path))
+        }
+        if resource.kind != .repository {
+            try await git.checkRepository(path, origin: repository.origin)
             let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
-            guard PathSafety.identity(URL(fileURLWithPath: expected)) == PathSafety.identity(URL(fileURLWithPath: actual)) else { throw ModuError("resource-unavailable", .groupRootBelongsAnotherRepository) }
+            guard PathSafety.identity(URL(fileURLWithPath: repository.commonDirectory)) == PathSafety.identity(URL(fileURLWithPath: actual)) else {
+                throw ModuError("resource-unavailable", resource.repo == nil ? .groupRootBelongsAnotherRepository : .worktreeBelongsAnotherRepository)
+            }
         }
         guard try await git.oid("HEAD", at: path) != nil else { throw ModuError("resource-unavailable", .worktreeHEADIsUnavailable) }
-        return path
     }
     private func checkCandidate(_ root: URL, hasRecord: Bool) async throws {
         try PathSafety.directory(root)
@@ -237,4 +248,11 @@ public struct WorkspaceService: Sendable {
         item.reasonCode = error.code; item.message = error.message; item.userMessage = error.userMessage
     }
     func checkCancellation() throws { if Task.isCancelled { throw ModuError("cancelled", .operationCancelledCompletedResourcesWereKept) } }
+}
+
+struct RepositoryInspection: Sendable {
+    var path: URL
+    var origin: String?
+    var registrations: [WorktreeRegistration]
+    var commonDirectory: String
 }

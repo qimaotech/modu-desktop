@@ -6,7 +6,14 @@ struct ModuCoreTests {
     @Test func urlAndStatusParsing() throws {
         for url in ["https://example.test/team/service.git", "ssh://git@example.test/team/service", "git@example.test:team/service.git"] { #expect(try RepositoryIdentity(url).name == "service") }
         for url in ["/tmp/repo", "file:///tmp/repo", "https://token@example.test/team/a", "https://u:p@example.test/a", "ssh://git@example.test/../..", "git@example.test:x/../../"] { #expect(throws: ModuError.self) { try RepositoryIdentity(url) } }
-        let changes = try Git.parseChanges(Data("AD file\0R  new\npath\0old\tpath\0?? untracked\0UU conflict\0".utf8))
+        let status = Data("AD file\0R  new\npath\0old\tpath\0?? untracked\0UU conflict\0".utf8)
+        let changes = try Git.parseChanges(status)
+        #expect(try Git.countChanges(status) == 4)
+        #expect(try Git.countChanges(Data()) == 0)
+        for invalid in ["bad\0", "R  new\0"] {
+            #expect(throws: ModuError.self) { try Git.countChanges(Data(invalid.utf8)) }
+            #expect(throws: ModuError.self) { try Git.parseChanges(Data(invalid.utf8)) }
+        }
         #expect(changes.first { $0.path == "file" }?.index == "A")
         #expect(changes.first { $0.path == "file" }?.workingTree == "D")
         #expect(changes.first { $0.path == "new\npath" }?.originalPath == "old\tpath")

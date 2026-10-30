@@ -35,9 +35,6 @@ public indirect enum UserMessage: Sendable, Equatable {
     case existingDirectoryHasNoMatchingGitRegistration(String)
     case worktreeIsLocked(String)
     case registeredWorktreeHEADIsUnreadable(String)
-    case couldNotInspectGroupDirectory
-    case groupContainsUnmanagedGitRepository(String)
-    case groupContainsUnmanagedBareGitRepository(String)
     case repositoryMembersMustBeRemovedFirst
     case groupStillHasMembers
     case couldNotVerifyBranchDeletion(String)
@@ -187,8 +184,6 @@ public indirect enum UserMessage: Sendable, Equatable {
     case workingTreeIsClean
     case changedPathsWillBeMovedTrash(Int)
     case changedPathsWillBePermanentlyDeleted(Int)
-    case ignoredFilesWillBePermanentlyDeleted
-    case commitsAreNotReachableFromLocallyKnownRemote(Int)
     case detachedHEADNoBranchDelete
     case currentLocalBranchWillBePermanentlyDeletedIncluding(String)
     case directoryAndRegistrationAreMissingOnlyDeclarationWill
@@ -232,9 +227,6 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .existingDirectoryHasNoMatchingGitRegistration(let arg1): return "Existing directory has no matching Git registration: \(arg1)"
         case .worktreeIsLocked(let arg1): return "Worktree is locked: \(arg1)"
         case .registeredWorktreeHEADIsUnreadable(let arg1): return "Registered worktree HEAD is unreadable: \(arg1)"
-        case .couldNotInspectGroupDirectory: return "Could not inspect group directory."
-        case .groupContainsUnmanagedGitRepository(let arg1): return "Group contains an unmanaged Git repository: \(arg1)"
-        case .groupContainsUnmanagedBareGitRepository(let arg1): return "Group contains an unmanaged bare Git repository: \(arg1)"
         case .repositoryMembersMustBeRemovedFirst: return "Repository members must be removed first."
         case .groupStillHasMembers: return "Group still has members."
         case .couldNotVerifyBranchDeletion(let arg1): return "Could not verify branch deletion: \(arg1)"
@@ -384,8 +376,6 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .workingTreeIsClean: return "Working tree is clean."
         case .changedPathsWillBeMovedTrash(let arg1): return "\(arg1) changed paths will be moved to Trash."
         case .changedPathsWillBePermanentlyDeleted(let arg1): return "\(arg1) changed paths will be permanently deleted."
-        case .ignoredFilesWillBePermanentlyDeleted: return "Ignored files will be permanently deleted."
-        case .commitsAreNotReachableFromLocallyKnownRemote(let arg1): return "\(arg1) commits are not reachable from locally known remote-tracking refs."
         case .detachedHEADNoBranchDelete: return "Detached HEAD — no branch to delete."
         case .currentLocalBranchWillBePermanentlyDeletedIncluding(let arg1): return "Current local branch '\(arg1)' will be permanently deleted, including unmerged commits."
         case .directoryAndRegistrationAreMissingOnlyDeclarationWill: return "Directory and registration are missing; only the declaration will be removed. No branch will be deleted."

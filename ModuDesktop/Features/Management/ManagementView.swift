@@ -160,7 +160,7 @@ struct ManagementView: View {
                 .accessibilityHint(risks)
             Spacer(minLength: 0)
             WorkingTreeStatus(text: presentation.text, status: "Clean").hidden().overlay(alignment: .trailing) {
-                if !management.deletionPresentation.loading, let target { WorkingTreeStatus(text: presentation.text, status: deletionStatus(target)) }
+                if let target { WorkingTreeStatus(text: presentation.text, status: deletionStatus(target)) }
             }.fixedSize()
         }.padding(.horizontal, 16).frame(height: 28)
     }
