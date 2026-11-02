@@ -85,14 +85,18 @@
 | 运行一个发布测试分组 | `task test TEST_SHARD=1`（1–4，与 `TEST_FILTER` 互斥） |
 | 枚举测试方法标识（Swift Testing 含括号） | `task test -- -enumerate-tests` |
 | 保留测试结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
+| 实时查看完整测试日志 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- --verbose` |
 | 明确需要时运行全量测试 | `task test` |
 
 - 在 Codex 沙箱中运行测试前，核对用户级 SwiftPM 缓存的写入权限。若缓存不在可写范围，且已有日志确认该测试入口需要提权，首次执行即申请所需权限，不重复尝试已知会失败的普通执行；权限配置变化后重新评估。
-- [run_tests.py](script/run_tests.py) 隔离并清理本次测试环境，默认删除结果包；检查实际执行数量与清理结果，退出或清理无法确认时保留环境并返回失败。
+- [run_tests.py](script/run_tests.py) 默认每 10 秒报告英文进度，包含阶段、累计耗时、已完成和失败数量、当前用例及运行时长；无新日志时仍更新。终端覆盖同一行，Codex/CI 等非终端环境追加低频文本，不额外枚举用例或估算百分比，最终数量以结果包为准。失败诊断立即显示并去重，最多 20 条。`--verbose` 实时显示完整日志，枚举测试时直接显示枚举结果。
+- 交互终端使用系统 ANSI 配色：运行阶段蓝色、成功绿色、失败红色、跳过或中断黄色，时间、路径和分隔符弱化。颜色只用于终端显示，不写入日志；非终端、`NO_COLOR` 或 `TERM=dumb` 环境禁用颜色，`TERM=dumb` 同时禁用单行覆盖。
+- 完整日志保存在系统临时目录独立的 `modu-tests-*.log`，清理测试环境时保留，按输出的精确路径查看或删除。日志定位优先读取进度、结果汇总和具体失败，避免反复输出日志尾部。
+- 测试环境隔离，默认删除结果包；退出或清理无法确认时保留环境并返回失败。Xcode 耗时包含构建与测试，另报告清理及总耗时。
 - 发布测试按 suite 分成四组，组内串行，在独立 runner 上并行；分组配置位于 `run_tests.py`，第四组包含前三组之外的全部测试，新增 suite 自动纳入。调整分组时参考 CI 日志中的 suite 耗时。
 - 零用例或全跳过不算通过，`-enumerate-tests` 除外；筛选失败时先核对方法标识与 `TEST_FILTER`。
 - Mock 测试聚焦场景加载、外部工具目标及安装、删除、目录和网络隔离；完整刷新、分组管理与 YAML 流程复用 [业务测试](ModuDesktopTests/)，避免重复覆盖。
-- 可重复的读取/缓存比较使用 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`，默认不执行。场景在本次临时目录准备多仓库、分组、2,000 个未跟踪文件和 250 条历史缓存，输出 `BENCHMARK` JSON；比较冷/热轻量查询与完整查询，以及重复保存和目标读取的调用次数。激活切换与忽略事件降噪分别复用 `ActivationReadSchedulingTests`、`WorkspaceSyncTests` 的可控时钟和事件替身；确定性断言使用次数，耗时只用于比较。
+- 可重复的读取/缓存比较使用 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`，默认不执行。场景在本次临时目录准备多仓库、分组、2,000 个未跟踪文件和 250 条历史缓存，`BENCHMARK` JSON 写入完整日志，追加 `-- --verbose` 可实时查看；比较冷/热轻量查询与完整查询，以及重复保存和目标读取的调用次数。激活切换与忽略事件降噪分别复用 `ActivationReadSchedulingTests`、`WorkspaceSyncTests` 的可控时钟和事件替身；确定性断言使用次数，耗时只用于比较。
 
 ## 临时实例收尾
 
