@@ -61,26 +61,50 @@ extension Git {
         if case .application = visibility { arguments.append("--ignore-submodules=dirty") }
         return try Self.parseWorkingState(await run(arguments, at: path).stdout, visibility: visibility)
     }
+    public func hasVisibleChanges(at path: URL, visibility: GitChangeVisibility = .application) async throws -> Bool {
+        let start = ContinuousClock.now
+        defer { runner.diagnostics?.record("status.lightweight", duration: start.duration(to: .now)) }
+        var arguments = ["status", "--porcelain=v2", "--no-ahead-behind", "-z", "--untracked-files=normal"]
+        if case .application = visibility { arguments.append("--ignore-submodules=dirty") }
+        return try Self.parseHasVisibleChanges(await run(arguments, at: path).stdout, visibility: visibility)
+    }
+
     public static func parseWorkingState(_ data: Data, visibility: GitChangeVisibility = .all) throws -> GitWorkingState {
-        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
         var changes: [FileChange] = [], head: String?, branch: String?
+        try readWorkingState(data, visibility: visibility, header: { field in
+            let value = String(decoding: field, as: UTF8.self)
+            if value.hasPrefix("# branch.oid ") {
+                let oid = String(value.dropFirst(13))
+                guard oid == "(initial)" || oid.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+                head = oid == "(initial)" ? nil : oid
+            } else if value.hasPrefix("# branch.head ") {
+                let name = String(value.dropFirst(14))
+                branch = name == "(detached)" ? nil : name
+            }
+        }, consume: { record in
+            let x = record.index == 46 ? " " : String(UnicodeScalar(record.index))
+            let y = record.workingTree == 46 ? " " : String(UnicodeScalar(record.workingTree))
+            changes.append(.init(path: String(decoding: record.path, as: UTF8.self), originalPath: record.original.map { String(decoding: $0, as: UTF8.self) }, index: x, workingTree: y))
+        })
+        return .init(changes: changes.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }, headOID: head, branch: branch)
+    }
+
+    public static func parseHasVisibleChanges(_ data: Data, visibility: GitChangeVisibility = .application) throws -> Bool {
+        var dirty = false
+        try readWorkingState(data, visibility: visibility, header: { _ in }, consume: { _ in dirty = true })
+        return dirty
+    }
+
+    private static func readWorkingState(_ data: Data, visibility: GitChangeVisibility,
+                                         header: (Data.SubSequence) throws -> Void, consume: (WorkingChangeRecord) -> Void) throws {
+        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
         var index = 0
         while index < fields.count {
             let field = fields[index]; index += 1
-            if field.starts(with: Data("# ".utf8)) {
-                let header = String(decoding: field, as: UTF8.self)
-                if header.hasPrefix("# branch.oid ") {
-                    let value = String(header.dropFirst(13))
-                    guard value == "(initial)" || value.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
-                    head = value == "(initial)" ? nil : value
-                } else if header.hasPrefix("# branch.head ") {
-                    let value = String(header.dropFirst(14))
-                    branch = value == "(detached)" ? nil : value
-                }
-                continue
-            }
+            if field.starts(with: Data("# ".utf8)) { try header(field); continue }
             if field.starts(with: Data("? ".utf8)) {
-                changes.append(.init(path: String(decoding: field.dropFirst(2), as: UTF8.self), index: " ", workingTree: "?"))
+                guard field.count > 2 else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+                consume(.init(path: field.dropFirst(2), original: nil, index: 32, workingTree: 63))
                 continue
             }
             let count: Int
@@ -93,10 +117,10 @@ extension Git {
             let parts = field.split(separator: 32, maxSplits: count, omittingEmptySubsequences: false)
             guard parts.count == count + 1, parts[1].count == 2, !parts[count].isEmpty else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
             let status = Array(parts[1])
-            var original: String?
+            var original: Data.SubSequence?
             if field.first == UInt8(ascii: "2") {
                 guard index < fields.count else { throw ModuError("git-output-invalid", .missingRenameSourcePath) }
-                original = String(decoding: fields[index], as: UTF8.self); index += 1
+                original = fields[index]; index += 1
             }
             if case .application = visibility, field.first != UInt8(ascii: "u") {
                 let modes = parts[3...5]
@@ -104,11 +128,15 @@ extension Git {
                 let hasOrdinaryFile = modes.contains { !$0.elementsEqual("160000".utf8) && !$0.elementsEqual("000000".utf8) }
                 if (parts[2].first == UInt8(ascii: "S") || hasGitlink), !hasOrdinaryFile, !status.contains(UInt8(ascii: "T")) { continue }
             }
-            let x = status[0] == 46 ? " " : String(UnicodeScalar(status[0]))
-            let y = status[1] == 46 ? " " : String(UnicodeScalar(status[1]))
-            changes.append(.init(path: String(decoding: parts[count], as: UTF8.self), originalPath: original, index: x, workingTree: y))
+            consume(.init(path: parts[count], original: original, index: status[0], workingTree: status[1]))
         }
-        return .init(changes: changes.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }, headOID: head, branch: branch)
+    }
+
+    private struct WorkingChangeRecord {
+        let path: Data.SubSequence
+        let original: Data.SubSequence?
+        let index: UInt8
+        let workingTree: UInt8
     }
     public func submodulePaths(at path: URL) async throws -> [String] {
         let output = try await run(["-c", "core.fsmonitor=false", "ls-files", "--stage", "-z"], at: path)

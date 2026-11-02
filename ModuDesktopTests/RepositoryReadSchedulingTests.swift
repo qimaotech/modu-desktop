@@ -4,7 +4,7 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct RepositoryReadSchedulingTests {
-    @Test func failedStatusReadsWaitForExpiryBeforeRetrying() async throws {
+    @Test func failedStatusReadsWaitForExpiryUnlessPathIdentityChanges() async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         var record = try fixture.service.store.load(fixture.root)
@@ -16,15 +16,25 @@ import Testing
         let clock = RepositoryReadClock()
         let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), now: { clock.now })
         do {
-            details.preload(in: record, including: [resource])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            #expect(details.state(for: resource)?.available == false)
+            clock.now = clock.now.advanced(by: .seconds(29))
+            details.setPreloadScope(in: record, including: [])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            #expect(details.detailPreloadTask == nil && details.state(for: resource)?.available == false)
+            clock.now = clock.now.advanced(by: .seconds(2))
+            details.setPreloadScope(in: record, including: [])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
             await details.detailPreloadTask?.value
             #expect(details.state(for: resource)?.available == false)
             _ = try await fixture.service.git.run(["worktree", "add", "-b", "missing", record.groupURL("missing").path], at: fixture.root)
-            clock.now = clock.now.advanced(by: .seconds(29))
-            details.preload(in: record, including: [resource])
-            #expect(details.detailPreloadTask == nil && details.state(for: resource)?.available == false)
-            clock.now = clock.now.advanced(by: .seconds(2))
-            details.preload(in: record, including: [resource])
+            details.setPreloadScope(in: record, including: [])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
             await details.detailPreloadTask?.value
             #expect(details.state(for: resource)?.available == true)
             details.stop(); await details.waitForReads()
@@ -80,11 +90,12 @@ import Testing
             await details.waitForReads()
             try FileManager.default.removeItem(at: blocked)
 
-            details.preload(in: record, including: [resource])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
             let retry = try #require(details.detailPreloadTask)
             await retry.value
             #expect(details.state(for: resource)?.dirty == true)
-            details.preload(in: record, including: [resource])
+            details.drainPreload()
             #expect(details.detailPreloadTask == nil)
             details.stop(); await details.waitForReads()
         } catch {
@@ -195,6 +206,6 @@ private actor SchedulingHistoryReader {
 }
 
 private final class SchedulingResourceMonitor: ResourceChangeMonitoring, @unchecked Sendable {
-    func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChange) -> Void) -> Bool { true }
+    func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChangeEvent) -> Void) -> Bool { true }
     func stop() {}
 }

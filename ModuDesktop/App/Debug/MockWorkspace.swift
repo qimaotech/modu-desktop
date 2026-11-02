@@ -26,11 +26,13 @@ final class MockWorkspace {
         for tool in ExternalTool.builtIn where ["codex", "fork", "vscode", "terminal"].contains(tool.id) { defaults.set(tool.id, forKey: "tool.\(tool.category)") }
     }
 
-    func makeModel(toolService: ExternalTools? = nil) -> AppModel {
+    func makeModel(toolService: ExternalTools? = nil, diagnostics: RepositoryReadDiagnostics? = RepositoryReadDiagnostics.fromEnvironment()) -> AppModel {
         let model = AppModel(defaults: defaults, service: fixture.service, toolService: toolService,
                              installer: InstallationService(support: fixture.service.store.support, runner: fixture.service.git.runner,
                                                             home: directory.appending(path: "home"), shell: "/bin/sh", shellArguments: ["-c"],
-                                                            directoryBoundary: directory))
+                                                            directoryBoundary: directory),
+                             cache: RepositoryDiskCache(directory: directory.appending(path: "repository-cache"), diagnostics: diagnostics),
+                             diagnostics: diagnostics)
         model.mockWorkspace = self
         return model
     }

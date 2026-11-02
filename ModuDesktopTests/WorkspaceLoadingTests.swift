@@ -121,7 +121,12 @@ import SwiftUI
         model.operations.onBusyChange = { busy in
             originalBusyChange?(busy)
             if !busy, followupGate == nil {
-                do { followupGate = try ReloadValidationGate(fixture.root) }
+                do {
+                    var changed = try fixture.service.store.load(fixture.root)
+                    changed.groups["followup"] = WorktreeGroup()
+                    try fixture.service.store.save(changed)
+                    followupGate = try ReloadValidationGate(fixture.root)
+                }
                 catch { Issue.record(error) }
             }
         }

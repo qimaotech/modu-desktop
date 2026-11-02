@@ -150,35 +150,24 @@ import Testing
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         model.workspace.selection = .repository("repo")
         model.workspace.setVisibleResources([.repository("repo")], in: try #require(model.workspace.record?.root))
-        var gate: ReloadValidationGate?
-        var activation: Task<Void, Never>?
         do {
             try await eventually { !model.workspace.detailLoading && model.workspace.detail.summary != nil }
             model.workspace.setActive(false)
             try Data("latest".utf8).write(to: fixture.root.appending(path: "repositories/repo/latest.txt"))
             try await Task.sleep(for: .milliseconds(250))
             try Data().write(to: trace)
-            gate = try ReloadValidationGate(fixture.root)
-            activation = Task { await model.activate() }
-            try await gate!.waitUntilStarted()
+            await model.activate()
             try await eventually { !model.workspace.detailLoading && model.workspace.detail.changes?.map(\.path) == ["latest.txt"] }
             #expect(commandCount("status ", in: trace) == 1)
-            try gate!.resume()
-            await activation?.value
-            try await Task.sleep(for: .milliseconds(250))
-            #expect(!model.workspace.detailLoading)
-            #expect(commandCount("status ", in: trace) == 1)
+            #expect(commandCount("rev-parse --show-toplevel", in: trace) == 0)
             await model.workspace.stopReads()
         } catch {
-            try? gate?.resume()
-            activation?.cancel()
             await model.workspace.stopReads()
-            await activation?.value
             throw error
         }
     }
 
-    @Test func periodicStatusChecksOnlyRefreshVisibleResourcesAndNewlyExpandedRows() async throws {
+    @Test func activationAndExpansionCheckVisibleRowsWithoutAnIdleTimer() async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         for name in ["visible", "folded"] { try await fixture.prepareEmptyGroup(name) }
@@ -198,6 +187,8 @@ import Testing
             try Data("folded change".utf8).write(to: root.groupURL("folded").appending(path: "new.txt"))
             clock.now = clock.now.advanced(by: .seconds(31))
             model.workspace.startDetailPreload()
+            #expect(model.workspace.detailPreloadTask == nil && model.workspace.state(for: visible)?.dirty == false)
+            await model.activate()
             try await eventually { model.workspace.state(for: visible)?.dirty == true }
             await model.workspace.detailPreloadTask?.value
             #expect(model.workspace.state(for: folded) == nil)
@@ -207,11 +198,52 @@ import Testing
             try FileManager.default.removeItem(at: visibleFile)
             clock.now = clock.now.advanced(by: .seconds(31))
             model.workspace.startDetailPreload()
-            let checking = try #require(model.workspace.detailPreloadTask)
-            await checking.value
+            #expect(model.workspace.detailPreloadTask == nil)
             #expect(model.workspace.state(for: visible)?.dirty == true)
             await model.workspace.stopReads()
         } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
+    }
+
+    @Test func repeatedActivationJoinsAnInFlightSidebarCheck() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareEmptyGroup("slow")
+        let record = try fixture.service.store.load(fixture.root)
+        let started = fixture.directory.appending(path: "sidebar-started")
+        let release = fixture.directory.appending(path: "sidebar-release")
+        let hook = fixture.directory.appending(path: "sidebar-fsmonitor")
+        try Data("""
+        #!/bin/sh
+        : > "\(started.path)"
+        trap 'exit 143' TERM INT
+        while [ ! -e "\(release.path)" ]; do sleep 0.02; done
+        printf 'test-token\\000/\\000'
+        """.utf8).write(to: hook)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+        for arguments in [["config", "core.fsmonitor", hook.path], ["config", "core.fsmonitorHookVersion", "2"]] {
+            _ = try await fixture.service.git.run(arguments, at: record.groupURL("slow"))
+        }
+        let trace = fixture.directory.appending(path: "sidebar-join-trace")
+        let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), trace: trace)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        model.workspace.setVisibleResources([.group("slow")], in: record.root)
+        do {
+            try await eventually { PathSafety.exists(started) }
+            let checking = try #require(model.workspace.detailPreloadTask)
+            await model.activate()
+            await model.activate()
+            #expect(!checking.isCancelled)
+            #expect(commandCount("status ", in: trace) == 1)
+            try Data().write(to: release)
+            await checking.value
+            #expect(model.workspace.state(for: .group("slow"))?.available == true)
+            #expect(commandCount("status ", in: trace) == 1)
+            await model.workspace.stopReads()
+        } catch {
+            try? Data().write(to: release)
             await model.workspace.stopReads()
             throw error
         }

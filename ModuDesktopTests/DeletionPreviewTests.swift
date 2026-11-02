@@ -21,7 +21,7 @@ import Testing
             defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
             let model = AppModel(defaults: defaults, service: fixture.service)
             model.workspace.record = record
-            model.workspace.details.cache(.init(resource: repository, changes: state == "clean" ? [.init(path: "README", index: " ", workingTree: "M")] : []))
+            model.workspace.details.cache(.init(resource: repository, available: true, dirty: state == "clean"))
             model.management.prepareDelete(.repository("repo"))
             await model.management.deletePreviewTask?.value
             let target = try #require(model.management.deletion.first { $0.resource == repository })
@@ -41,7 +41,7 @@ import Testing
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = record
-        model.workspace.details.cache(.init(resource: repository, changes: []))
+        model.workspace.details.cache(.init(resource: repository, available: true, dirty: false))
         try Data("invalid index".utf8).write(to: record.repositoryURL("repo").appending(path: ".git/index"))
         model.management.prepareDelete(.repository("repo"))
         await model.management.deletePreviewTask?.value
@@ -254,7 +254,7 @@ import Testing
             model.workspace.record = record
             let member = Resource.member("feature", "repo")
             try Data("changed".utf8).write(to: record.memberURL("feature", "repo").appending(path: "README"))
-            model.workspace.details.cache(.init(resource: member, changes: []))
+            model.workspace.details.cache(.init(resource: member, available: true, dirty: false))
             model.management.prepareDelete(.group("feature"))
             let preview = try #require(model.management.deletePreviewTask)
             #expect(model.management.sheet == .delete && model.management.deletionLoading && model.management.deletion.isEmpty)

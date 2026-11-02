@@ -8,6 +8,7 @@ struct RepositoryDetailView: View {
     var tools: [ExternalTool]
     var preferredToolIDs: [String: String]
     var openTool: (ExternalTool) -> Void
+    private var presentation: RepositoryDetailPresentation { workspace.details.presentationCache }
 
     var body: some View {
         GeometryReader { geometry in
@@ -74,7 +75,26 @@ struct RepositoryDetailView: View {
             } else if let error = workspace.detail.summaryError { IssueDescriptionView(message: preferences.text.message(error), details: error.message, text: preferences.text).foregroundStyle(.secondary) }
             else { Color.clear.frame(height: 22).accessibilityElement()
                 .accessibilityLabel(preferences.text.string(.uiLoadingSummary)) }
+            if workspace.details.detailIsStale { verificationStatus.padding(.top, 4) }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading).detailCard()
+    }
+
+    @ViewBuilder private var verificationStatus: some View {
+        if let error = workspace.details.detailRefreshError {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 8) {
+                    Label(preferences.text.string(.uiVerificationFailedShowingPreviousResults), systemImage: "exclamationmark.triangle")
+                    Spacer(minLength: 0)
+                    Button(preferences.text.string(.uiRetry)) { workspace.refreshDetail() }
+                        .controlSize(.small).disabled(!workspace.canRefreshDetail || workspace.detailLoading)
+                }.font(.system(size: 12))
+                IssueDescriptionView(message: preferences.text.message(error), details: Git.sanitize(error.message), text: preferences.text)
+                    .font(.system(size: 11))
+            }.foregroundStyle(DesignStyle.secondary)
+        } else {
+            Label(preferences.text.string(.uiAwaitingVerification), systemImage: "clock")
+                .font(.system(size: 12)).foregroundStyle(DesignStyle.secondary)
+        }
     }
 
     private var changesSection: some View {
@@ -82,7 +102,7 @@ struct RepositoryDetailView: View {
             Text(preferences.text.string(.uiChanges)).font(.system(size: 13)).frame(height: 22)
             if let error = workspace.detail.changesError { unavailable(error) }
             else if let changes = workspace.detail.changes {
-                let rows = ChangeNode.tree(changes).flatMap { $0.visibleRows(collapsed: workspace.details.collapsedPaths) }
+                let rows = presentation.changeRows(changes, collapsed: workspace.details.collapsedPaths)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(rows) { row in
@@ -130,12 +150,13 @@ struct RepositoryDetailView: View {
             Text(preferences.text.string(.uiCommits)).font(.system(size: 13)).frame(height: 22)
             if let commits = workspace.detail.commits {
                 let contentHeight = CGFloat(commits.count) * 22
-                let columnWidths = commitColumnWidths(commits)
+                let content = presentation.commitRows(commits, locale: preferences.activeLocale)
                 GeometryReader { geometry in
                     let columnSpacing = min(36, max(12, 12 + (geometry.size.width - 640) / 20))
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(commits.enumerated()), id: \.element.id) { index, commit in
+                            ForEach(Array(content.rows.enumerated()), id: \.element.id) { index, row in
+                                let commit = row.commit
                                 HStack(spacing: 2) {
                                     CommitLaneView(index: index, count: commits.count, rowHeight: 22)
                                         .offset(x: 1)
@@ -144,13 +165,13 @@ struct RepositoryDetailView: View {
                                             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading).layoutPriority(-1).help(commit.subject)
                                         Text(commit.author).font(.system(size: 12)).foregroundStyle(DesignStyle.secondary)
                                             .fixedSize(horizontal: true, vertical: false)
-                                            .frame(width: columnWidths.author, alignment: .leading).help(commit.author)
-                                        Text(commit.displayDate(locale: preferences.activeLocale)).font(.system(size: 12)).foregroundStyle(DesignStyle.secondary)
+                                            .frame(width: content.authorWidth, alignment: .leading).help(commit.author)
+                                        Text(row.date).font(.system(size: 12)).foregroundStyle(DesignStyle.secondary)
                                             .fixedSize(horizontal: true, vertical: false)
-                                            .frame(width: columnWidths.date, alignment: .leading).help(commit.date)
+                                            .frame(width: content.dateWidth, alignment: .leading).help(commit.date)
                                         Text(String(commit.id.prefix(7))).font(.system(size: 12, design: .monospaced)).foregroundStyle(DesignStyle.secondary)
                                             .fixedSize(horizontal: true, vertical: false)
-                                            .frame(width: columnWidths.hash, alignment: .trailing).help(commit.id)
+                                            .frame(width: content.hashWidth, alignment: .trailing).help(commit.id)
                                     }.lineLimit(1)
                                 }.font(.system(size: 13)).frame(height: 22)
                                     .accessibilityElement(children: .combine)
@@ -160,15 +181,6 @@ struct RepositoryDetailView: View {
                 }.frame(idealHeight: contentHeight, maxHeight: contentHeight)
             }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
-    }
-    private func commitColumnWidths(_ commits: [GitCommit]) -> (author: CGFloat, date: CGFloat, hash: CGFloat) {
-        let font = NSFont.systemFont(ofSize: 12)
-        let hashFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        return commits.reduce(into: (author: CGFloat.zero, date: CGFloat.zero, hash: CGFloat.zero)) { widths, commit in
-            widths.author = max(widths.author, ceil((commit.author as NSString).size(withAttributes: [.font: font]).width))
-            widths.date = max(widths.date, ceil((commit.displayDate(locale: preferences.activeLocale) as NSString).size(withAttributes: [.font: font]).width))
-            widths.hash = max(widths.hash, ceil((String(commit.id.prefix(7)) as NSString).size(withAttributes: [.font: hashFont]).width))
-        }
     }
 
     private func unavailable(_ reason: ModuError) -> some View { VStack(alignment: .leading) { Label(preferences.text.string(.uiUnavailable), systemImage: "exclamationmark.circle"); IssueDescriptionView(message: preferences.text.message(reason), details: reason.message, text: preferences.text).foregroundStyle(.secondary) } }

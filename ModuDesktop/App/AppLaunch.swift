@@ -17,7 +17,8 @@ extension AppModel {
     static func makeForLaunch(arguments: [String]) throws -> AppModel {
         guard let index = arguments.firstIndex(of: "--mock") else {
             guard !arguments.contains("--mock-workspace") else { throw ModuError("invalid-input", .mockWorkspaceRequiresMock) }
-            return AppModel()
+            let diagnostics = RepositoryReadDiagnostics.fromEnvironment()
+            return AppModel(cache: launchRepositoryCache(diagnostics: diagnostics), diagnostics: diagnostics)
         }
         #if DEBUG
         guard arguments.filter({ $0 == "--mock" }).count == 1, index + 1 < arguments.count,
@@ -31,5 +32,18 @@ extension AppModel {
         #else
         throw ModuError("debug-only", .mockScenariosAreOnlyAvailableInDebugBuilds)
         #endif
+    }
+
+    private static func launchRepositoryCache(diagnostics: RepositoryReadDiagnostics?) -> (any RepositoryDetailCaching)? {
+        #if DEBUG
+        if let session = ProcessInfo.processInfo.environment["MODU_TEST_SESSION_DIRECTORY"] {
+            return RepositoryDiskCache(directory: URL(fileURLWithPath: session).appending(path: "repository-cache"), diagnostics: diagnostics)
+        }
+        guard !TestHost.isEnabled() else { return nil }
+        let configuration = "development"
+        #else
+        let configuration = "production"
+        #endif
+        return RepositoryDiskCache(directory: URL.cachesDirectory.appending(path: "fun.armantang.ModuDesktop/RepositoryCache/v1/\(configuration)"), diagnostics: diagnostics)
     }
 }

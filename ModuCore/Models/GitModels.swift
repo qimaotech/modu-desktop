@@ -11,7 +11,7 @@ public struct GitWorkingState: Sendable, Equatable {
     public var head: String { branch ?? "Detached at \((headOID ?? "").prefix(8))" }
 }
 
-public struct FileChange: Identifiable, Sendable, Equatable {
+public struct FileChange: Codable, Identifiable, Sendable, Equatable {
     public var path: String
     public var originalPath: String?
     public var index: String
@@ -25,7 +25,7 @@ public struct FileChange: Identifiable, Sendable, Equatable {
         switch status { case "A", "C": "Added"; case "R": "Moved"; case "M", "T": "Modified"; case "D": "Deleted"; case "?": "Untracked"; case "U": "Conflict"; case " ", ".": "—"; default: "Unknown (\(status))" }
     }
 }
-public struct GitCommit: Identifiable, Sendable {
+public struct GitCommit: Codable, Identifiable, Sendable, Equatable {
     public var id: String
     public var subject: String
     public var author: String
@@ -34,7 +34,7 @@ public struct GitCommit: Identifiable, Sendable {
         self.id = id; self.subject = subject; self.author = author; self.date = date
     }
 }
-public struct GitSummary: Sendable {
+public struct GitSummary: Sendable, Equatable {
     public var head: String
     public var headOID: String
     public var hasRemotes = true

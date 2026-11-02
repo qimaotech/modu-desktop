@@ -7,22 +7,23 @@ public struct ResourceReadContext: Sendable {
     public let path: URL
     public let gitDirectory: URL
     public let commonDirectory: URL
+    let mainDirectory: URL
     private let indexedSubmoduleDirectories: [URL]
     private let submoduleIndexIdentity: SubmoduleIndexIdentity?
+    private let submoduleConfigurationIdentity: ReadPathIdentity?
     private let identities: [ReadPathIdentity]
 
     public var submoduleDirectories: [URL] {
         // A stale index disables event filtering without invalidating normal status reads.
-        guard let submoduleIndexIdentity,
-              let current = try? SubmoduleIndexIdentity(gitDirectory.appending(path: "index")),
-              current == submoduleIndexIdentity else { return [] }
+        guard submoduleIndexIdentity != nil, indexIsCurrent else { return [] }
         return indexedSubmoduleDirectories
     }
 
     init(resource: Resource, workspace: WorkspaceRecord, path: URL, gitDirectory: URL, commonDirectory: URL, main: URL, submodulePaths: [String] = [], submoduleIndexIdentity: SubmoduleIndexIdentity? = nil) throws {
         self.resource = resource; self.workspace = workspace; self.path = path
-        self.gitDirectory = gitDirectory; self.commonDirectory = commonDirectory
+        self.gitDirectory = gitDirectory; self.commonDirectory = commonDirectory; mainDirectory = main
         self.submoduleIndexIdentity = submoduleIndexIdentity
+        submoduleConfigurationIdentity = submoduleIndexIdentity.flatMap { _ in try? ReadPathIdentity(path.appending(path: ".gitmodules")) }
         // A gitlink replaced by an ordinary file must remain observable as a type change.
         indexedSubmoduleDirectories = submodulePaths.compactMap { try? PathSafety.child($0, of: path) }
         var seen = Set<URL>()
@@ -32,10 +33,46 @@ public struct ResourceReadContext: Sendable {
     }
 
     public func isValid(in record: WorkspaceRecord) -> Bool {
-        guard workspace == record,
+        guard matchesRegistration(in: record),
               let current = try? PathSafety.child(resource.path, of: record.rootURL, allowMissing: false), current == path else { return false }
         return identities.allSatisfy { (try? ReadPathIdentity($0.url)) == $0 }
     }
+
+    var indexIsCurrent: Bool {
+        guard let submoduleIndexIdentity else { return true }
+        guard let submoduleConfigurationIdentity else { return false }
+        return (try? SubmoduleIndexIdentity(gitDirectory.appending(path: "index"))) == submoduleIndexIdentity
+            && (try? ReadPathIdentity(submoduleConfigurationIdentity.url)) == submoduleConfigurationIdentity
+    }
+
+    func rebinding(to record: WorkspaceRecord) -> ResourceReadContext? {
+        guard isValid(in: record) else { return nil }
+        return ResourceReadContext(rebinding: self, workspace: record)
+    }
+
+    private init(rebinding context: ResourceReadContext, workspace: WorkspaceRecord) {
+        resource = context.resource; self.workspace = workspace; path = context.path
+        gitDirectory = context.gitDirectory; commonDirectory = context.commonDirectory; mainDirectory = context.mainDirectory
+        indexedSubmoduleDirectories = context.indexedSubmoduleDirectories
+        submoduleIndexIdentity = context.submoduleIndexIdentity
+        submoduleConfigurationIdentity = context.submoduleConfigurationIdentity; identities = context.identities
+    }
+
+    private func matchesRegistration(in record: WorkspaceRecord) -> Bool {
+        guard workspace.root == record.root else { return false }
+        if let name = resource.repo {
+            guard let previous = workspace.repositories.first(where: { $0.id == name }),
+                  record.repositories.first(where: { $0.id == name })?.url == previous.url else { return false }
+        }
+        if let name = resource.group {
+            guard let previous = workspace.groups[name], let current = record.groups[name],
+                  previous.createdAt == current.createdAt else { return false }
+            if let repository = resource.repo { return current.repositories.contains(repository) }
+            return Set(previous.repositories) == Set(current.repositories)
+        }
+        return resource.repo != nil
+    }
+
 }
 
 enum SubmoduleIndexIdentity: Sendable, Equatable {
@@ -55,7 +92,7 @@ enum SubmoduleIndexIdentity: Sendable, Equatable {
     }
 }
 
-private struct ReadPathIdentity: Sendable, Equatable {
+struct ReadPathIdentity: Sendable, Equatable {
     let url: URL
     let identity: String
     let inode: UInt64?

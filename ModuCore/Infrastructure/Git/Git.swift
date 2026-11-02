@@ -14,9 +14,9 @@ public struct Git: Sendable {
         runner.environment["LC_ALL"] = "C"
         self.runner = runner
     }
-    public func run(_ arguments: [String], at url: URL, timeout: TimeInterval = 60, allowFailure: Bool = false, cancellable: Bool = true) async throws -> CommandOutput {
+    public func run(_ arguments: [String], at url: URL, timeout: TimeInterval = 60, allowFailure: Bool = false, cancellable: Bool = true, input: Data? = nil) async throws -> CommandOutput {
         let output: CommandOutput
-        do { output = try await runner.run("/usr/bin/git", arguments, at: url, timeout: timeout, cancellable: cancellable) }
+        do { output = try await runner.run("/usr/bin/git", arguments, at: url, timeout: timeout, cancellable: cancellable, input: input) }
         catch let error as ModuError {
             throw ModuError(error.code, .git(arguments.first ?? "command", error.userMessage))
         }

@@ -51,8 +51,8 @@ import Testing
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: service)
         model.workspace.record = record
-        model.workspace.details.cache(.init(resource: .repository("slow"), changes: []))
-        model.workspace.details.cache(.init(resource: .repository("cached"), changes: []))
+        model.workspace.details.cache(.init(resource: .repository("slow"), available: true, dirty: false))
+        model.workspace.details.cache(.init(resource: .repository("cached"), available: true, dirty: false))
         let state = DrainWaitState()
         var background: Task<Void, Never>?
         var waiting: Task<Void, Never>?
@@ -147,7 +147,7 @@ import Testing
         let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
             try await gate.read(at: path, head: head, base: base)
         })
-        details.cache(.init(resource: resource, changes: []))
+        details.cache(.init(resource: resource, available: true, dirty: false))
         details.refresh(resource, in: record)
         do {
             try await eventually { gate.started.contains(gate.blockedHead!) && gate.completed.contains(blocksAhead ? base : first) }
@@ -267,7 +267,7 @@ import Testing
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: service, toolService: ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in }))
         model.workspace.record = record
-        model.workspace.details.cache(.init(resource: .repository("slow"), changes: []))
+        model.workspace.details.cache(.init(resource: .repository("slow"), available: true, dirty: false))
         model.workspace.selection = .repository("repo")
         do {
             try await eventually { !model.workspace.details.snapshotLoading }
@@ -374,7 +374,7 @@ import Testing
         #expect(details.detail.changes?.map(\.path) == ["busy.txt", "new.txt"])
         let lateCallback = monitor.currentCallback
         details.stop(); await details.waitForReads()
-        lateCallback?(.structure)
+        lateCallback?(.init(change: .structure))
         await Task.yield()
         #expect(details.detailTask == nil)
     }
@@ -396,10 +396,10 @@ import Testing
         try await Task.sleep(for: .milliseconds(300))
         received.values = []
         try FileManager.default.removeItem(at: context.path.appending(path: "new.txt"))
-        try await eventually { received.values.contains(.workingTree) }
+        try await eventually { received.values.contains { $0.change.contains(.workingTree) } }
         received.values = []
         _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/main", "HEAD"], at: context.path)
-        try await eventually { received.values.contains { $0 >= .summary } }
+        try await eventually { received.values.contains { $0.change.contains(.summary) } }
         monitor.stop()
         try await Task.sleep(for: .milliseconds(200))
         let count = received.values.count
@@ -436,12 +436,12 @@ import Testing
         try await Task.sleep(for: .milliseconds(300))
         received.values = []
         try Data("attributes.txt text\n".utf8).write(to: attributes)
-        try await eventually { received.values.contains(.workingTree) }
+        try await eventually { received.values.contains { $0.change.contains([.configuration, .workingTree]) } }
         #expect(try await f.service.workingState(context, visibility: .application).changes.map(\.path) == ["attributes.txt"])
         try await Task.sleep(for: .milliseconds(300))
         received.values = []
         try Data("attributes.txt -text\n".utf8).write(to: attributes)
-        try await eventually { received.values.contains(.workingTree) }
+        try await eventually { received.values.contains { $0.change.contains([.configuration, .workingTree]) } }
         #expect(try await f.service.workingState(context, visibility: .application).changes.isEmpty)
     }
 
@@ -474,11 +474,11 @@ import Testing
         var modules = try Data(contentsOf: path.appending(path: ".gitmodules"))
         modules.append(Data("\n".utf8))
         try modules.write(to: path.appending(path: ".gitmodules"))
-        try await eventually { received.values.contains(.structure) }
+        try await eventually { received.values.contains { $0.change.contains([.index, .workingTree]) } }
         try await Task.sleep(for: .milliseconds(300))
         received.values = []
         _ = try await f.service.git.run(["add", ".gitmodules"], at: path)
-        try await eventually { received.values.contains(.structure) }
+        try await eventually { received.values.contains { $0.change.contains(.index) } }
         try await Task.sleep(for: .milliseconds(300))
         received.values = []
         _ = try await f.service.git.run(["init", "nested"], at: path)
@@ -506,7 +506,7 @@ import Testing
             Task { @MainActor in received.values.append(event) }
         })
         try Data("now a parent file".utf8).write(to: path.appending(path: "sub/README"))
-        try await eventually { received.values.contains(.workingTree) }
+        try await eventually { received.values.contains { $0.change.contains(.workingTree) || $0.candidatePaths.contains("sub/README") } }
     }
 
     @Test func indexChangesRebuildSubmoduleExclusionsWithoutHidingNestedRepositories() async throws {
@@ -548,7 +548,7 @@ import Testing
     }
 }
 
-@MainActor private final class MonitorEvents { var values: [ResourceChange] = [] }
+@MainActor private final class MonitorEvents { var values: [ResourceChangeEvent] = [] }
 
 @MainActor private final class DrainWaitState {
     var waitingStarted = false
@@ -574,14 +574,14 @@ import Testing
 
 private final class TestResourceMonitor: ResourceChangeMonitoring, @unchecked Sendable {
     private let lock = NSLock()
-    private var callback: (@Sendable (ResourceChange) -> Void)?
+    private var callback: (@Sendable (ResourceChangeEvent) -> Void)?
     private var directories: [URL] = []
-    func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChange) -> Void) -> Bool {
+    func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChangeEvent) -> Void) -> Bool {
         lock.withLock { callback = onChange; directories = context.submoduleDirectories }
         return true
     }
     func stop() { lock.withLock { callback = nil } }
-    var currentCallback: (@Sendable (ResourceChange) -> Void)? { lock.withLock { callback } }
+    var currentCallback: (@Sendable (ResourceChangeEvent) -> Void)? { lock.withLock { callback } }
     var submoduleDirectories: [URL] { lock.withLock { directories } }
-    func emit(_ event: ResourceChange) { lock.withLock { callback }?(event) }
+    func emit(_ event: ResourceChange) { lock.withLock { callback }?(.init(change: event)) }
 }

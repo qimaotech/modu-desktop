@@ -51,10 +51,13 @@ final class AppModel {
     var canPresentMaintenanceFailure: Bool { workspace.maintenanceFailurePending && canShowMaintenanceFailure }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
+         cache: (any RepositoryDetailCaching)? = nil,
          updates: AppUpdateModel? = nil, relaunch: AppRelaunchModel? = nil,
          recordMonitor: any WorkspaceRecordChangeMonitoring = WorkspaceRecordChangeMonitor(),
          now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
-         waitForRecordDebounce: (@MainActor (ContinuousClock.Instant) async throws -> Void)? = nil) {
+         waitForRecordDebounce: (@MainActor (ContinuousClock.Instant) async throws -> Void)? = nil,
+         diagnostics: RepositoryReadDiagnostics? = nil) {
+        let service = diagnostics.map { service.withDiagnostics($0) } ?? service
         self.service = service
         self.toolService = toolService ?? ExternalTools(git: service.git)
         let installer = installer ?? InstallationService(support: service.store.support)
@@ -68,7 +71,7 @@ final class AppModel {
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
-        let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation, recordMonitor: recordMonitor, now: now, waitForRecordDebounce: waitForRecordDebounce)
+        let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation, cache: cache, recordMonitor: recordMonitor, now: now, waitForRecordDebounce: waitForRecordDebounce, diagnostics: diagnostics)
         self.workspace = workspace
         operations.onBusyChange = { [weak workspace] busy in workspace?.operationsChanged(busy) }
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
@@ -278,7 +281,7 @@ final class AppModel {
             guard !presentation.quitPending else { throw CancellationError() }
             onReady()
         } catch {
-            workspace.cancelDetailPreload(); workspace.details.detailTask?.cancel()
+            await workspace.stopReads()
             workspace.record = nil; workspace.selection = nil; tools = []
             mock.fixture.remove()
             guard !Task.isCancelled, !presentation.quitPending else { return }

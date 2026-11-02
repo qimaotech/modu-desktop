@@ -14,6 +14,20 @@ extension WorkspaceService {
         try await reader.checkWorktree(resource, at: path, repository: repository, validateHEAD: false)
         let directory = try await reader.git.run(["rev-parse", "--absolute-git-dir"], at: path).text
         let gitDirectory = URL(fileURLWithPath: directory)
+        return try await makeReadContext(resource, record: record, path: path, gitDirectory: gitDirectory,
+                                         commonDirectory: URL(fileURLWithPath: repository.commonDirectory), main: repository.path, visibility: visibility)
+    }
+
+    func refreshSubmoduleRead(_ context: ResourceReadContext, visibility: GitChangeVisibility) async throws -> ResourceReadContext {
+        guard context.isValid(in: context.workspace) else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
+        return try await makeReadContext(context.resource, record: context.workspace, path: context.path,
+                                         gitDirectory: context.gitDirectory, commonDirectory: context.commonDirectory,
+                                         main: context.mainDirectory, visibility: visibility)
+    }
+
+    private func makeReadContext(_ resource: Resource, record: WorkspaceRecord, path: URL, gitDirectory: URL,
+                                 commonDirectory: URL, main: URL, visibility: GitChangeVisibility) async throws -> ResourceReadContext {
+        let reader = inspectionService()
         let submodulePaths: [String]
         let submoduleIndexIdentity: SubmoduleIndexIdentity?
         switch visibility {
@@ -21,24 +35,27 @@ extension WorkspaceService {
         case .application:
             submoduleIndexIdentity = try? SubmoduleIndexIdentity(gitDirectory.appending(path: "index"))
             do { submodulePaths = try await reader.git.submodulePaths(at: path) }
-            catch let error as ModuError where error.code == "output-limit" {
-                // Watch exclusions are optional; a large index must not prevent status reads.
-                submodulePaths = []
-            }
+            catch let error as ModuError where error.code == "output-limit" { submodulePaths = [] }
         }
         try reader.checkCancellation()
-        return try ResourceReadContext(resource: resource, workspace: record, path: path, gitDirectory: gitDirectory, commonDirectory: URL(fileURLWithPath: repository.commonDirectory), main: repository.path, submodulePaths: submodulePaths, submoduleIndexIdentity: submoduleIndexIdentity)
+        return try ResourceReadContext(resource: resource, workspace: record, path: path, gitDirectory: gitDirectory,
+                                       commonDirectory: commonDirectory, main: main, submodulePaths: submodulePaths,
+                                       submoduleIndexIdentity: submoduleIndexIdentity)
     }
 
     public func workingState(_ context: ResourceReadContext, visibility: GitChangeVisibility = .all) async throws -> GitWorkingState {
         try store.checkBoundary(context.workspace.rootURL)
         guard context.isValid(in: context.workspace) else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
+        let start = ContinuousClock.now
+        defer { git.runner.diagnostics?.record("status", duration: start.duration(to: .now)) }
         return try await inspectionService().git.workingState(at: context.path, visibility: visibility)
     }
 
     public func summary(_ context: ResourceReadContext, workingState: GitWorkingState) async throws -> GitSummary {
         try store.checkBoundary(context.workspace.rootURL)
         guard context.isValid(in: context.workspace) else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
+        let start = ContinuousClock.now
+        defer { git.runner.diagnostics?.record("summary", duration: start.duration(to: .now)) }
         return try await inspectionService().git.summary(at: context.path, workingState: workingState)
     }
 
