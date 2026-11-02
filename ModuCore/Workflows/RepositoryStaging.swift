@@ -52,33 +52,34 @@ struct RepositoryStaging: Sendable {
 
 struct RepositoryDirectory: Sendable {
     let url: URL
-    private let values: URLResourceValues
+    private let identity: Identity
 
     init(_ url: URL) throws {
         self.url = url
-        values = try Self.values(at: url)
-        guard values.fileResourceIdentifier != nil else { throw ModuError("unsafe-path", "Could not identify the repository preparation directory: \(url.path)") }
+        identity = try Identity(at: url)
     }
 
     func validate() throws {
-        let current = try Self.values(at: url)
-        guard let expected = values.fileResourceIdentifier, let actual = current.fileResourceIdentifier, expected.isEqual(actual) else {
+        guard try Identity(at: url) == identity else {
             throw ModuError("unsafe-path", "The repository preparation directory changed and was kept: \(url.path)")
         }
     }
 
     func relocated(to target: URL) -> RepositoryDirectory {
-        RepositoryDirectory(url: target, values: values)
+        RepositoryDirectory(url: target, identity: identity)
     }
 
-    private init(url: URL, values: URLResourceValues) { self.url = url; self.values = values }
+    private init(url: URL, identity: Identity) { self.url = url; self.identity = identity }
 
-    private static func values(at url: URL) throws -> URLResourceValues {
-        try PathSafety.directory(url)
-        var fresh = url
-        fresh.removeAllCachedResourceValues()
-        let values = try fresh.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileResourceIdentifierKey])
-        guard values.isDirectory == true, values.isSymbolicLink != true else { throw ModuError("unsafe-path", .expectedRealDirectory(url.path)) }
-        return values
+    private struct Identity: Equatable, Sendable {
+        let device: dev_t
+        let inode: ino_t
+
+        init(at url: URL) throws {
+            var metadata = stat()
+            guard lstat(url.path, &metadata) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            guard metadata.st_mode & S_IFMT == S_IFDIR else { throw ModuError("unsafe-path", .expectedRealDirectory(url.path)) }
+            device = metadata.st_dev; inode = metadata.st_ino
+        }
     }
 }

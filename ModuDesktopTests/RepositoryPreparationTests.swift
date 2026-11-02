@@ -3,6 +3,28 @@ import Testing
 @testable import ModuCore
 
 struct RepositoryPreparationTests {
+    @Test(arguments: ["directory", "file", "symlink", "missing"])
+    func relocatedDirectoryIdentityRejectsReplacements(_ replacement: String) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let original = try RepositoryDirectory(fixture.root)
+        try original.validate()
+        let target = fixture.directory.appending(path: "published")
+        try FileManager.default.moveItem(at: fixture.root, to: target)
+        let relocated = original.relocated(to: target)
+        try relocated.validate()
+
+        let retained = fixture.directory.appending(path: "retained")
+        try FileManager.default.moveItem(at: target, to: retained)
+        switch replacement {
+        case "directory": try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        case "file": try Data("replacement data".utf8).write(to: target)
+        case "symlink": try FileManager.default.createSymbolicLink(at: target, withDestinationURL: retained)
+        default: break
+        }
+        #expect(throws: (any Error).self) { try relocated.validate() }
+        try RepositoryDirectory(retained).validate()
+    }
+
     @Test(arguments: [false, true])
     func concurrentPreparationsReleaseTheLockAndPublishAgainstCurrentRecords(_ sameRepository: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }

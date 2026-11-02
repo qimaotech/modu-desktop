@@ -189,10 +189,10 @@ final class WorkspaceModel {
 
     func maintainWorkspace(_ trigger: MaintenanceTrigger = .manual) async {
         if trigger == .manual { presentation.completionMessage = nil }
-        await requestReload(maintenance: MaintenanceOptions(trigger))
+        await requestReload(maintenance: MaintenanceOptions(trigger), intent: .all)
     }
 
-    private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent = .all, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
+    private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
         guard !Task.isCancelled, !presentation.quitPending, let path = defaults.string(forKey: "workspace") else { return }
         let completion = ReloadCompletion(afterLoad)
         let request = ReloadBatch(path: path, maintenance: maintenance, intent: intent, completion: completion)
