@@ -7,6 +7,242 @@ import SwiftUI
 @testable import ModuDesktop
 
 @MainActor struct WorkspaceLoadingTests {
+    @Test(arguments: [false, true])
+    func cancelledManagementRefreshesCompletedRemoval(_ reportsCancellation: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        try await fixture.prepareEmptyGroup("removed")
+        let original = try fixture.service.store.load(fixture.root)
+        model.workspace.details.setActive(false)
+        model.workspace.record = original
+        model.workspace.selection = .group("removed")
+        model.management.run { service, root, progress in
+            var outcome = await service.remove(.group("removed"), at: root, execute: true, progress: progress)
+            #expect(outcome.status == .success)
+            #expect(outcome.items.contains { $0.effects.contains { $0.action == "remove-declaration" } })
+            withUnsafeCurrentTask { $0?.cancel() }
+            #expect(Task.isCancelled)
+            if reportsCancellation { outcome.status = .cancelled; outcome.reasonCode = "cancelled" }
+            return outcome
+        }
+        let operation = try #require(model.operation)
+        do {
+            await operation.value
+            let saved = try fixture.service.store.load(fixture.root)
+            #expect(operation.isCancelled && !model.busy)
+            #expect(original.groups["removed"] != nil && saved.groups["removed"] == nil)
+            #expect(!PathSafety.exists(original.groupURL("removed")))
+            #expect(model.workspace.record == saved && model.workspace.selection == nil)
+            #expect(!model.workspace.visibleResources.contains(.group("removed")))
+            #expect(model.workspace.blocked == nil)
+            if reportsCancellation { #expect(model.presentation.result?.status == .cancelled) }
+            else { #expect(model.presentation.result == nil) }
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            await operation.value
+            throw error
+        }
+    }
+
+    @Test func recordRefreshBatchesKeepCallbacksAndIndependentWaiters() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let trace = fixture.directory.appending(path: "reload-trace")
+        let model = try await makeModel(fixture, trace: trace)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        model.workspace.details.setActive(false)
+        var firstGate = try ReloadValidationGate(fixture.root)
+        var secondGate: ReloadValidationGate?
+        defer { try? firstGate.resume(); try? secondGate?.resume() }
+        var callbacks: [String] = []
+        var firstFinished = false
+        var queued = 0
+        var finished: [String] = []
+        let first = Task {
+            await model.workspace.refreshRecord {
+                callbacks.append("initial")
+                do { secondGate = try ReloadValidationGate(fixture.root) }
+                catch { Issue.record(error) }
+            }
+            firstFinished = true
+        }
+        var following: [Task<Void, Never>] = []
+        do {
+            try await firstGate.waitUntilStarted()
+            var latest = try fixture.service.store.load(fixture.root)
+            latest.groups["latest"] = WorktreeGroup()
+            try fixture.service.store.save(latest)
+            for name in ["one", "two", "cancelled"] {
+                following.append(Task {
+                    queued += 1
+                    await model.workspace.refreshRecord {
+                        callbacks.append(name)
+                        #expect(model.workspace.record == latest)
+                    }
+                    finished.append(name)
+                })
+                try await waitUntil { queued == following.count }
+            }
+            await Task.yield()
+            following[2].cancel()
+            try await waitUntil { finished == ["cancelled"] }
+            #expect(!firstFinished && callbacks.isEmpty)
+            try firstGate.resume()
+            try await waitUntil { secondGate != nil }
+            try await secondGate!.waitUntilStarted()
+            try await waitUntil { firstFinished }
+            #expect(callbacks == ["initial"] && finished == ["cancelled"])
+            try secondGate!.resume()
+            for task in following { await task.value }
+            await first.value
+            #expect(callbacks == ["initial", "one", "two"])
+            #expect(Set(finished) == ["one", "two", "cancelled"])
+            await model.workspace.stopReads()
+            let commands = try String(contentsOf: trace, encoding: .utf8)
+            #expect(commands.components(separatedBy: "built-in: git rev-parse --show-toplevel").count - 1 == 2)
+        } catch {
+            try? firstGate.resume(); try? secondGate?.resume()
+            first.cancel(); for task in following { task.cancel() }
+            await model.workspace.stopReads()
+            await first.value; for task in following { await task.value }
+            throw error
+        }
+    }
+
+    @Test func maintenanceJoinKeepsOptionsAndFollowupReadDrainsBeforeWrites() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let trace = fixture.directory.appending(path: "maintenance-trace")
+        let model = try await makeModel(fixture, trace: trace)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        var followupGate: ReloadValidationGate?
+        defer { try? followupGate?.resume() }
+        let originalBusyChange = model.operations.onBusyChange
+        model.operations.onBusyChange = { busy in
+            originalBusyChange?(busy)
+            if !busy, followupGate == nil {
+                do { followupGate = try ReloadValidationGate(fixture.root) }
+                catch { Issue.record(error) }
+            }
+        }
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
+        var maintenanceFinished = false
+        var joined = false
+        var joinFinished = false
+        var bodyStarted = false
+        let maintenance = Task {
+            await model.workspace.maintainWorkspace(.startup)
+            maintenanceFinished = true
+        }
+        var joining: Task<Void, Never>?
+        var writing: Task<Void, Never>?
+        do {
+            try await waitForWorkspaceOperation(model)
+            joining = Task {
+                joined = true
+                await model.workspace.maintainWorkspace()
+                joinFinished = true
+            }
+            try await waitUntil { joined }
+            await Task.yield()
+            #expect(!model.workspace.showsReloadProgress && model.operations.canCancel)
+            await model.activate()
+            #expect(!maintenanceFinished && !joinFinished)
+            lease.unlock()
+            try await waitUntil { followupGate != nil }
+            try await followupGate!.waitUntilStarted()
+            try await waitUntil { maintenanceFinished && joinFinished }
+            #expect(!model.busy && !model.workspace.isReloading && model.workspace.needsReadTermination)
+            model.management.run { _, root, _ in
+                await MainActor.run {
+                    bodyStarted = true
+                    #expect(!model.workspace.needsReadTermination)
+                }
+                return OperationResult(command: "repo.update", workspace: root.path, status: .success)
+            }
+            let operation = try #require(model.operation)
+            writing = operation
+            try await waitUntil { bodyStarted }
+            try followupGate!.resume()
+            await writing?.value
+            await joining?.value
+            await maintenance.value
+            await model.workspace.stopReads()
+            let commands = try String(contentsOf: trace, encoding: .utf8)
+            #expect(commands.components(separatedBy: "ls-files -z -- repositories worktrees").count - 1 == 1)
+        } catch {
+            lease.unlock(); try? followupGate?.resume()
+            model.cancel(); maintenance.cancel(); joining?.cancel()
+            await model.workspace.stopReads()
+            await maintenance.value; await joining?.value; await writing?.value
+            throw error
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func invalidatedReloadBatchesDoNotPublishCallbacks(_ switchesWorkspace: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let next = fixture.directory.appending(path: "next-workspace")
+        try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
+        #expect(await fixture.service.openWorkspace(next).status == .success)
+        var gate = try ReloadValidationGate(fixture.root)
+        defer { try? gate.resume() }
+        var callbacks: [String] = []
+        var firstFinished = false
+        var queued = false
+        var queuedFinished = false
+        var actionStarted = false
+        let first = Task {
+            await model.workspace.refreshRecord { callbacks.append("active") }
+            firstFinished = true
+        }
+        var following: Task<Void, Never>?
+        var switching: Task<Void, Error>?
+        var stopping: Task<Void, Never>?
+        do {
+            try await gate.waitUntilStarted()
+            following = Task {
+                queued = true
+                await model.workspace.refreshRecord { callbacks.append("pending") }
+                queuedFinished = true
+            }
+            try await waitUntil { queued }
+            await Task.yield()
+            if switchesWorkspace {
+                switching = Task {
+                    actionStarted = true
+                    try await model.switchTo(next)
+                }
+            } else {
+                model.presentation.quitPending = true
+                stopping = Task {
+                    actionStarted = true
+                    await model.workspace.stopReads()
+                }
+            }
+            try await waitUntil { actionStarted }
+            try await waitUntil { firstFinished && queuedFinished }
+            try gate.resume()
+            try await switching?.value
+            await stopping?.value
+            try await waitUntil { firstFinished && queuedFinished }
+            await first.value; await following?.value
+            #expect(callbacks.isEmpty)
+            #expect(model.workspace.record?.root == PathSafety.canonical(switchesWorkspace ? next : fixture.root).path)
+            await model.workspace.stopReads()
+        } catch {
+            try? gate.resume()
+            first.cancel(); following?.cancel(); switching?.cancel()
+            await model.workspace.stopReads()
+            _ = try? await switching?.value
+            await stopping?.value; await first.value; await following?.value
+            throw error
+        }
+    }
+
     @Test(arguments: ["failed", "cancelled", "success"])
     func queuedStartupMaintenanceFollowsWorkspaceChangeOutcome(_ outcome: String) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
@@ -86,6 +322,42 @@ import SwiftUI
         }
     }
 
+    @Test func failedSwitchAfterCancellingMaintenanceKeepsWorkspaceBrowsable() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let original = try #require(model.workspace.record)
+        let lease = try fixture.service.store.tryLock(fixture.root)
+        defer { lease.unlock() }
+        let maintenance = Task { await model.workspace.maintainWorkspace(.startup) }
+        do {
+            try await waitForWorkspaceOperation(model)
+            #expect(model.operations.canCancel && model.workspace.isReloading)
+            do {
+                try await model.switchTo(fixture.directory.appending(path: "missing-workspace"))
+                Issue.record("Switching to a missing workspace must fail.")
+            } catch {
+                #expect(!(error is CancellationError))
+            }
+            await maintenance.value
+            #expect(model.workspace.record == original && model.defaults.string(forKey: "workspace") == original.root)
+            #expect(!model.busy && !model.workspace.isReloading)
+            #expect(model.workspace.maintenanceState == .failed && !model.workspace.canManage)
+            await model.workspace.refreshRecord()
+            #expect(model.workspace.record == original && model.workspace.blocked == nil)
+            #expect(!model.busy && !model.workspace.isReloading && model.workspace.maintenanceState == .failed)
+            lease.unlock()
+            await model.workspace.maintainWorkspace()
+            #expect(model.workspace.record == original && model.workspace.maintenanceState == .ready && model.workspace.canManage)
+            await model.workspace.stopReads()
+        } catch {
+            lease.unlock(); maintenance.cancel()
+            await model.workspace.stopReads()
+            await maintenance.value
+            throw error
+        }
+    }
+
     @Test func queuedMaintenanceKeepsExplicitReloadOptions() async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -95,8 +367,8 @@ import SwiftUI
         let lease = try fixture.service.store.tryLock(fixture.root)
         defer { lease.unlock() }
         let operationID = try #require(model.operations.begin(.workspace))
-        await model.workspace.reload(showProgress: false, maintainingWorkspace: true, cancellable: true, afterLoad: nil)
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace(.startup)
+        await model.workspace.maintainWorkspace()
         await model.activate()
         model.operations.finish(operationID)
         do {
@@ -126,7 +398,7 @@ import SwiftUI
         let ignore = fixture.root.appending(path: ".gitignore")
         try FileManager.default.removeItem(at: ignore)
         let operationID = try #require(model.operations.begin(.workspace))
-        await model.workspace.reload(showProgress: false, maintainingWorkspace: true, cancellable: true, afterLoad: nil)
+        await model.workspace.maintainWorkspace(.startup)
         model.presentation.quitPending = true
         model.operations.finish(operationID)
         await model.workspace.stopReads()
@@ -207,7 +479,7 @@ import SwiftUI
         let notes = fixture.root.appending(path: "notes.txt")
         try Data("keep me".utf8).write(to: notes)
         model.presentation.completionMessage = "Completed"
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
 
         let record = try #require(model.workspace.record)
         #expect(record.repositories.isEmpty && record.groups.isEmpty)
@@ -221,7 +493,7 @@ import SwiftUI
         #expect(try await fixture.service.git.run(["ls-tree", "-r", "--name-only", "HEAD"], at: fixture.root).text.components(separatedBy: "\n") == [".agents/skills/modu-workflow/SKILL.md", ".agents/skills/modu-workflow/agents/openai.yaml", ".gitignore"])
         #expect(try Data(contentsOf: notes) == Data("keep me".utf8))
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
 
     }
@@ -238,7 +510,7 @@ import SwiftUI
         #expect(!PathSafety.exists(fixture.root.appending(path: ".gitignore")))
         #expect(model.workspace.blocked != nil && model.presentation.result == nil)
 
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
         let skill = fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")
         try Data("user edit".utf8).write(to: skill)
@@ -258,7 +530,7 @@ import SwiftUI
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         await model.workspace.detailPreloadTask?.value
         let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
         var record = try fixture.service.store.load(fixture.root)
@@ -281,7 +553,7 @@ import SwiftUI
             var maintenanceRequested = false
             maintaining = Task {
                 maintenanceRequested = true
-                await model.workspace.reload()
+                await model.workspace.maintainWorkspace()
             }
             while !maintenanceRequested { await Task.yield() }
             model.cancel()
@@ -371,7 +643,7 @@ import SwiftUI
         else { try Data("broken".utf8).write(to: file) }
         try FileManager.default.removeItem(at: fixture.root.appending(path: ".git"))
 
-        if implicit { await model.activate() } else { await model.workspace.reload() }
+        if implicit { await model.activate() } else { await model.workspace.maintainWorkspace() }
         if implicit {
             #expect(model.workspace.record == nil && model.workspace.blocked != nil)
         } else {
@@ -393,7 +665,7 @@ import SwiftUI
         let head = try await fixture.service.git.oid("HEAD", at: fixture.root)
         _ = try await fixture.service.git.run(["config", "commit.gpgSign", "true"], at: fixture.root)
         _ = try await fixture.service.git.run(["config", "gpg.program", "/usr/bin/false"], at: fixture.root)
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record != nil && model.workspace.maintenanceState == .failed && !model.busy)
         #expect(!model.workspace.canManage && model.workspace.notice != nil)
         #expect(model.presentation.result?.items.first?.reasonCode == "workspace-commit-failed")
@@ -403,7 +675,7 @@ import SwiftUI
 
         _ = try await fixture.service.git.run(["config", "commit.gpgSign", "false"], at: fixture.root)
         model.presentation.dismissResult()
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record != nil && model.workspace.blocked == nil && model.presentation.result == nil)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) != head)
         #expect(try await fixture.service.git.changes(at: fixture.root).isEmpty)
@@ -755,7 +1027,7 @@ import SwiftUI
             }
             model.workspace.selection = resource
             try FileManager.default.removeItem(at: fixture.root.appending(path: resource.path))
-            await model.workspace.reload()
+            await model.workspace.maintainWorkspace()
             await model.workspace.detailPreloadTask?.value
             #expect(model.workspace.record == expected)
             #expect(try fixture.service.store.load(fixture.root) == expected)
@@ -845,12 +1117,12 @@ import SwiftUI
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let failingStore = WorkspaceStore(support: fixture.service.store.support) { _, _ in throw ModuError("injected", "save failed") }
         let failing = AppModel(defaults: model.defaults, service: WorkspaceService(store: failingStore, git: fixture.service.git))
-        await failing.workspace.reload()
+        await failing.workspace.maintainWorkspace()
         #expect(failing.workspace.record == nil && failing.workspace.blocked != nil)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
 
         try FileManager.default.removeItem(at: fixture.root)
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record != nil && model.workspace.maintenanceState == .failed && !model.workspace.canManage)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
     }
@@ -1041,7 +1313,7 @@ import SwiftUI
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         await model.workspace.detailPreloadTask?.value
         model.workspace.selection = .repository("repo")
         await model.workspace.details.waitForDetail()
@@ -1133,7 +1405,7 @@ import SwiftUI
         defaults.set(original.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
 
-        let first = Task { await model.workspace.reload() }
+        let first = Task { await model.workspace.maintainWorkspace() }
         try await waitForReadLock(fixture)
         try await model.switchTo(nextRoot)
         await first.value
@@ -1153,7 +1425,7 @@ import SwiftUI
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let lease = try fixture.service.store.tryLock(fixture.root)
         defer { lease.unlock() }
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(!model.busy && model.hasSavedWorkspace)
         #expect(model.workspace.record == (alreadyLoaded ? record : nil))
         if alreadyLoaded {
@@ -1164,10 +1436,10 @@ import SwiftUI
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
         lease.unlock()
 
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record == record && model.workspace.blocked == nil)
         try FileManager.default.removeItem(at: fixture.service.store.recordURL(fixture.root))
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record == record && model.workspace.maintenanceState == .failed && !model.workspace.canManage)
     }
 
@@ -1179,7 +1451,7 @@ import SwiftUI
         let record = model.workspace.record
         let lease = try fixture.service.store.tryLock(fixture.root)
         defer { lease.unlock() }
-        let refresh = Task { await model.workspace.reload() }
+        let refresh = Task { await model.workspace.maintainWorkspace() }
         do {
             try await waitForWorkspaceOperation(model)
             let operation = try #require(model.operation)
@@ -1213,10 +1485,13 @@ import SwiftUI
         try #require(model.busy && model.openingWorkspace)
     }
 
-    private func makeModel(_ fixture: Fixture) async throws -> AppModel {
+    private func makeModel(_ fixture: Fixture, trace: URL? = nil) async throws -> AppModel {
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        let model = AppModel(defaults: defaults, service: fixture.service)
+        var git = fixture.service.git
+        if let trace { git.runner.environment["GIT_TRACE"] = trace.path }
+        let service = WorkspaceService(store: fixture.service.store, git: git, trash: fixture.service.trashDirectory)
+        let model = AppModel(defaults: defaults, service: service)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         defaults.set(model.workspace.record?.root, forKey: "workspace")
         return model
@@ -1245,6 +1520,12 @@ import SwiftUI
             try await Task.sleep(for: .milliseconds(1))
         }
         throw ModuError("test-timeout", "Workspace reload did not acquire its read lock.")
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(condition())
     }
 }
 
@@ -1286,6 +1567,8 @@ import SwiftUI
         if writer >= 0 {
             _ = fcntl(writer, F_SETNOSIGPIPE, 1)
             let written = original.withUnsafeBytes { Darwin.write(writer, $0.baseAddress, $0.count) }
+            // Cancellation may already have terminated the blocked Git reader.
+            if written < 0, errno == EPIPE { return }
             guard written == original.count else { throw ModuError("test-gate", "Could not resume Git repository validation.") }
         }
     }

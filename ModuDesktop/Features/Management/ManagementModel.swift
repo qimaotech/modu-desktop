@@ -122,15 +122,18 @@ final class ManagementModel {
             importFileName = nil
             if presentation.quitPending, presentation.result == nil { presentation.finishQuitIfPossible(); return }
             let selectionAtCompletion = session.selection
-            await session.reload(showProgress: !isWorktreeOperation, afterLoad: { [self] in
-                guard operationGeneration == operationToken, session.record?.rootURL == root, session.selection == selectionAtCompletion else { return }
-                if let retainedDetail, session.selection == retainedDetail.resource, let workspace = session.record,
-                   session.canRestoreDetail(retainedDetail.resource, from: retainedDetail.workspace, in: workspace) {
-                    session.details.restore(retainedDetail.detail, for: retainedDetail.resource)
-                }
-                if let select, let workspace = session.record, service.resources(workspace).contains(select) { session.selection = select; if let group = select.group { session.expandedGroups.insert(group) } }
-                else if let last = outcome.items.last(where: { $0.data?["disposition"] == "added" }), outcome.command == "repo.import-yaml" { session.selection = last.resource }
-            })
+            // Completed effects still need a record refresh when the business task was cancelled.
+            await Task { @MainActor [self] in
+                await session.refreshRecord(afterLoad: { [self] in
+                    guard operationGeneration == operationToken, session.record?.rootURL == root, session.selection == selectionAtCompletion else { return }
+                    if let retainedDetail, session.selection == retainedDetail.resource, let workspace = session.record,
+                       session.canRestoreDetail(retainedDetail.resource, from: retainedDetail.workspace, in: workspace) {
+                        session.details.restore(retainedDetail.detail, for: retainedDetail.resource)
+                    }
+                    if let select, let workspace = session.record, service.resources(workspace).contains(select) { session.selection = select; if let group = select.group { session.expandedGroups.insert(group) } }
+                    else if let last = outcome.items.last(where: { $0.data?["disposition"] == "added" }), outcome.command == "repo.import-yaml" { session.selection = last.resource }
+                })
+            }.value
         }
         operations.attach(task, to: operationID)
     }

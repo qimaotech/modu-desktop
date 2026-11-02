@@ -150,7 +150,7 @@ import Testing
         #expect(model.workspace.record == record)
         #expect(!PathSafety.exists(record.repositoryURL("outside")))
         model.defaults.set(other.root.path, forKey: "workspace")
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         #expect(model.workspace.record == nil && model.workspace.blocked != nil)
         #expect(try Data(contentsOf: originalFile) == originalBytes)
         #expect(try other.service.store.load(original.rootURL) == original)

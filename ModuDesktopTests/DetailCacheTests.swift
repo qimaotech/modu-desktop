@@ -385,7 +385,7 @@ import Testing
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
 
-        await model.workspace.reload()
+        await model.workspace.maintainWorkspace()
         await model.workspace.detailPreloadTask?.value
         #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
         for (resource, file, head) in [

@@ -93,7 +93,7 @@ final class AppModel {
                 await workspace.details.waitForDetail()
                 guard !Task.isCancelled, !presentation.quitPending else { return false }
                 if defaults.string(forKey: "workspace") == path {
-                    await workspace.reload(showProgress: false, maintainingWorkspace: true, cancellable: true, afterLoad: nil)
+                    await workspace.maintainWorkspace(.startup)
                 }
             } catch {
                 guard !(error is CancellationError), !Task.isCancelled, !presentation.quitPending else { return false }

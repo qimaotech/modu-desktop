@@ -65,7 +65,7 @@ struct ContentView: View {
                     IssueDescriptionView(message: notice, details: model.workspace.noticeDetails, text: model.text).font(.system(size: 11))
                 }
                 Spacer(minLength: 0)
-                Button(model.text.string(.uiRetryMaintenance)) { Task { await model.workspace.reload() } }.disabled(model.busy)
+                Button(model.text.string(.uiRetryMaintenance)) { Task { await model.workspace.maintainWorkspace() } }.disabled(model.busy)
             }.padding(12)
             Divider()
         } else if model.workspace.maintenanceState == .pending || (model.workspace.maintenanceState == .maintaining && !model.showsMainOperationProgress) {
@@ -92,7 +92,7 @@ struct ContentView: View {
             ContentUnavailableView {
                 Label(model.text.string(.uiWorkspaceDataCouldnTBeLoaded), systemImage: "exclamationmark.triangle")
             } description: { IssueDescriptionView(message: blocked, details: model.workspace.blockedDetails, text: model.text) } actions: {
-                Button(model.text.string(.uiReload)) { Task { await model.workspace.reload() } }
+                Button(model.text.string(.uiReload)) { Task { await model.workspace.maintainWorkspace() } }
                     .disabled(model.busy)
                 Button(model.text.string(.uiSetUpWorkspace)) { openWindow(id: "setup") }
                 Button(model.text.string(.uiQuit)) { NSApp.terminate(nil) }
