@@ -49,12 +49,12 @@ struct ContentView: View {
         .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if startupCompleted { Task { await model.activate() } }
-            else { model.workspace.details.setActive(true) }
+            else { model.workspace.setActive(true) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-            model.workspace.details.setActive(false)
+            model.workspace.setActive(false)
         }
-        .onAppear { if !NSApp.isActive { model.workspace.details.setActive(false) } }
+        .onAppear { if !NSApp.isActive { model.workspace.setActive(false) } }
     }
 
     @ViewBuilder private var maintenanceBanner: some View {
@@ -112,7 +112,7 @@ struct ContentView: View {
                 HStack(spacing: 12) {
                     ForEach(["Git GUI", "Editor", "Agent"], id: \.self) { category in
                         if model.tools.contains(where: { $0.category == category }) {
-                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.states[$0.id]?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136).disabled(!model.workspace.canManage)
+                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.state(for: $0)?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136).disabled(!model.workspace.canManage)
                         }
                     }
                 }

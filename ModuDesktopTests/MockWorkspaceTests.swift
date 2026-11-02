@@ -13,7 +13,6 @@ import Testing
         defer { mock.remove() }
         var readySelection: Resource?
         let needsSetup = await model.start { readySelection = model.workspace.selection }
-        await model.workspace.detailPreloadTask?.value
         let record = try #require(model.workspace.record)
         #expect(!needsSetup && model.started && model.workspace.blocked == nil)
         #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
@@ -27,7 +26,8 @@ import Testing
         for path in [record.rootURL, record.repositoryURL("order-service"), record.memberURL("feature-store-pickup", "order-service")] {
             #expect(try await model.service.git.run(["config", "--local", "--get", "include.path"], at: path).text == mock.directory.appending(path: "gitconfig").path)
         }
-        #expect(resources.allSatisfy { model.workspace.states[$0.id]?.available == true })
+        let selected = try #require(model.workspace.selection)
+        #expect(model.workspace.state(for: selected)?.available == true)
         #expect(!(await model.installer.checkCLIInstallation()).available)
         #expect(try await model.service.git.run(["config", "--get", "protocol.allow"], at: record.rootURL).text == "never")
         let remote = try #require(record.repositories.first)

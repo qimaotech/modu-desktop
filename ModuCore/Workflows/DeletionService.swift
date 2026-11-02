@@ -18,7 +18,7 @@ public enum DeleteRequest: Sendable {
 extension WorkspaceService {
     public func previewDelete(_ request: DeleteRequest, at root: URL, publish: @Sendable (DeletionTarget) async -> Void = { _ in }) async throws -> [DeletionTarget] {
         let record = try await read(root)
-        let reader = inspectionService(for: .localOnly)
+        let reader = inspectionService()
         return try await reader.deletionTargets(deleteResources(request, record: record), record: record, publish: publish)
     }
     public func remove(_ request: DeleteRequest, at root: URL, authorization: [DeletionTarget]? = nil, execute: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {

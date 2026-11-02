@@ -3,8 +3,8 @@ import Testing
 @testable import ModuCore
 
 struct ResourceSnapshotTests {
-    @Test(arguments: [false, true])
-    func concurrentInspectionPublishesBeforeSlowResourcesAndPreservesOrder(_ cancelsAfterPublish: Bool) async throws {
+    @Test(arguments: [(false, InspectionContent.withSummary), (true, .workingTreeOnly)])
+    func concurrentInspectionPublishesBeforeSlowResourcesAndPreservesOrder(_ cancelsAfterPublish: Bool, _ content: InspectionContent) async throws {
         let f = try await Fixture(); defer { f.remove() }
         let path = try await submoduleRepository(f)
         try Data("ignored child edit".utf8).write(to: path.appending(path: "submodule/README"))
@@ -40,8 +40,10 @@ struct ResourceSnapshotTests {
         let service = WorkspaceService(store: f.service.store, git: Git(runner: runner))
         let saved = record
         let inspection = Task {
-            await service.inspect(saved, policy: .localOnly, visibility: .application, concurrency: 2) { snapshot in
+            await service.inspect(saved, content: content, visibility: .application, concurrency: 2) { snapshot in
                 #expect(snapshot.changes?.map(\.path) == ["parent.txt"])
+                if case .workingTreeOnly = content { #expect(snapshot.summary == nil && snapshot.summaryError == nil) }
+                else { #expect(snapshot.summary != nil && snapshot.summaryError == nil) }
                 try? Data().write(to: probe.appending(path: "published-\(snapshot.resource.repo ?? "workspace")"))
                 if cancelsAfterPublish, snapshot.resource == .repository("second") { withUnsafeCurrentTask { $0?.cancel() } }
             }
@@ -66,6 +68,9 @@ struct ResourceSnapshotTests {
             let trace = try String(contentsOf: probe.appending(path: "trace"), encoding: .utf8)
             #expect(!trace.contains("built-in: git log ") && !trace.contains("built-in: git fetch "))
             #expect(!trace.contains("ls-files --stage"))
+            if case .workingTreeOnly = content {
+                #expect(!trace.contains("built-in: git remote\n") && !trace.contains("refs/remotes/origin/HEAD"))
+            }
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
             inspection.cancel(); _ = await inspection.value
@@ -260,54 +265,29 @@ struct ResourceSnapshotTests {
         return path
     }
 
-    @Test func readContextSupportsLinkedConfigAndDetectsItsReplacement() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        let record = try f.service.store.load(f.root)
-        let config = record.repositoryURL("repo").appending(path: ".git/config")
-        let target = f.directory.appending(path: "linked-config")
-        try FileManager.default.moveItem(at: config, to: target)
-        try FileManager.default.createSymbolicLink(at: config, withDestinationURL: target)
-        let context = try await f.service.prepareResourceRead(.repository("repo"), in: record)
-        #expect(context.isValid(in: record))
-        #expect(try await f.service.workingState(context).changes.isEmpty)
-        var data = try Data(contentsOf: target); data.append(Data("\n[status]\n    showUntrackedFiles = all\n".utf8))
-        try data.write(to: target, options: .atomic)
-        #expect(!context.isValid(in: record))
-    }
-
-    @Test(arguments: ["fetch-failed", "base-still-missing", "existing-base-fetch-failed"])
-    func baseRefreshFetchesOnceAndPreservesChangesOnFailure(_ outcome: String) async throws {
-        let fixture = try await Fixture()
-        defer { fixture.remove() }
+    @Test func defaultQueriesKeepChangesAndMissingBaseLocal() async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        let record = try fixture.service.store.load(fixture.root)
+        let record = try fixture.service.store.load(fixture.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
-        let head = try #require(await fixture.service.git.oid("HEAD", at: path))
-        if outcome != "existing-base-fetch-failed" {
-            _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
-        }
-        if outcome != "base-still-missing" {
-            _ = try await fixture.service.git.run(["config", "remote.origin.uploadpack", "/usr/bin/false"], at: path)
-        } else {
-            _ = try await fixture.service.git.run(["config", "remote.origin.followRemoteHEAD", "never"], at: path)
-        }
+        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
         try Data("keep changes".utf8).write(to: path.appending(path: "new.txt"))
-        let trace = fixture.directory.appending(path: "recovery-trace")
+        let trace = fixture.directory.appending(path: "local-query-trace")
         var runner = fixture.service.git.runner
         runner.environment["GIT_TRACE"] = trace.path
         let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
 
-        let policy: InspectionPolicy = outcome == "existing-base-fetch-failed" ? .refreshBase : .refreshMissingBase
-        let snapshot = try await service.snapshot(.repository("repo"), in: record, policy: policy)
-
+        let context = try await service.prepareResourceRead(resource, in: record)
+        let snapshot = try await service.localSnapshot(context, content: .withSummary)
         #expect(snapshot.changes?.map(\.path) == ["new.txt"] && snapshot.changesError == nil)
-        #expect(snapshot.summary?.headOID == head && snapshot.summaryError == nil)
-        #expect(snapshot.summary?.baseOID == nil && snapshot.summary?.baseError != nil)
-        let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
-        #expect(commands.filter { $0.contains("built-in: git fetch ") }.count == 1)
+        #expect(snapshot.summary?.baseOID == nil && snapshot.summary?.baseError != nil && snapshot.summaryError == nil)
+        let result = await service.inspect(record)
+        let item = try #require(result.items.first { $0.resource == resource })
+        #expect(item.status == .success && item.data?["working-tree"] == "dirty")
+        #expect(item.data?["head"] == "main" && item.data?["base-error"] != nil)
+        let commands = try String(contentsOf: trace, encoding: .utf8)
+        #expect(!commands.contains("built-in: git fetch ") && !commands.contains("built-in: git log "))
     }
 
     @Test(arguments: ["before-start", "between-resources", "after-completion"])
@@ -343,7 +323,9 @@ struct ResourceSnapshotTests {
         let record = try fixture.service.store.load(fixture.root)
         try Data("gitdir: missing-git-directory\n".utf8).write(to: record.groupURL("broken").appending(path: ".git"))
         let inspection = Task {
-            await fixture.service.inspect(record) { _ in withUnsafeCurrentTask { $0?.cancel() } }
+            await fixture.service.inspect(record) { snapshot in
+                if snapshot.resource == .group("first") { withUnsafeCurrentTask { $0?.cancel() } }
+            }
         }
         let result = await inspection.value
         #expect(result.items.map(\.status) == [.success, .failed, .success, .cancelled])

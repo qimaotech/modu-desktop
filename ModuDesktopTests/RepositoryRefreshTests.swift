@@ -18,8 +18,6 @@ import Testing
             record.repositories.append(repository)
         }
         try f.service.store.save(record)
-        let cachedSlow = try await f.service.snapshot(.repository("slow"), in: record, policy: .localOnly)
-        let cachedOther = try await f.service.snapshot(.repository("cached"), in: record, policy: .localOnly)
         let cachedFile = record.repositoryURL("cached").appending(path: "pending.txt")
         try Data("before cancellation".utf8).write(to: cachedFile)
         let probe = f.directory.appending(path: "preload-drain-probe")
@@ -53,8 +51,8 @@ import Testing
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: service)
         model.workspace.record = record
-        model.workspace.details.cache(cachedSlow)
-        model.workspace.details.cache(cachedOther)
+        model.workspace.details.cache(.init(resource: .repository("slow"), changes: []))
+        model.workspace.details.cache(.init(resource: .repository("cached"), changes: []))
         let state = DrainWaitState()
         var background: Task<Void, Never>?
         var waiting: Task<Void, Never>?
@@ -62,11 +60,12 @@ import Testing
         do {
             model.workspace.selection = .repository("repo")
             try await eventually { !model.workspace.detailLoading }
-            model.workspace.details.preload(in: record, force: true)
+            model.workspace.details.invalidate(resources: [.repository("slow"), .repository("cached")])
+            model.workspace.setVisibleResources(Set(service.resources(record)), in: record.root)
             let scanning = try #require(model.workspace.detailPreloadTask)
             background = scanning
             try await eventually {
-                PathSafety.exists(probe.appending(path: "started")) && model.workspace.states[Resource.repository("cached").id]?.dirty == true
+                PathSafety.exists(probe.appending(path: "started")) && model.workspace.state(for: .repository("cached"))?.dirty == true
             }
             let pidText = try String(contentsOf: probe.appending(path: "pid"), encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             let helperPID = try #require(Int32(pidText))
@@ -75,12 +74,13 @@ import Testing
             try await eventually { PathSafety.exists(probe.appending(path: "cancelling")) }
             try await eventually { model.workspace.detail.changes?.map(\.path) == ["new.txt"] }
             #expect(background?.isCancelled == true && model.workspace.detailPreloadTask == nil)
-            #expect(model.workspace.states[Resource.repository("slow").id]?.dirty == false)
+            #expect(model.workspace.state(for: .repository("slow"))?.dirty == false)
             try Data("latest".utf8).write(to: record.repositoryURL("slow").appending(path: "late.txt"))
             try FileManager.default.removeItem(at: cachedFile)
             model.workspace.cancelDetailPreload()
             model.workspace.cancelDetailPreload()
-            model.workspace.details.preload(in: record, force: true)
+            model.workspace.details.invalidate(resources: [.repository("slow"), .repository("cached")])
+            model.workspace.startDetailPreload()
             #expect(model.workspace.detailPreloadTask == nil)
             #expect(try String(contentsOf: probe.appending(path: "reads"), encoding: .utf8).split(separator: "\n").count == 1)
 
@@ -117,7 +117,7 @@ import Testing
                 model.workspace.resumeAfterFailedQuit()
             }
             try await eventually {
-                model.workspace.states[Resource.repository("slow").id]?.dirty == true && model.workspace.states[Resource.repository("cached").id]?.dirty == false
+                model.workspace.state(for: .repository("slow"))?.dirty == true && model.workspace.state(for: .repository("cached"))?.dirty == false
             }
             await model.workspace.stopReads()
         } catch {
@@ -147,7 +147,7 @@ import Testing
         let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
             try await gate.read(at: path, head: head, base: base)
         })
-        details.cache(try await f.service.snapshot(resource, in: record, policy: .localOnly))
+        details.cache(.init(resource: resource, changes: []))
         details.refresh(resource, in: record)
         do {
             try await eventually { gate.started.contains(gate.blockedHead!) && gate.completed.contains(blocksAhead ? base : first) }
@@ -181,10 +181,10 @@ import Testing
             #expect(details.detail.changes?.map(\.path) == ["last.txt", "new.txt"])
             #expect(details.detail.summary?.head == "feature" && details.detail.summary?.headOID == second)
             #expect(details.detail.commits?.map(\.subject) == ["second", "first"] && details.detail.behindCommits?.isEmpty == true)
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
         } catch {
             gate.blockedHead = nil
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
             throw error
         }
     }
@@ -218,7 +218,7 @@ import Testing
             await waiter.value
             #expect(!reading.isCancelled && details.detailLoading)
             if switchesSelection { details.refresh(nil, in: record) }
-            else { let tasks = details.pause(); for task in tasks { await task.value } }
+            else { details.pause(); await details.waitForReads() }
             await reading.value
             #expect(reading.isCancelled && !details.detailLoading && !reportedError)
             #expect(details.detail.changes == nil && details.detail.summary == nil && details.detail.commits == nil)
@@ -228,10 +228,10 @@ import Testing
             try await settle(details)
             #expect(details.detail.summary?.headOID == head && details.detail.changes?.isEmpty == true)
             #expect(details.detail.commits?.isEmpty == true && details.detail.behindCommits?.isEmpty == true)
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
         } catch {
             gate.blockedHead = nil
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
             throw error
         }
     }
@@ -245,7 +245,6 @@ import Testing
         try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL("slow"))
         _ = try await f.service.git.run(["config", "remote.origin.url", slow.url], at: record.repositoryURL("slow"))
         record.repositories.append(slow); try f.service.store.save(record)
-        let cachedSlow = try await f.service.snapshot(.repository("slow"), in: record, policy: .localOnly)
         let probe = f.directory.appending(path: "activation-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
         let hook = probe.appending(path: "fsmonitor")
@@ -268,11 +267,12 @@ import Testing
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: service, toolService: ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in }))
         model.workspace.record = record
-        model.workspace.details.cache(cachedSlow)
+        model.workspace.details.cache(.init(resource: .repository("slow"), changes: []))
         model.workspace.selection = .repository("repo")
         do {
             try await eventually { !model.workspace.details.snapshotLoading }
-            model.workspace.details.preload(in: record, force: true)
+            model.workspace.details.invalidate(resources: [.repository("slow")])
+            model.workspace.setVisibleResources(Set(service.resources(record)), in: record.root)
             try await eventually { PathSafety.exists(probe.appending(path: "started")) }
             try Data("background".utf8).write(to: record.repositoryURL("slow").appending(path: "slow.txt"))
             try Data("latest".utf8).write(to: record.repositoryURL("repo").appending(path: "new.txt"))
@@ -286,7 +286,7 @@ import Testing
             model.operations.finish(operation)
             try await eventually { model.workspace.detail.changes?.map(\.path) == ["busy.txt", "new.txt"] }
             try Data().write(to: probe.appending(path: "release"))
-            try await eventually { model.workspace.states[Resource.repository("slow").id]?.dirty == true }
+            try await eventually { model.workspace.state(for: .repository("slow"))?.dirty == true }
             await model.workspace.stopReads()
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
@@ -338,10 +338,10 @@ import Testing
             #expect(details.detail.changes?.map(\.path) == ["new.txt"])
             let reads = try String(contentsOf: probe.appending(path: "reads"), encoding: .utf8).split(separator: "\n")
             #expect(reads.count == 2)
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
             throw error
         }
     }
@@ -365,7 +365,7 @@ import Testing
         details.setActive(true)
         try await settle(details)
         #expect(details.detail.changes?.map(\.path) == ["new.txt"])
-        let paused = details.pause(); for task in paused { await task.value }
+        details.pause(); await details.waitForReads()
         try Data("busy".utf8).write(to: record.groupURL("feature").appending(path: "busy.txt"))
         details.refresh(.group("feature"), in: record)
         #expect(details.detailTask == nil)
@@ -373,7 +373,7 @@ import Testing
         try await settle(details)
         #expect(details.detail.changes?.map(\.path) == ["busy.txt", "new.txt"])
         let lateCallback = monitor.currentCallback
-        let tasks = details.stop(); for task in tasks { await task.value }
+        details.stop(); await details.waitForReads()
         lateCallback?(.structure)
         await Task.yield()
         #expect(details.detailTask == nil)
@@ -393,6 +393,10 @@ import Testing
         })
         try Data("edit".utf8).write(to: context.path.appending(path: "new.txt"))
         try await eventually { !received.values.isEmpty }
+        try await Task.sleep(for: .milliseconds(300))
+        received.values = []
+        try FileManager.default.removeItem(at: context.path.appending(path: "new.txt"))
+        try await eventually { received.values.contains(.workingTree) }
         received.values = []
         _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/main", "HEAD"], at: context.path)
         try await eventually { received.values.contains { $0 >= .summary } }
@@ -527,9 +531,9 @@ import Testing
             monitor.emit(.structure)
             try await eventually { monitor.submoduleDirectories.isEmpty && !details.detailLoading }
             #expect(details.detail.changes?.contains { $0.path == "sub/" } == true)
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
         } catch {
-            let tasks = details.stop(); for task in tasks { await task.value }
+            details.stop(); await details.waitForReads()
             throw error
         }
     }

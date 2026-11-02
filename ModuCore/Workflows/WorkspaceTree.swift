@@ -3,7 +3,7 @@ import Foundation
 extension WorkspaceService {
     public func workspaceTree(_ root: URL) async throws -> WorkspaceTreeNode {
         let record = try await read(root)
-        let reader = inspectionService(for: .localOnly)
+        let reader = inspectionService()
         try await reader.git.checkRepository(record.rootURL, main: true)
         var children: [WorkspaceTreeNode] = []
         var validRepositories = Set<String>()

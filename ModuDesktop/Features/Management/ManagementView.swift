@@ -244,7 +244,7 @@ struct ManagementView: View {
     private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .importRepositories: !management.canConfirmRepositoryImport; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositories ?? []); case .delete: !management.canConfirmDelete } }
     private func memberStatus(_ repo: String) -> String {
         guard workspace.record?.groups[group]?.repositories.contains(repo) == true else { return "Unset" }
-        let state = workspace.states[Resource.member(group, repo).id]
+        let state = workspace.state(for: .member(group, repo))
         if state?.available != true { return "Other" }
         return state?.dirty == true ? "Dirty" : "Clean"
     }

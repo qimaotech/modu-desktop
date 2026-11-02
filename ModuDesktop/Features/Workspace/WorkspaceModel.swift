@@ -9,12 +9,32 @@ final class WorkspaceModel {
     private let preferences: AppPreferences
     private let operations: OperationLifecycle
     private let presentation: OperationPresentation
+    private let recordMonitor: any WorkspaceRecordChangeMonitoring
+    private let waitForRecordDebounce: @MainActor (ContinuousClock.Instant) async throws -> Void
+    private var active = true
+    private var recordWatchRoot: String?
+    private var recordWatchID = UUID()
+    private var recordMonitoring = false
+    private var recordWatchNeedsRestart = false
+    private var recordDebounceTask: Task<Void, Never>?
+    private var recordBurstStart: ContinuousClock.Instant?
+    private var sidebarRefreshTask: Task<Void, Never>?
+    private var sidebarResources = Set<Resource>()
+    private var recordContextChanged = false
+    private struct RefreshIntent: OptionSet {
+        let rawValue: Int
+        static let record = Self(rawValue: 1)
+        static let current = Self(rawValue: 2)
+        static let sidebar = Self(rawValue: 4)
+        static let all: Self = [.record, .current, .sidebar]
+    }
     let details: RepositoryDetailModel
     enum MaintenanceState { case pending, maintaining, ready, failed }
     var maintenanceState: MaintenanceState = .ready
     var canManage: Bool { record != nil && maintenanceState == .ready && !busy && !presentation.quitPending }
     enum MaintenanceTrigger { case startup, manual }
-    var needsReadTermination: Bool { details.hasActiveReads || reloadTask != nil }
+    var hasActiveReads: Bool { details.hasActiveReads || reloadTask != nil }
+    var needsReadTermination: Bool { hasActiveReads || recordMonitoring || recordDebounceTask != nil || sidebarRefreshTask != nil }
     private var readsAllowed = true
     private struct MaintenanceOptions {
         var showProgress: Bool
@@ -43,11 +63,13 @@ final class WorkspaceModel {
         var maintenance: MaintenanceOptions?
         var completions: [ReloadCompletion]
         var operationID: Int?
+        var intent: RefreshIntent
 
-        init(path: String, maintenance: MaintenanceOptions?, completion: ReloadCompletion) {
-            self.path = path; self.maintenance = maintenance; completions = [completion]
+        init(path: String, maintenance: MaintenanceOptions?, intent: RefreshIntent, completion: ReloadCompletion) {
+            self.path = path; self.maintenance = maintenance; self.intent = intent; completions = [completion]
         }
         func merge(_ request: ReloadBatch) {
+            intent.formUnion(request.intent)
             if let options = request.maintenance {
                 if let current = maintenance {
                     maintenance = .init(showProgress: current.showProgress || options.showProgress, cancellable: current.cancellable && options.cancellable)
@@ -62,33 +84,12 @@ final class WorkspaceModel {
     private var reloadTask: (generation: Int, task: Task<Void, Never>)?
     private var reloadStopped = false
     private var switchingGeneration: Int?
-    private var backgroundNeedsRefresh = false
-    private var drainingReads: [Task<Void, Never>] = []
+    private var cancelledReload: Task<Void, Never>?
     @ObservationIgnored var onContextChange: ((Bool) -> Void)?
     var record: WorkspaceRecord? {
-        didSet {
-            let rootChanged = oldValue?.root != record?.root
-            if rootChanged { onContextChange?(true) }
-            guard let record else { return }
-            let resources = Set(service.resources(record).map(\.id))
-            states = states.filter { resources.contains($0.key) }
-            let groups = Set(record.groups.keys)
-            var expanded = expandedGroups
-            let previousGroups: Set<String>
-            if rootChanged {
-                let savedExpanded = defaults.stringArray(forKey: sidebarPreferenceKey("expandedGroups"))
-                expanded = Set(savedExpanded ?? [])
-                // Legacy preferences lack the seen-group list; preserve their existing collapsed state.
-                previousGroups = defaults.stringArray(forKey: sidebarPreferenceKey("knownGroups")).map { Set($0) }
-                    ?? (savedExpanded == nil ? [] : groups)
-            } else {
-                previousGroups = Set(oldValue?.groups.keys ?? [:].keys)
-            }
-            expandedGroups = expanded.union(groups.subtracting(previousGroups)).intersection(groups)
-            defaults.set(groups.sorted(), forKey: sidebarPreferenceKey("knownGroups"))
-            if rootChanged { restoreSelection(in: record) }
-        }
+        didSet { applyRecord(previous: oldValue) }
     }
+
     var blocked: String?
     var blockedDetails: String?
     var notice: String?
@@ -115,10 +116,7 @@ final class WorkspaceModel {
     private var refreshGeneration = 0
     private var defaults: UserDefaults { preferences.defaults }
     private var busy: Bool { operations.busy }
-    var states: [String: ResourceState] {
-        get { details.states }
-        set { details.states = newValue }
-    }
+    func state(for resource: Resource) -> ResourceState? { details.state(for: resource) }
     var detail: RepositoryDetailState { details.detail }
     var detailLoading: Bool { details.detailLoading }
     var detailPreloadTask: Task<Void, Never>? { details.detailPreloadTask }
@@ -132,13 +130,20 @@ final class WorkspaceModel {
 
     var text: InterfaceText { preferences.text }
 
-    init(service: WorkspaceService, installer: InstallationService, preferences: AppPreferences, operations: OperationLifecycle, presentation: OperationPresentation) {
+    init(service: WorkspaceService, installer: InstallationService, preferences: AppPreferences, operations: OperationLifecycle, presentation: OperationPresentation,
+         recordMonitor: any WorkspaceRecordChangeMonitoring = WorkspaceRecordChangeMonitor(),
+         now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
+         waitForRecordDebounce: (@MainActor (ContinuousClock.Instant) async throws -> Void)? = nil) {
         self.service = service
         self.installer = installer
         self.preferences = preferences
         self.operations = operations
         self.presentation = presentation
-        details = RepositoryDetailModel(service: service, defaults: preferences.defaults)
+        self.recordMonitor = recordMonitor
+        self.waitForRecordDebounce = waitForRecordDebounce ?? { deadline in
+            try await Task.sleep(until: deadline, clock: .continuous)
+        }
+        details = RepositoryDetailModel(service: service, defaults: preferences.defaults, now: now)
         details.onIdle = { [weak self] in self?.startDetailPreload() }
         details.onCommitsError = { [weak self] error in
             guard let self, !self.presentation.quitPending else { return }
@@ -178,8 +183,8 @@ final class WorkspaceModel {
         if selection == previousSelection { refreshDetail() }
     }
 
-    func refreshRecord(afterLoad: (() -> Void)? = nil) async {
-        await requestReload(maintenance: nil, afterLoad: afterLoad)
+    func refreshRecord(refreshingSidebar: Bool = true, afterLoad: (() -> Void)? = nil) async {
+        await requestReload(maintenance: nil, intent: refreshingSidebar ? .all : [.record, .current], afterLoad: afterLoad)
     }
 
     func maintainWorkspace(_ trigger: MaintenanceTrigger = .manual) async {
@@ -187,11 +192,11 @@ final class WorkspaceModel {
         await requestReload(maintenance: MaintenanceOptions(trigger))
     }
 
-    private func requestReload(maintenance: MaintenanceOptions?, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
+    private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent = .all, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
         guard !Task.isCancelled, !presentation.quitPending, let path = defaults.string(forKey: "workspace") else { return }
         let completion = ReloadCompletion(afterLoad)
-        let request = ReloadBatch(path: path, maintenance: maintenance, completion: completion)
-        let waitsForBatch = wait && (!busy || activeReload?.operationID.map(operations.isCurrent) == true)
+        let request = ReloadBatch(path: path, maintenance: maintenance, intent: intent, completion: completion)
+        let waitsForBatch = wait && (active || maintenance != nil) && (!busy || activeReload?.operationID.map(operations.isCurrent) == true)
         if waitsForBatch {
             await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
@@ -225,12 +230,13 @@ final class WorkspaceModel {
 
     private func startPendingReloadIfPossible() {
         guard reloadTask == nil, !reloadStopped, switchingGeneration == nil, !busy, !presentation.quitPending,
-              let pending = pendingReload else { return }
+              let pending = pendingReload, active || pending.maintenance != nil else { return }
         guard defaults.string(forKey: "workspace") == pending.path else {
             pending.finish(); pendingReload = nil
             return
         }
         cancelDetailPreload()
+        ensureRecordMonitoring()
         refreshGeneration += 1
         let generation = refreshGeneration
         let task = Task(priority: .utility) { await runReloads(generation: generation) }
@@ -240,7 +246,7 @@ final class WorkspaceModel {
     private func runReloads(generation: Int) async {
         defer { finishReloads(generation: generation) }
         while generation == refreshGeneration, !Task.isCancelled, !reloadStopped, !busy, !presentation.quitPending,
-              let batch = pendingReload, defaults.string(forKey: "workspace") == batch.path {
+              let batch = pendingReload, (active || batch.maintenance != nil), defaults.string(forKey: "workspace") == batch.path {
             activeReload = batch
             if let options = batch.maintenance {
                 guard let operationID = operations.begin(.workspace, cancellable: options.cancellable) else {
@@ -275,8 +281,10 @@ final class WorkspaceModel {
 
     private func resumeReadsIfAllowed() {
         guard !reloadStopped, switchingGeneration == nil, !busy, !presentation.quitPending, readsAllowed,
-              maintenanceState != .maintaining, pendingReload?.maintenance == nil else { return }
+              maintenanceState != .maintaining, pendingReload?.maintenance == nil,
+              pendingReload?.intent.contains(.current) != true, activeReload?.intent.contains(.current) != true else { return }
         details.resume()
+        startSidebarRefreshTimer()
         startDetailPreload()
     }
 
@@ -292,19 +300,17 @@ final class WorkspaceModel {
             guard let record = try await recordForReload(root, batch: batch, generation: generation) else { return }
             guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
                   !busy || batch.operationID.map(operations.isCurrent) == true else { return }
-            let recordChanged = self.record != record
-            if recordChanged { invalidateDetailCache() }
             let previousSelection = selection
             self.record = record; blocked = nil; blockedDetails = nil
+            let contextChanged = recordContextChanged
             if maintainingWorkspace { maintenanceState = .ready }
             readsAllowed = true
             for completion in batch.completions {
                 guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending else { return }
                 completion.apply()
             }
-            if let selection, !service.resources(record).contains(selection) { self.selection = nil }
-            if selection == previousSelection, recordChanged || !details.snapshotLoading { refreshDetail() }
-            backgroundNeedsRefresh = true
+            if selection == previousSelection, contextChanged || batch.intent.contains(.current) { refreshDetail() }
+            if batch.intent.contains(.sidebar) { details.invalidate(resources: sidebarResources.subtracting(selection.map { [$0] } ?? [])) }
         } catch {
             guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
                   !busy || batch.operationID.map(operations.isCurrent) == true else { return }
@@ -313,21 +319,15 @@ final class WorkspaceModel {
                 notice = text.message(error); noticeDetails = Git.sanitize(error.localizedDescription)
                 if let actual = try? await service.read(URL(fileURLWithPath: path)) {
                     guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending else { return }
-                    let retained = selection.map { ($0, self.record, detail) }
-                    if self.record != actual { invalidateDetailCache() }
                     self.record = actual
-                    if let selected = selection, !service.resources(actual).contains(selected) { selection = nil }
-                    if let (resource, previous, savedDetail) = retained, let previous,
-                       canRestoreDetail(resource, from: previous, in: actual) { details.restore(savedDetail, for: resource) }
                     readsAllowed = true
                     refreshDetail()
                 } else {
                     readsAllowed = false
-                    drainingReads += details.pause()
+                    details.pause()
                 }
                 return
             }
-            invalidateDetailCache()
             if maintainingWorkspace { maintenanceState = .failed; notice = nil; noticeDetails = nil }
             record = nil; selection = nil; blocked = text.message(error); blockedDetails = Git.sanitize(error.localizedDescription)
         }
@@ -335,7 +335,7 @@ final class WorkspaceModel {
     private func recordForReload(_ root: URL, batch: ReloadBatch, generation: Int) async throws -> WorkspaceRecord? {
         guard let operationID = batch.operationID else {
             let record = try await service.read(root)
-            try await service.git.checkRepository(root, main: true)
+            if batch.intent != .record || record != self.record { try await service.git.checkRepository(root, main: true) }
             return record
         }
         await waitForReadCancellation()
@@ -393,29 +393,37 @@ final class WorkspaceModel {
         }
         try Task.checkCancellation()
         guard token == refreshGeneration, !presentation.quitPending else { throw CancellationError() }
-        invalidateDetailCache()
         pendingReload?.finish()
         pendingReload = nil
         defaults.set(record.root, forKey: "workspace")
         let previousSelection = selection
         self.record = record; blocked = nil; notice = nil
-        states = [:]; maintenanceState = .ready; readsAllowed = true
+        maintenanceState = .ready; readsAllowed = true
         reloadStopped = false
+        ensureRecordMonitoring()
         if selection == previousSelection { refreshDetail() }
     }
     func refreshDetail() { details.refresh(selection, in: record) }
 
+    func setActive(_ active: Bool, refresh: Bool = true) {
+        self.active = active
+        details.setActive(active, refresh: refresh)
+        if active { startPendingReloadIfPossible(); resumeReadsIfAllowed() }
+        else { sidebarRefreshTask?.cancel(); sidebarRefreshTask = nil }
+    }
+
     func activate() async {
-        details.setActive(true)
-        backgroundNeedsRefresh = true
-        await requestReload(maintenance: nil, wait: !busy)
+        setActive(true, refresh: false)
+        refreshDetail()
+        await requestReload(maintenance: nil, intent: [.record, .sidebar], wait: !busy)
     }
 
     func operationsChanged(_ busy: Bool) {
         if busy {
-            drainingReads += details.pause()
+            sidebarRefreshTask?.cancel(); sidebarRefreshTask = nil
+            details.pause()
             if activeReload?.maintenance == nil, let load = reloadTask {
-                drainingReads.append(load.task); load.task.cancel(); refreshGeneration += 1
+                cancelledReload = load.task; load.task.cancel(); refreshGeneration += 1
                 activeReload?.finish(); pendingReload?.finish()
             }
         } else {
@@ -429,13 +437,16 @@ final class WorkspaceModel {
     }
 
     func waitForReadCancellation() async {
-        let tasks = drainingReads; drainingReads = []
-        for task in tasks { await task.value }
+        let reload = cancelledReload
+        await details.waitForReads()
+        await reload?.value
     }
 
     func stopReads() async {
         reloadStopped = true
-        drainingReads += details.stop()
+        stopRecordMonitoring()
+        sidebarRefreshTask?.cancel(); sidebarRefreshTask = nil
+        details.stop()
         let load = reloadTask?.task
         load?.cancel()
         activeReload?.finish(); pendingReload?.finish()
@@ -447,6 +458,7 @@ final class WorkspaceModel {
     func resumeAfterFailedQuit() {
         guard !busy, !presentation.quitPending else { return }
         reloadStopped = false
+        ensureRecordMonitoring()
         startPendingReloadIfPossible()
         guard pendingReload?.maintenance == nil else { return }
         if readsAllowed, maintenanceState != .maintaining { refreshDetail() }
@@ -464,18 +476,107 @@ final class WorkspaceModel {
               let record else { return }
         guard readsAllowed, pendingReload?.maintenance == nil, !details.snapshotLoading,
               maintenanceState != .pending && maintenanceState != .maintaining else { return }
-        details.preload(in: record, force: backgroundNeedsRefresh)
-        backgroundNeedsRefresh = false
+        details.preload(in: record, including: sidebarResources)
+    }
+
+    func setVisibleResources(_ resources: Set<Resource>, in root: String) {
+        guard let record, record.root == root else { return }
+        sidebarResources = resources.intersection(service.resources(record))
+        if sidebarResources.isEmpty { sidebarRefreshTask?.cancel(); sidebarRefreshTask = nil }
+        startDetailPreload()
+        startSidebarRefreshTimer()
+    }
+
+    private func startSidebarRefreshTimer() {
+        guard sidebarRefreshTask == nil, active, !sidebarResources.isEmpty, !reloadStopped, !busy,
+              readsAllowed, !presentation.quitPending, maintenanceState != .pending, maintenanceState != .maintaining else { return }
+        sidebarRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                guard let self, self.active, !self.reloadStopped else { return }
+                self.startDetailPreload()
+            }
+        }
+    }
+
+    private func ensureRecordMonitoring() {
+        guard !reloadStopped, !presentation.quitPending, let root = record?.root ?? defaults.string(forKey: "workspace") else { return }
+        guard recordWatchRoot != root || !recordMonitoring || recordWatchNeedsRestart else { return }
+        // Rebinding must not discard an event whose refresh has not entered the queue yet.
+        if recordWatchRoot == root, recordDebounceTask != nil { return }
+        stopRecordMonitoring()
+        recordWatchRoot = root
+        let id = recordWatchID
+        recordMonitoring = recordMonitor.start(service.store.recordURL(URL(fileURLWithPath: root))) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.recordWatchID == id, !self.reloadStopped, !self.presentation.quitPending else { return }
+                self.receivedRecordChange()
+            }
+        }
+    }
+
+    private func receivedRecordChange() {
+        recordWatchNeedsRestart = true
+        let now = ContinuousClock.now
+        if recordBurstStart == nil { recordBurstStart = now }
+        let deadline = min(now.advanced(by: .milliseconds(150)), recordBurstStart!.advanced(by: .seconds(1)))
+        recordDebounceTask?.cancel()
+        let watchID = recordWatchID
+        let wait = waitForRecordDebounce
+        recordDebounceTask = Task { [weak self] in
+            do { try await wait(deadline) } catch { return }
+            guard !Task.isCancelled, let self, self.recordWatchID == watchID,
+                  !self.reloadStopped, !self.presentation.quitPending else { return }
+            self.recordDebounceTask = nil; self.recordBurstStart = nil
+            await self.requestReload(maintenance: nil, intent: .record, wait: false)
+        }
+    }
+
+    private func stopRecordMonitoring() {
+        recordMonitor.stop(); recordMonitoring = false; recordWatchNeedsRestart = false
+        recordWatchRoot = nil; recordWatchID = UUID()
+        recordDebounceTask?.cancel(); recordDebounceTask = nil; recordBurstStart = nil
+    }
+
+    func invalidateResources(after outcome: OperationResult) {
+        guard let record else { return }
+        let changed = outcome.items.filter { !$0.effects.isEmpty }.map(\.resource)
+        let repositories = Set(changed.compactMap(\.repo))
+        let workspaceGitChanged = changed.contains { $0.repo == nil }
+        let affected = Set(service.resources(record).filter { resource in
+            resource.repo.map(repositories.contains) ?? workspaceGitChanged
+        })
+        details.invalidate(resources: affected)
     }
 
     func cancelDetailPreload() { details.cancelPreload() }
-    func invalidateDetailCache() { details.invalidate() }
 
-    func canRestoreDetail(_ resource: Resource, from previous: WorkspaceRecord, in current: WorkspaceRecord) -> Bool {
-        guard previous.root == current.root, service.resources(current).contains(resource) else { return false }
-        if let repo = resource.repo, previous.repositories.first(where: { $0.id == repo })?.url != current.repositories.first(where: { $0.id == repo })?.url { return false }
-        if let group = resource.group, previous.groups[group]?.createdAt != current.groups[group]?.createdAt { return false }
-        return true
+    private func applyRecord(previous: WorkspaceRecord?) {
+        let rootChanged = previous?.root != record?.root
+        recordContextChanged = details.applyWorkspace(record)
+        if rootChanged {
+            onContextChange?(true)
+            sidebarResources = []
+            sidebarRefreshTask?.cancel(); sidebarRefreshTask = nil
+        }
+        guard let record else { return }
+        let groups = Set(record.groups.keys)
+        var expanded = expandedGroups
+        let previousGroups: Set<String>
+        if rootChanged {
+            let savedExpanded = defaults.stringArray(forKey: sidebarPreferenceKey("expandedGroups"))
+            expanded = Set(savedExpanded ?? [])
+            // Legacy preferences lack the seen-group list; preserve their existing collapsed state.
+            previousGroups = defaults.stringArray(forKey: sidebarPreferenceKey("knownGroups")).map { Set($0) }
+                ?? (savedExpanded == nil ? [] : groups)
+        } else {
+            previousGroups = Set(previous?.groups.keys ?? [:].keys)
+        }
+        expandedGroups = expanded.union(groups.subtracting(previousGroups)).intersection(groups)
+        defaults.set(groups.sorted(), forKey: sidebarPreferenceKey("knownGroups"))
+        if rootChanged { restoreSelection(in: record) }
+        else if let selection, !service.resources(record).contains(selection) { self.selection = nil }
+        ensureRecordMonitoring()
     }
 
     private func restoreSelection(in record: WorkspaceRecord) {

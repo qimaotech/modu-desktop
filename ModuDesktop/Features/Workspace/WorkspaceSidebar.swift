@@ -69,6 +69,9 @@ struct WorkspaceSidebar: View {
                     }
                 }
                 .onChange(of: workspace.selection, initial: true) { _, selection in if let selection { proxy.scrollTo(selection.id) } }
+                .onChange(of: visibleResources, initial: true) { _, resources in
+                    if let root = workspace.record?.root { workspace.setVisibleResources(Set(resources), in: root) }
+                }
             }
         }
         .background(DesignStyle.sidebar)
@@ -117,7 +120,8 @@ struct WorkspaceSidebar: View {
     }
 
     private func resourceRow(_ resource: Resource, title: String) -> some View {
-        HStack(spacing: 6) {
+        let state = workspace.state(for: resource)
+        return HStack(spacing: 6) {
             if resource.kind == .group {
                 Button { workspace.toggleGroup(title); sidebarFocused = true } label: {
                     DisclosureIcon(expanded: workspace.expandedGroups.contains(title))
@@ -129,10 +133,10 @@ struct WorkspaceSidebar: View {
                     else { DesignIcon(name: "FolderGit") }
                     Text(title).font(.system(size: 13, weight: resource.kind == .group ? .medium : .regular)).lineLimit(1)
                     Spacer(minLength: 4)
-                    if workspace.states[resource.id]?.available == false {
+                    if state?.available == false {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary).frame(width: 24)
-                            .help(workspace.states[resource.id]?.reasonMessage.map(preferences.text.message) ?? preferences.text.string(.uiUnavailable)).accessibilityLabel(preferences.text.string(.uiUnavailable))
-                    } else if workspace.states[resource.id]?.dirty == true {
+                            .help(state?.reasonMessage.map(preferences.text.message) ?? preferences.text.string(.uiUnavailable)).accessibilityLabel(preferences.text.string(.uiUnavailable))
+                    } else if state?.dirty == true {
                         Circle().fill(.tertiary).frame(width: 7, height: 7).frame(width: 24, height: 20)
                             .accessibilityLabel(preferences.text.string(.uiWorkingTreeHasChanges))
                     }
@@ -147,8 +151,12 @@ struct WorkspaceSidebar: View {
         .contextMenu { ResourceActions(workspace: workspace, management: management, operations: operations, text: preferences.text, resource: resource) }
     }
 
+    private var visibleResources: [Resource] {
+        workspace.visibleResources.filter { $0.kind == .repository ? repositoriesExpanded : groupsExpanded }
+    }
+
     private func moveSelection(_ offset: Int) -> KeyPress.Result {
-        let resources = workspace.visibleResources.filter { $0.kind == .repository ? repositoriesExpanded : groupsExpanded }
+        let resources = visibleResources
         guard !resources.isEmpty else { return .ignored }
         let current = workspace.selection.flatMap { resources.firstIndex(of: $0) } ?? (offset > 0 ? -1 : resources.count)
         workspace.selection = resources[min(resources.count - 1, max(0, current + offset))]

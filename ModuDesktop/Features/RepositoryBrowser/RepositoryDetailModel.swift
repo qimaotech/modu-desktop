@@ -8,6 +8,7 @@ final class RepositoryDetailModel {
     private let defaults: UserDefaults
     private let monitor: any ResourceChangeMonitoring
     private let readCommits: @Sendable (URL, String, String) async throws -> [GitCommit]
+    private let now: @MainActor () -> ContinuousClock.Instant
     private var workspace: WorkspaceRecord?
     private var selection: Resource?
     var collapsedPaths = Set<String>() {
@@ -23,7 +24,8 @@ final class RepositoryDetailModel {
     var hasActiveReads: Bool { detailTask != nil || detailPreloadTask != nil || cancellationDrain != nil || monitoring || fallbackTask != nil }
     var snapshotLoading: Bool { changesLoading || summaryLoading }
     var detailLoading: Bool { detailTask != nil }
-    var states: [String: ResourceState] = [:]
+    func state(for resource: Resource) -> ResourceState? { resources[resource]?.state }
+
     private(set) var detailTask: Task<Void, Never>?
     private(set) var detailPreloadTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
@@ -35,15 +37,16 @@ final class RepositoryDetailModel {
     private var generation = 0
     private var preloadGeneration = 0
     private var pendingPreload = Set<Resource>()
+    private var preloadScope = Set<Resource>()
+    private var runningPreload = Set<Resource>()
     private var readContext: ResourceReadContext?
     private var monitoring = false
     private var suspended = false
     private var active = true
     private var detailWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
-    private var detailCache: [Resource: RepositoryDetailState] = [:]
-    private var preloadedSnapshots: [Resource: RepositoryDetailState] = [:]
-    private var commitCache: [String: [GitCommit]] = [:]
-    private var behindCommitCache: [String: [GitCommit]] = [:]
+    private var resources: [Resource: ResourceCacheEntry] = [:]
+    private var histories: [HistoryKey: HistoryCacheEntry] = [:]
+    private var historyUse = 0
     @ObservationIgnored var onIdle: (() -> Void)?
     @ObservationIgnored var onCommitsError: ((ModuError) -> Void)?
     private var collapsedPathsPreferenceKey: String? {
@@ -52,18 +55,48 @@ final class RepositoryDetailModel {
     }
 
     init(service: WorkspaceService, defaults: UserDefaults, monitor: any ResourceChangeMonitoring = ResourceChangeMonitor(),
-         readCommits: (@Sendable (URL, String, String) async throws -> [GitCommit])? = nil) {
-        self.service = service; self.defaults = defaults; self.monitor = monitor
+         readCommits: (@Sendable (URL, String, String) async throws -> [GitCommit])? = nil,
+         now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }) {
+        self.service = service; self.defaults = defaults; self.monitor = monitor; self.now = now
         self.readCommits = readCommits ?? { path, head, base in
             try await service.git.commits(at: path, head: head, base: base, limit: nil)
         }
     }
 
+    @discardableResult func applyWorkspace(_ workspace: WorkspaceRecord?) -> Bool {
+        guard self.workspace != workspace else { return false }
+        let previous = self.workspace
+        let rootChanged = previous?.root != workspace?.root
+        let previousIdentities = identities(in: previous)
+        let currentIdentities = identities(in: workspace)
+        let contextChanged = rootChanged || selection.map { resource in
+            previousIdentities[resource] != currentIdentities[resource]
+                || (resource.kind == .group && Set(previous?.groups[resource.group ?? ""]?.repositories ?? []) != Set(workspace?.groups[resource.group ?? ""]?.repositories ?? []))
+        } == true
+        if contextChanged { cancelCurrent(); pendingChange = selection == nil ? nil : .structure }
+        else { cancelPreload() }
+        if rootChanged {
+            resources = [:]; histories = [:]; pendingPreload = []; preloadScope = []
+            detail = .init()
+        } else {
+            let configured = Set(currentIdentities.keys)
+            resources = resources.filter { configured.contains($0.key) && previousIdentities[$0.key] == currentIdentities[$0.key] }
+            pendingPreload.formIntersection(configured)
+            preloadScope.formIntersection(configured)
+            if let selection, let current = currentIdentities[selection], current != previousIdentities[selection] { detail = .init() }
+        }
+        self.workspace = workspace
+        if rootChanged { collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? []) }
+        return contextChanged
+    }
+
     func refresh(_ selection: Resource?, in workspace: WorkspaceRecord?) {
-        if self.selection != selection || self.workspace != workspace {
-            _ = cancelCurrent()
-            self.selection = selection; self.workspace = workspace
-            detail = selection.flatMap { detailCache[$0] } ?? RepositoryDetailState()
+        let changedSelection = self.selection != selection
+        applyWorkspace(workspace)
+        if changedSelection {
+            cancelCurrent()
+            self.selection = selection
+            detail = selection.flatMap { resources[$0]?.lastCompleteDetail } ?? RepositoryDetailState()
             collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? [])
         }
         guard selection != nil, workspace != nil else { onIdle?(); return }
@@ -73,20 +106,22 @@ final class RepositoryDetailModel {
     func request(_ change: ResourceChange) {
         guard selection != nil, workspace != nil else { return }
         pendingChange = max(pendingChange ?? change, change)
+        if let selection { resources[selection, default: .init()].invalidated = true }
         cancelPreload()
         startRefresh()
     }
 
-    func setActive(_ active: Bool) {
+    func setActive(_ active: Bool, refresh: Bool = true) {
+        let changed = self.active != active
         self.active = active
-        if active { request(.structure) }
-        else { debounceTask?.cancel(); debounceTask = nil; changeBurstStart = nil; cancelPreload() }
+        if !active { debounceTask?.cancel(); debounceTask = nil; changeBurstStart = nil; cancelPreload() }
+        else if changed && refresh { request(.structure) }
     }
 
-    func pause() -> [Task<Void, Never>] {
+    func pause() {
         suspended = true
         pendingChange = .structure
-        return cancelCurrent()
+        cancelCurrent()
     }
 
     func resume() {
@@ -94,9 +129,9 @@ final class RepositoryDetailModel {
         startRefresh()
     }
 
-    func stop() -> [Task<Void, Never>] {
+    func stop() {
         suspended = true; pendingChange = nil
-        return cancelCurrent()
+        cancelCurrent()
     }
 
     func waitForDetail() async {
@@ -112,45 +147,64 @@ final class RepositoryDetailModel {
         }
     }
 
-    func cache(_ snapshot: ResourceSnapshot) {
-        guard selection != snapshot.resource else { return }
-        let loaded = RepositoryDetailState(snapshot: snapshot, cached: detailCache[snapshot.resource])
-        preloadedSnapshots[snapshot.resource] = loaded
-        updateState(snapshot.resource, from: loaded)
+    func waitForReads() async {
+        while let drain = cancellationDrain { await drain.value }
     }
 
-    func restore(_ detail: RepositoryDetailState, for resource: Resource) { detailCache[resource] = detail }
+    func cache(_ snapshot: ResourceSnapshot) {
+        guard selection != snapshot.resource else { return }
+        updateState(snapshot.resource, changes: snapshot.changes, error: snapshot.changesError)
+    }
 
-    func preload(in workspace: WorkspaceRecord, force: Bool = false) {
-        guard detailPreloadTask == nil, !snapshotLoading, !suspended, active else { return }
-        self.workspace = workspace
-        let resources = Set(service.resources(workspace))
-        pendingPreload.formIntersection(resources)
-        pendingPreload.formUnion(resources.filter { force || (detailCache[$0] == nil && preloadedSnapshots[$0] == nil) })
-        if let selection { pendingPreload.remove(selection) }
-        guard !pendingPreload.isEmpty, cancellationDrain == nil else { return }
+    func preload(in workspace: WorkspaceRecord, including included: Set<Resource>) {
+        applyWorkspace(workspace)
+        let configured = Set(service.resources(workspace))
+        let previousScope = preloadScope
+        preloadScope = configured.intersection(included)
+        if let selection { preloadScope.remove(selection) }
+        pendingPreload.formIntersection(preloadScope)
+        if detailPreloadTask != nil, previousScope != preloadScope { cancelPreload() }
+        pendingPreload.formUnion(preloadScope.filter { resource in
+            guard let entry = resources[resource], !entry.invalidated, let attempted = entry.lastAttempt else { return true }
+            return attempted.duration(to: now()) >= .seconds(30)
+        })
+        guard detailPreloadTask == nil, !snapshotLoading, !suspended, active,
+              !pendingPreload.isEmpty, cancellationDrain == nil else { return }
         let requested = pendingPreload
         let token = preloadGeneration
+        runningPreload = requested
         detailPreloadTask = Task(priority: .utility) {
-            _ = await service.inspect(workspace, excluding: selection, policy: .localOnly, visibility: .application, concurrency: 2, including: requested) { @MainActor [weak self] snapshot in
-                guard let self, !Task.isCancelled, self.preloadGeneration == token, self.workspace == workspace else { return }
+            let result = await service.inspect(workspace, excluding: selection, content: .workingTreeOnly, visibility: .application, concurrency: 2, including: requested) { @MainActor [weak self] snapshot in
+                guard let self, !Task.isCancelled, self.preloadGeneration == token,
+                      self.workspace?.root == workspace.root, self.preloadScope.contains(snapshot.resource) else { return }
                 self.cache(snapshot)
                 self.pendingPreload.remove(snapshot.resource)
             }
-            if !Task.isCancelled, preloadGeneration == token { detailPreloadTask = nil }
+            guard !Task.isCancelled, preloadGeneration == token else { return }
+            for resource in requested.intersection(pendingPreload).intersection(preloadScope) {
+                let error = ModuError(result.reasonCode ?? "resource-unavailable", result.message ?? "Repository state is unavailable.", userMessage: result.userMessage)
+                updateState(resource, changes: nil, error: error)
+                pendingPreload.remove(resource)
+            }
+            detailPreloadTask = nil; runningPreload = []
+            onIdle?()
         }
     }
 
     func cancelPreload() {
         let task = detailPreloadTask
-        task?.cancel(); detailPreloadTask = nil; preloadGeneration += 1
-        if let task { _ = drainCancelledTasks([task]) }
+        task?.cancel(); detailPreloadTask = nil; runningPreload = []; preloadGeneration += 1
+        if let task { drainCancelledTask(task) }
     }
 
-    func invalidate() {
-        _ = cancelCurrent()
-        detailCache = [:]; preloadedSnapshots = [:]; commitCache = [:]; behindCommitCache = [:]; pendingPreload = []
-        pendingChange = .structure
+    func invalidate(resources affected: Set<Resource>) {
+        for resource in affected { resources[resource, default: .init()].invalidated = true }
+        pendingPreload.formUnion(affected.intersection(preloadScope))
+        if !runningPreload.isDisjoint(with: affected) { cancelPreload() }
+        if let selection, affected.contains(selection) {
+            cancelCurrent()
+            pendingChange = .structure
+        }
     }
 
     private func startRefresh() {
@@ -174,7 +228,7 @@ final class RepositoryDetailModel {
 
     private func readSnapshot(_ resource: Resource, in workspace: WorkspaceRecord, change: ResourceChange, token: Int) async {
         guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-        var next = preloadedSnapshots[resource] ?? detail
+        var next = detail
         do {
             let context: ResourceReadContext
             if change != .structure, let existing = readContext, existing.isValid(in: workspace) { context = existing }
@@ -209,10 +263,10 @@ final class RepositoryDetailModel {
         }
         guard isCurrent(token, resource: resource, root: workspace.root) else { return }
         detail = next
-        detailCache[resource] = next; preloadedSnapshots.removeValue(forKey: resource)
+        resources[resource, default: .init()].lastCompleteDetail = next
         changesLoading = false; summaryLoading = false
-        updateState(resource, from: next)
-        if let error = next.commitsError, next.summary?.baseOID != nil { onCommitsError?(error) }
+        updateState(resource, changes: next.changes, error: next.changesError, invalidated: pendingChange != nil)
+        if pendingChange == nil, let error = next.commitsError, next.summary?.baseOID != nil { onCommitsError?(error) }
         finishDetail()
     }
 
@@ -226,22 +280,25 @@ final class RepositoryDetailModel {
             next.behindCommits = nil; next.comparisonError = nil
             return next
         }
-        let key = historyKey(summary, root: workspace.root, resource: resource)
+        let key = HistoryKey(root: workspace.root, repository: resource.repo ?? "", head: summary.headOID, base: base)
+        let cached = cachedHistory(key)
         let path = workspace.rootURL.appending(path: resource.path)
-        async let ahead = readHistoryRange(at: path, head: summary.headOID, base: base, cached: commitCache[key])
-        async let behind = readHistoryRange(at: path, head: base, base: summary.headOID, cached: behindCommitCache[key])
+        async let ahead = readHistoryRange(at: path, head: summary.headOID, base: base, cached: cached?.ahead)
+        async let behind = readHistoryRange(at: path, head: base, base: summary.headOID, cached: cached?.behind)
         let results = await (ahead, behind)
         guard isCurrent(token, resource: resource, root: workspace.root) else { return next }
+        var history = cached ?? .init()
         switch results.0 {
         case .success(let commits):
-            commitCache[key] = commits; next.commits = commits; next.commitsError = nil
+            history.ahead = commits; next.commits = commits; next.commitsError = nil
         case .failure(let error): next.commits = nil; next.commitsError = error
         }
         switch results.1 {
         case .success(let commits):
-            behindCommitCache[key] = commits; next.behindCommits = commits; next.comparisonError = nil
+            history.behind = commits; next.behindCommits = commits; next.comparisonError = nil
         case .failure(let error): next.behindCommits = nil; next.comparisonError = error
         }
+        if history.ahead != nil || history.behind != nil { storeHistory(history, for: key) }
         return next
     }
 
@@ -265,6 +322,7 @@ final class RepositoryDetailModel {
 
     private func received(_ change: ResourceChange) {
         pendingChange = max(pendingChange ?? change, change)
+        if let selection { resources[selection, default: .init()].invalidated = true }
         guard active, !suspended else { return }
         let now = ContinuousClock.now
         if changeBurstStart == nil { changeBurstStart = now }
@@ -272,7 +330,7 @@ final class RepositoryDetailModel {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
-            guard let self else { return }
+            guard !Task.isCancelled, let self else { return }
             self.changeBurstStart = nil; self.debounceTask = nil
             self.cancelPreload(); self.startRefresh()
         }
@@ -295,38 +353,61 @@ final class RepositoryDetailModel {
         debounceTask?.cancel(); debounceTask = nil; changeBurstStart = nil
     }
 
-    private func cancelCurrent() -> [Task<Void, Never>] {
-        let tasks = [detailTask].compactMap { $0 }
-        for task in tasks { task.cancel() }
+    private func cancelCurrent() {
+        let task = detailTask
+        task?.cancel()
         detailTask = nil; cancelPreload()
         generation += 1; readContext = nil
         stopMonitoring()
         changesLoading = false; summaryLoading = false
         finishDetail()
-        return drainCancelledTasks(tasks).map { [$0] } ?? []
+        if let task { drainCancelledTask(task) }
     }
 
-    private func drainCancelledTasks(_ tasks: [Task<Void, Never>]) -> Task<Void, Never>? {
+    private func drainCancelledTask(_ task: Task<Void, Never>) {
         let previous = cancellationDrain
-        guard !tasks.isEmpty || previous != nil else { return nil }
         let id = UUID(); drainID = id
         let drain = Task { [weak self] in
             await previous?.value
-            for task in tasks { await task.value }
+            await task.value
             guard let self, self.drainID == id else { return }
             self.cancellationDrain = nil
             self.onIdle?()
         }
         cancellationDrain = drain
-        return drain
     }
 
     private func isCurrent(_ token: Int, resource: Resource, root: String) -> Bool {
         !Task.isCancelled && generation == token && selection == resource && workspace?.root == root
     }
 
-    private func historyKey(_ summary: GitSummary, root: String, resource: Resource) -> String {
-        "\(root)|\(resource.repo ?? "")|\(summary.headOID)|\(summary.baseOID ?? "")"
+    private func cachedHistory(_ key: HistoryKey) -> HistoryCacheEntry? {
+        guard var entry = histories[key] else { return nil }
+        historyUse += 1; entry.lastUse = historyUse
+        histories[key] = entry
+        return entry
+    }
+
+    private func storeHistory(_ history: HistoryCacheEntry, for key: HistoryKey) {
+        historyUse += 1
+        var history = history; history.lastUse = historyUse
+        histories[key] = history
+        let family = histories.filter { $0.key.root == key.root && $0.key.repository == key.repository }
+        if family.count > 2, let oldest = family.min(by: { $0.value.lastUse < $1.value.lastUse })?.key {
+            histories.removeValue(forKey: oldest)
+        }
+        if histories.count > 32, let oldest = histories.min(by: { $0.value.lastUse < $1.value.lastUse })?.key {
+            histories.removeValue(forKey: oldest)
+        }
+    }
+
+    private func identities(in workspace: WorkspaceRecord?) -> [Resource: ResourceIdentity] {
+        guard let workspace else { return [:] }
+        let repositories = Dictionary(workspace.repositories.map { ($0.id, $0.url) }, uniquingKeysWith: { first, _ in first })
+        return Dictionary(service.resources(workspace).map { resource in
+            (resource, ResourceIdentity(repositoryURL: resource.repo.flatMap { repositories[$0] },
+                                        groupCreatedAt: resource.group.flatMap { workspace.groups[$0]?.createdAt }))
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     private func finishDetail() {
@@ -334,8 +415,36 @@ final class RepositoryDetailModel {
         for waiter in waiters.values { waiter.resume() }
     }
 
-    private func updateState(_ resource: Resource, from detail: RepositoryDetailState) {
-        states[resource.id] = ResourceState(resource: resource, available: detail.changesError == nil, dirty: detail.changes.map { !$0.isEmpty }, reason: detail.changesError?.message, reasonMessage: detail.changesError?.userMessage)
+    private func updateState(_ resource: Resource, changes: [FileChange]?, error: ModuError?, invalidated: Bool = false) {
+        var entry = resources[resource] ?? .init()
+        entry.state = ResourceState(resource: resource, available: error == nil, dirty: changes.map { !$0.isEmpty }, reason: error?.message, reasonMessage: error?.userMessage)
+        entry.lastAttempt = now(); entry.invalidated = invalidated
+        resources[resource] = entry
+    }
+
+    private struct ResourceCacheEntry {
+        var state: ResourceState?
+        var lastAttempt: ContinuousClock.Instant?
+        var lastCompleteDetail: RepositoryDetailState?
+        var invalidated = true
+    }
+
+    private struct ResourceIdentity: Equatable {
+        let repositoryURL: String?
+        let groupCreatedAt: String?
+    }
+
+    private struct HistoryKey: Hashable {
+        let root: String
+        let repository: String
+        let head: String
+        let base: String
+    }
+
+    private struct HistoryCacheEntry {
+        var ahead: [GitCommit]?
+        var behind: [GitCommit]?
+        var lastUse = 0
     }
 }
 
@@ -348,18 +457,4 @@ struct RepositoryDetailState: Sendable {
     var commitsError: ModuError?
     var behindCommits: [GitCommit]?
     var comparisonError: ModuError?
-}
-
-extension RepositoryDetailState {
-    init(snapshot: ResourceSnapshot, cached: RepositoryDetailState? = nil) {
-        self = cached ?? .init()
-        changes = snapshot.changes; changesError = snapshot.changesError
-        if snapshot.summary != nil || snapshot.summaryError != nil {
-            if summary?.headOID != snapshot.summary?.headOID || summary?.baseOID != snapshot.summary?.baseOID || snapshot.summaryError != nil {
-                commits = nil; commitsError = nil
-                behindCommits = nil; comparisonError = nil
-            }
-            summary = snapshot.summary; summaryError = snapshot.summaryError
-        }
-    }
 }

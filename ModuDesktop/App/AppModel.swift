@@ -38,7 +38,10 @@ final class AppModel {
     }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
-         updates: AppUpdateModel? = nil, relaunch: AppRelaunchModel? = nil) {
+         updates: AppUpdateModel? = nil, relaunch: AppRelaunchModel? = nil,
+         recordMonitor: any WorkspaceRecordChangeMonitoring = WorkspaceRecordChangeMonitor(),
+         now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
+         waitForRecordDebounce: (@MainActor (ContinuousClock.Instant) async throws -> Void)? = nil) {
         self.service = service
         self.toolService = toolService ?? ExternalTools(git: service.git)
         let installer = installer ?? InstallationService(support: service.store.support)
@@ -52,7 +55,7 @@ final class AppModel {
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
-        let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
+        let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation, recordMonitor: recordMonitor, now: now, waitForRecordDebounce: waitForRecordDebounce)
         self.workspace = workspace
         operations.onBusyChange = { [weak workspace] busy in workspace?.operationsChanged(busy) }
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
@@ -245,7 +248,7 @@ final class AppModel {
             onReady()
         } catch {
             workspace.cancelDetailPreload(); workspace.details.detailTask?.cancel()
-            workspace.record = nil; workspace.selection = nil; workspace.states = [:]; tools = []
+            workspace.record = nil; workspace.selection = nil; tools = []
             mock.fixture.remove()
             guard !Task.isCancelled, !presentation.quitPending else { return }
             workspace.blocked = text.message(error); workspace.blockedDetails = Git.sanitize(error.localizedDescription)

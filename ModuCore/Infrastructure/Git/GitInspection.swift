@@ -160,28 +160,13 @@ extension Git {
         }
         return count
     }
-    public func summary(at path: URL, origin: String? = nil, refreshBase: (@Sendable (String?) async throws -> Void)? = nil) async throws -> GitSummary {
-        guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
-        let branch = try await run(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path, allowFailure: true)
-        let summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
-        return await completeSummary(summary, at: path, origin: origin, validated: false, refreshBase: refreshBase)
-    }
     func summary(at path: URL, workingState: GitWorkingState) async throws -> GitSummary {
         guard let head = workingState.headOID else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
-        return await completeSummary(GitSummary(head: workingState.head, headOID: head), at: path, origin: nil, validated: true, refreshBase: nil)
-    }
-    private func completeSummary(_ initial: GitSummary, at path: URL, origin: String?, validated: Bool, refreshBase: (@Sendable (String?) async throws -> Void)?) async -> GitSummary {
-        var summary = initial
+        var summary = GitSummary(head: workingState.head, headOID: head)
         do {
-            if !validated { try await checkRepository(path, origin: origin) }
             summary.hasRemotes = !(try await run(["remote"], at: path).text.isEmpty)
             guard summary.hasRemotes else { return summary }
-            var ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
-            guard ref.status == 1 || (ref.status == 0 && ref.text.hasPrefix("refs/remotes/origin/")) else { throw ModuError("base-unavailable", .originHEADDoesNotIdentifyCommit) }
-            if let refreshBase {
-                try await refreshBase(ref.status == 0 ? ref.text : nil)
-                ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
-            }
+            let ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
             guard ref.status == 0, ref.text.hasPrefix("refs/remotes/origin/"), let oid = try await oid(ref.text, at: path) else { throw ModuError("base-unavailable", .originHEADDoesNotIdentifyCommit) }
             summary.base = String(ref.text.dropFirst(13)); summary.baseOID = oid
         } catch { let failure = ModuError.wrap(error); summary.baseError = failure.message; summary.baseMessage = failure.userMessage }

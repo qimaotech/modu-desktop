@@ -21,7 +21,7 @@ import Testing
             defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
             let model = AppModel(defaults: defaults, service: fixture.service)
             model.workspace.record = record
-            model.workspace.states[repository.id] = ResourceState(resource: repository, available: true, dirty: state == "clean")
+            model.workspace.details.cache(.init(resource: repository, changes: state == "clean" ? [.init(path: "README", index: " ", workingTree: "M")] : []))
             model.management.prepareDelete(.repository("repo"))
             await model.management.deletePreviewTask?.value
             let target = try #require(model.management.deletion.first { $0.resource == repository })
@@ -41,7 +41,7 @@ import Testing
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = record
-        model.workspace.states[repository.id] = ResourceState(resource: repository, available: true, dirty: false)
+        model.workspace.details.cache(.init(resource: repository, changes: []))
         try Data("invalid index".utf8).write(to: record.repositoryURL("repo").appending(path: ".git/index"))
         model.management.prepareDelete(.repository("repo"))
         await model.management.deletePreviewTask?.value
@@ -254,7 +254,7 @@ import Testing
             model.workspace.record = record
             let member = Resource.member("feature", "repo")
             try Data("changed".utf8).write(to: record.memberURL("feature", "repo").appending(path: "README"))
-            model.workspace.states[member.id] = .init(resource: member, available: true, dirty: false)
+            model.workspace.details.cache(.init(resource: member, changes: []))
             model.management.prepareDelete(.group("feature"))
             let preview = try #require(model.management.deletePreviewTask)
             #expect(model.management.sheet == .delete && model.management.deletionLoading && model.management.deletion.isEmpty)

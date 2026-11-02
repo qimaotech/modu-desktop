@@ -72,7 +72,9 @@ public final class ResourceChangeMonitor: ResourceChangeMonitoring, @unchecked S
         let uncertain = FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagRootChanged | kFSEventStreamEventFlagMount | kFSEventStreamEventFlagUnmount)
         for index in 0..<count {
             if flags[index] & uncertain != 0 { change = .structure; break }
-            let path = URL(fileURLWithPath: paths[index]).standardizedFileURL.path
+            let event = URL(fileURLWithPath: paths[index])
+            // Removed files can arrive through a volume alias; resolve their existing parent instead of the missing leaf.
+            let path = PathSafety.canonical(event.deletingLastPathComponent()).appending(path: event.lastPathComponent).path
             if excluded.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) { continue }
             if let event = classify(path, flags: flags[index]) { change = max(change ?? event, event) }
         }

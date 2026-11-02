@@ -99,12 +99,7 @@ final class ManagementModel {
                 session.startDetailPreload()
                 return
             }
-            let retainedDetail: (resource: Resource, workspace: WorkspaceRecord, detail: RepositoryDetailState)?
-            if outcome.status == .success, ["worktree.remove", "repo.remove"].contains(outcome.command),
-               let selection = session.selection, let workspace = session.record, !outcome.items.contains(where: { $0.resource == selection }) {
-                retainedDetail = (selection, workspace, session.detail)
-            } else { retainedDetail = nil }
-            session.invalidateDetailCache()
+            session.invalidateResources(after: outcome)
             pendingEdit = nil; deletion = []
             if outcome.command == "repo.update" {
                 presentation.result = text.resultDisplayItems(outcome).isEmpty ? nil : outcome
@@ -124,12 +119,8 @@ final class ManagementModel {
             let selectionAtCompletion = session.selection
             // Completed effects still need a record refresh when the business task was cancelled.
             await Task { @MainActor [self] in
-                await session.refreshRecord(afterLoad: { [self] in
+                await session.refreshRecord(refreshingSidebar: false, afterLoad: { [self] in
                     guard operationGeneration == operationToken, session.record?.rootURL == root, session.selection == selectionAtCompletion else { return }
-                    if let retainedDetail, session.selection == retainedDetail.resource, let workspace = session.record,
-                       session.canRestoreDetail(retainedDetail.resource, from: retainedDetail.workspace, in: workspace) {
-                        session.details.restore(retainedDetail.detail, for: retainedDetail.resource)
-                    }
                     if let select, let workspace = session.record, service.resources(workspace).contains(select) { session.selection = select; if let group = select.group { session.expandedGroups.insert(group) } }
                     else if let last = outcome.items.last(where: { $0.data?["disposition"] == "added" }), outcome.command == "repo.import-yaml" { session.selection = last.resource }
                 })

@@ -25,12 +25,12 @@ import Testing
         }
 
         do {
-            model.workspace.details.preload(in: record, force: true)
+            model.workspace.setVisibleResources([resource], in: record.root)
             await model.workspace.detailPreloadTask?.value
-            #expect(model.workspace.states[resource.id]?.dirty == false)
+            #expect(model.workspace.state(for: resource)?.dirty == false)
             model.workspace.selection = resource
             try await waitForDetail(model)
-            #expect(model.workspace.detail.changes?.isEmpty == true && model.workspace.states[resource.id]?.dirty == false)
+            #expect(model.workspace.detail.changes?.isEmpty == true && model.workspace.state(for: resource)?.dirty == false)
             #expect(model.workspace.detail.summary?.headOID == head)
             #expect(model.workspace.detail.commits?.map(\.subject) == ["add submodule"])
 
@@ -56,11 +56,12 @@ import Testing
             model.workspace.refreshDetail()
             try await waitForDetail(model)
             #expect(Set(model.workspace.detail.changes?.map(\.path) ?? []) == [".gitmodules", "visible.txt"])
-            #expect(model.workspace.states[resource.id]?.dirty == true)
+            #expect(model.workspace.state(for: resource)?.dirty == true)
             model.workspace.selection = nil
-            model.workspace.details.preload(in: record, force: true)
+            model.workspace.details.invalidate(resources: [resource])
+            model.workspace.startDetailPreload()
             await model.workspace.detailPreloadTask?.value
-            #expect(model.workspace.states[resource.id]?.dirty == true)
+            #expect(model.workspace.state(for: resource)?.dirty == true)
             await model.workspace.stopReads()
         } catch {
             await model.workspace.stopReads()
@@ -170,6 +171,7 @@ import Testing
         model.workspace.selection = .repository("repo")
         try await waitForDetail(model)
         await model.workspace.detailPreloadTask?.value
+        model.workspace.setVisibleResources([.repository("repo")], in: record.root)
 
         let monitor = probe.appending(path: "fsmonitor")
         try Data("""
@@ -258,8 +260,8 @@ import Testing
         #expect(model.workspace.detail.summary == nil && model.workspace.detail.summaryError != nil)
         #expect(model.workspace.detail.changes == nil && model.workspace.detail.changesError != nil)
         #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
-        #expect(model.workspace.states[repository.id]?.available == false)
-        #expect(model.workspace.states[repository.id]?.dirty == nil)
+        #expect(model.workspace.state(for: repository)?.available == false)
+        #expect(model.workspace.state(for: repository)?.dirty == nil)
     }
 
     @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
@@ -385,9 +387,15 @@ import Testing
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
 
+        let visibleResources = fixture.service.resources(record)
+        model.workspace.setVisibleResources(Set(visibleResources), in: record.root)
         await model.workspace.maintainWorkspace()
-        await model.workspace.detailPreloadTask?.value
+        let preloadDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while !visibleResources.allSatisfy({ model.workspace.state(for: $0)?.dirty == true }), ContinuousClock.now < preloadDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
+        #expect(visibleResources.allSatisfy { model.workspace.state(for: $0)?.dirty == true })
         for (resource, file, head) in [
             (Resource.repository("repo"), "main.txt", "main"),
             (.group("feature"), "group.txt", "feature"),
@@ -398,7 +406,7 @@ import Testing
             try await waitForDetail(model)
             #expect(model.workspace.detail.summary?.head == head)
             #expect(model.workspace.detail.changes?.map(\.path) == [file])
-            #expect(model.workspace.states[resource.id]?.dirty == true)
+            #expect(model.workspace.state(for: resource)?.dirty == true)
         }
         await model.workspace.detailPreloadTask?.value
         let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
@@ -527,6 +535,8 @@ import Testing
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
 
+        let record = try #require(model.workspace.record)
+        model.workspace.setVisibleResources([.repository("repo")], in: record.root)
         model.workspace.refreshDetail()
         let initialPreload = try #require(model.workspace.detailPreloadTask)
         model.workspace.selection = .repository("repo")
@@ -543,6 +553,8 @@ import Testing
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: next).status == .success)
         try Data("next".utf8).write(to: next.appending(path: "repositories/repo/next.txt"))
         try await model.switchTo(next)
+        let nextRecord = try #require(model.workspace.record)
+        model.workspace.setVisibleResources([.repository("repo")], in: nextRecord.root)
         await model.workspace.detailPreloadTask?.value
         #expect(model.workspace.selection == nil)
         model.workspace.selection = .repository("repo")
@@ -564,6 +576,8 @@ import Testing
         let switching = AppModel(defaults: model.defaults, service: fixture.service)
         switching.workspace.record = try fixture.service.store.load(fixture.root)
         switching.workspace.selection = nil
+        let switchingRecord = try #require(switching.workspace.record)
+        switching.workspace.setVisibleResources([.repository("repo")], in: switchingRecord.root)
         switching.workspace.refreshDetail()
         let preloadDeadline = ContinuousClock.now.advanced(by: .seconds(10))
         while switching.workspace.detailPreloadTask == nil, ContinuousClock.now < preloadDeadline {

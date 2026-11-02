@@ -123,45 +123,23 @@ public struct WorkspaceService: Sendable {
         _ = try await validateAndClean(&record)
         return record
     }
-    public func inspect(_ root: URL, scope: InspectionScope = .all, excluding excluded: Resource? = nil) async -> OperationResult {
-        do { return await inspect(try await read(root), scope: scope, excluding: excluded, policy: .localOnly) }
+    public func inspect(_ root: URL, scope: InspectionScope = .all, excluding excluded: Resource? = nil, content: InspectionContent = .withSummary) async -> OperationResult {
+        do { return await inspect(try await read(root), scope: scope, excluding: excluded, content: content) }
         catch { return .init(command: "workspace.inspect", workspace: root.path, status: .failed, error: .wrap(error)) }
     }
-    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, policy: InspectionPolicy = .refreshMissingBase, visibility: GitChangeVisibility = .all, concurrency: Int = 1, including included: Set<Resource>? = nil, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
-        if concurrency > 1, case .localOnly = policy {
-            return await inspectConcurrent(record, scope: scope, excluding: excluded, visibility: visibility, concurrency: min(concurrency, 6), including: included, publish: publish)
-        }
-        let root = record.rootURL
-        let reader = inspectionService(for: policy)
-        do { try store.checkBoundary(root) }
-        catch { return .init(command: "workspace.inspect", workspace: root.path, status: .failed, error: .wrap(error)) }
-        var result = OperationResult(command: "workspace.inspect", workspace: root.path)
-        var workspace = ItemResult(.workspace())
-        do { try await reader.git.checkRepository(root, main: true); workspace.data = ["root": record.root] } catch { fail(&workspace, error) }
-        result.items.append(workspace)
-        for resource in resources(record) where resource != excluded && scope.includes(resource) && (included?.contains(resource) ?? true) {
-            var item = ItemResult(resource)
-            do {
-                let snapshot = try await reader.snapshot(resource, in: record, policy: policy, visibility: visibility)
-                await publish(snapshot)
-                try applyInspectionSnapshot(snapshot, to: &item, at: record.rootURL.appending(path: resource.path))
-                guard snapshot.summary != nil else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
-            } catch { fail(&item, error) }
-            result.items.append(item)
-        }
-        result.summarize(cancelled: result.items.contains { $0.status == .cancelled })
-        return result
+    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, content: InspectionContent = .withSummary, visibility: GitChangeVisibility = .all, concurrency: Int = 1, including included: Set<Resource>? = nil, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
+        await inspectConcurrent(record, scope: scope, excluding: excluded, content: content, visibility: visibility, concurrency: max(1, min(concurrency, 6)), including: included, publish: publish)
     }
-    func applyInspectionSnapshot(_ snapshot: ResourceSnapshot, to item: inout ItemResult, at path: URL) throws {
+    func applyInspectionSnapshot(_ snapshot: ResourceSnapshot, content: InspectionContent, to item: inout ItemResult, at path: URL) throws {
         item.data = ["path": path.path]
         if let error = snapshot.changesError { throw error }
         item.data?["working-tree"] = snapshot.changes?.isEmpty == true ? "clean" : "dirty"
+        guard case .withSummary = content else { return }
         if let error = snapshot.summaryError { throw error }
-        if let summary = snapshot.summary {
-            item.data?["head"] = summary.head; item.data?["head-oid"] = summary.headOID
-            item.data?["base"] = summary.base; item.data?["base-oid"] = summary.baseOID
-            item.data?["base-error"] = summary.baseError
-        }
+        guard let summary = snapshot.summary else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
+        item.data?["head"] = summary.head; item.data?["head-oid"] = summary.headOID
+        item.data?["base"] = summary.base; item.data?["base-oid"] = summary.baseOID
+        item.data?["base-error"] = summary.baseError
     }
     public func resources(_ record: WorkspaceRecord) -> [Resource] {
         record.repositories.map { .repository($0.id) } + record.groups.keys.sorted().flatMap { name in

@@ -157,7 +157,7 @@ import SwiftUI
             model.management.run { _, root, _ in
                 await MainActor.run {
                     bodyStarted = true
-                    #expect(!model.workspace.needsReadTermination)
+                    #expect(!model.workspace.hasActiveReads)
                 }
                 return OperationResult(command: "repo.update", workspace: root.path, status: .success)
             }
@@ -716,7 +716,13 @@ import SwiftUI
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? probe.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
         let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
         var completed = false
-        let startup = Task { let needsSetup = await model.start(); completed = true; return needsSetup }
+        let startup = Task {
+            let needsSetup = await model.start(onReady: {
+                model.workspace.setVisibleResources(Set(service.resources(record)), in: record.root)
+            })
+            completed = true
+            return needsSetup
+        }
         do {
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
             while !PathSafety.exists(probe.appending(path: "started")), ContinuousClock.now < deadline {
@@ -731,11 +737,11 @@ import SwiftUI
             let detailDeadline = ContinuousClock.now.advanced(by: .seconds(10))
             while model.workspace.detailLoading, ContinuousClock.now < detailDeadline { try await Task.sleep(for: .milliseconds(10)) }
             #expect(!model.workspace.detailLoading && model.workspace.detail.changes?.map(\.path) == ["new.txt"])
-            #expect(model.workspace.states[Resource.repository("repo").id]?.dirty == true)
+            #expect(model.workspace.state(for: .repository("repo"))?.dirty == true)
             try Data().write(to: probe.appending(path: "release"))
             #expect(await startup.value == false)
             await model.workspace.detailPreloadTask?.value
-            #expect(model.workspace.states[Resource.repository(other.id).id]?.available == true)
+            #expect(model.workspace.state(for: .repository(other.id))?.available == true)
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
             _ = await startup.value
@@ -1032,7 +1038,7 @@ import SwiftUI
             #expect(model.workspace.record == expected)
             #expect(try fixture.service.store.load(fixture.root) == expected)
             #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil)
-            #expect(model.workspace.states[resource.id] == nil && model.workspace.blocked == nil)
+            #expect(model.workspace.state(for: resource) == nil && model.workspace.blocked == nil)
             #expect(model.workspace.expandedGroups == Set(expected.groups.keys))
             #expect(PathSafety.exists(expected.groupURL("kept")) && PathSafety.exists(expected.memberURL("kept", "repo")))
             #expect(try await fixture.service.git.oid("refs/heads/feature", at: fixture.root) != nil)
@@ -1136,11 +1142,11 @@ import SwiftUI
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL, name: "Custom"), at: fixture.root).status == .success)
         #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         try await fixture.prepareEmptyGroup("closed")
+        await model.workspace.stopReads()
         model.workspace.record = try fixture.service.store.load(fixture.root)
         model.workspace.toggleGroup("closed")
         model.workspace.selection = .member("feature", "repo")
         model.workspace.details.collapsedPaths = ["Sources"]
-        await model.workspace.details.detailTask?.value
         if legacyPreferences { model.defaults.removeObject(forKey: model.workspace.sidebarPreferenceKey("knownGroups")) }
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("repositoriesExpanded"))
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("groupsExpanded"))
@@ -1189,11 +1195,11 @@ import SwiftUI
         #expect(try await fixture.service.store.locate(explicit: nil, cwd: fixture.root.appending(path: "worktrees/feature/repo")).path == PathSafety.canonical(fixture.root).path)
         #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")))
         reopened.workspace.selection = nil
-        await reopened.workspace.detailPreloadTask?.value
+        await reopened.workspace.stopReads()
         let welcome = AppModel(defaults: model.defaults, service: fixture.service, installer: try makeInstaller(fixture))
         #expect(await welcome.start() == false)
         #expect(welcome.workspace.selection == nil)
-        await welcome.workspace.detailPreloadTask?.value
+        await welcome.workspace.stopReads()
     }
 
     @Test func savedSelectionRejectsMissingResourcesAndMalformedPreferences() async throws {
@@ -1529,7 +1535,7 @@ import SwiftUI
     }
 }
 
-@MainActor private struct ReloadValidationGate {
+@MainActor struct ReloadValidationGate {
     private let config: URL
     private let original: Data
     private var writer: Int32 = -1

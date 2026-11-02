@@ -225,7 +225,7 @@ extension WorkspaceService {
     public func editGroupPreview(_ name: String, repositories: [String], at root: URL) async -> OperationResult {
         do {
             let record = try await read(root)
-            let reader = inspectionService(for: .localOnly)
+            let reader = inspectionService()
             try await reader.validateMembers(name, repositories: repositories, record: record)
             guard let group = record.groups[name] else { throw ModuError("target-not-configured", .groupIsNotConfigured) }
             let removals = group.repositories.filter { !repositories.contains($0) }.map { Resource.member(name, $0) }

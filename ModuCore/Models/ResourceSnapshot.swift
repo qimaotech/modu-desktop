@@ -1,5 +1,9 @@
 import Foundation
 
+public enum InspectionContent: Sendable {
+    case workingTreeOnly, withSummary
+}
+
 public enum InspectionScope: Sendable {
     case all, repositories, worktrees
 
