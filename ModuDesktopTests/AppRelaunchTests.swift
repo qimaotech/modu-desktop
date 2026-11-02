@@ -109,6 +109,11 @@ import Testing
     @Test func finalQuitWaitsForHelperReadinessAndHandoffFailureAllowsRetry() async throws {
         let fixture = try AppUpdateFixture()
         defer { fixture.remove() }
+        let browsing = try await Fixture(createRemote: false)
+        defer { browsing.remove() }
+        #expect(await browsing.service.openWorkspace(browsing.root).status == .success)
+        try await browsing.prepareEmptyGroup("feature")
+        let record = try browsing.service.store.load(browsing.root)
         let handoffPath = fixture.directory.appending(path: "handoff-path")
         let helper = fixture.directory.appending(path: "relaunch-helper")
         try Data("""
@@ -123,29 +128,44 @@ import Testing
         let relauncher = AppRelauncher(runner: CommandRunner(environment: environment))
         var requests = 0
         let relaunch = AppRelaunchModel(relauncher: relauncher, helper: helper, requestRestart: { requests += 1 })
-        let model = AppModel(defaults: try fixture.preferences().defaults, relaunch: relaunch)
+        let model = AppModel(defaults: try fixture.preferences().defaults, service: browsing.service, relaunch: relaunch)
         let quit = QuitProbe()
         let delegate = AppDelegate(terminate: quit.request)
         quit.delegate = delegate
         delegate.model = model
         var handoff: AppRelaunch?
         defer { if let handoff { clean(handoff, using: relauncher) } }
-        relaunch.restart()
-        #expect(requests == 1)
-        #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
-        let preparation = try #require(delegate.terminationTask)
-        #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
-        await preparation.value
-        let prepared = AppRelaunch(directory: URL(fileURLWithPath: try String(contentsOf: handoffPath, encoding: .utf8)))
-        handoff = prepared
-        let pid = try helperPID(prepared)
-        #expect(PathSafety.exists(prepared.ready) && relaunch.restartPending && quit.replies == [.terminateNow])
-        try Data("Test handoff failure".utf8).write(to: prepared.failure)
-        try await waitUntil { !relaunch.restartPending && !running(pid) }
-        #expect(!model.presentation.quitPending && model.presentation.message != nil)
-        #expect(!PathSafety.exists(prepared.directory))
-        relaunch.restart()
-        #expect(requests == 2)
+        do {
+            model.workspace.record = record
+            model.workspace.selection = .group("feature")
+            try await waitUntil { !model.workspace.detailLoading }
+            #expect(model.workspace.detail.changes?.isEmpty == true)
+            relaunch.restart()
+            #expect(requests == 1)
+            #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
+            let preparation = try #require(delegate.terminationTask)
+            #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
+            await preparation.value
+            let prepared = AppRelaunch(directory: URL(fileURLWithPath: try String(contentsOf: handoffPath, encoding: .utf8)))
+            handoff = prepared
+            let pid = try helperPID(prepared)
+            #expect(PathSafety.exists(prepared.ready) && relaunch.restartPending && quit.replies == [.terminateNow])
+            #expect(!model.workspace.details.hasActiveReads)
+            try Data("during quit".utf8).write(to: record.groupURL("feature").appending(path: "pending.txt"))
+            try Data("Test handoff failure".utf8).write(to: prepared.failure)
+            try await waitUntil { !relaunch.restartPending && !running(pid) }
+            #expect(!model.presentation.quitPending && model.presentation.message != nil)
+            #expect(!PathSafety.exists(prepared.directory))
+            try await waitUntil { model.workspace.detail.changes?.map(\.path) == ["pending.txt"] }
+            try Data("after failure".utf8).write(to: record.groupURL("feature").appending(path: "watched.txt"))
+            try await waitUntil { model.workspace.detail.changes?.map(\.path) == ["pending.txt", "watched.txt"] }
+            relaunch.restart()
+            #expect(requests == 2)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {

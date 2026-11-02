@@ -5524,23 +5524,6 @@
         }
       }
     },
-    "ui.loadMore": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Load More"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加载更多"
-          }
-        }
-      }
-    },
     "ui.loadingChanges": {
       "extractionState": "manual",
       "localizations": {
@@ -6136,6 +6119,23 @@
         }
       }
     },
+    "ui.preparingWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing workspace…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备工作区…"
+          }
+        }
+      }
+    },
     "ui.pressShortcut": {
       "extractionState": "manual",
       "localizations": {
@@ -6625,6 +6625,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "重试"
+          }
+        }
+      }
+    },
+    "ui.retryMaintenance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Maintenance"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试维护"
           }
         }
       }
@@ -7794,6 +7811,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开工作区"
+          }
+        }
+      }
+    },
+    "ui.workspaceReadOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace maintenance failed. Browsing is read-only; displayed status may be out of date."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区维护失败，当前仅可浏览，显示的状态可能不是最新。"
           }
         }
       }

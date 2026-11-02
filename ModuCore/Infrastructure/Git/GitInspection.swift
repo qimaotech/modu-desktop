@@ -56,6 +56,74 @@ extension Git {
     public func changes(at path: URL) async throws -> [FileChange] {
         try Self.parseChanges(await changeStatus(at: path))
     }
+    public func workingState(at path: URL, visibility: GitChangeVisibility = .all) async throws -> GitWorkingState {
+        var arguments = ["status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z", "--untracked-files=all"]
+        if case .application = visibility { arguments.append("--ignore-submodules=dirty") }
+        return try Self.parseWorkingState(await run(arguments, at: path).stdout, visibility: visibility)
+    }
+    public static func parseWorkingState(_ data: Data, visibility: GitChangeVisibility = .all) throws -> GitWorkingState {
+        let fields = data.split(separator: 0, omittingEmptySubsequences: true)
+        var changes: [FileChange] = [], head: String?, branch: String?
+        var index = 0
+        while index < fields.count {
+            let field = fields[index]; index += 1
+            if field.starts(with: Data("# ".utf8)) {
+                let header = String(decoding: field, as: UTF8.self)
+                if header.hasPrefix("# branch.oid ") {
+                    let value = String(header.dropFirst(13))
+                    guard value == "(initial)" || value.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+                    head = value == "(initial)" ? nil : value
+                } else if header.hasPrefix("# branch.head ") {
+                    let value = String(header.dropFirst(14))
+                    branch = value == "(detached)" ? nil : value
+                }
+                continue
+            }
+            if field.starts(with: Data("? ".utf8)) {
+                changes.append(.init(path: String(decoding: field.dropFirst(2), as: UTF8.self), index: " ", workingTree: "?"))
+                continue
+            }
+            let count: Int
+            switch field.first {
+            case UInt8(ascii: "1"): count = 8
+            case UInt8(ascii: "2"): count = 9
+            case UInt8(ascii: "u"): count = 10
+            default: throw ModuError("git-output-invalid", .invalidGitStatusRecord)
+            }
+            let parts = field.split(separator: 32, maxSplits: count, omittingEmptySubsequences: false)
+            guard parts.count == count + 1, parts[1].count == 2, !parts[count].isEmpty else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+            let status = Array(parts[1])
+            var original: String?
+            if field.first == UInt8(ascii: "2") {
+                guard index < fields.count else { throw ModuError("git-output-invalid", .missingRenameSourcePath) }
+                original = String(decoding: fields[index], as: UTF8.self); index += 1
+            }
+            if case .application = visibility, field.first != UInt8(ascii: "u") {
+                let modes = parts[3...5]
+                let hasGitlink = modes.contains { $0.elementsEqual("160000".utf8) }
+                let hasOrdinaryFile = modes.contains { !$0.elementsEqual("160000".utf8) && !$0.elementsEqual("000000".utf8) }
+                if (parts[2].first == UInt8(ascii: "S") || hasGitlink), !hasOrdinaryFile, !status.contains(UInt8(ascii: "T")) { continue }
+            }
+            let x = status[0] == 46 ? " " : String(UnicodeScalar(status[0]))
+            let y = status[1] == 46 ? " " : String(UnicodeScalar(status[1]))
+            changes.append(.init(path: String(decoding: parts[count], as: UTF8.self), originalPath: original, index: x, workingTree: y))
+        }
+        return .init(changes: changes.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }, headOID: head, branch: branch)
+    }
+    public func submodulePaths(at path: URL) async throws -> [String] {
+        let output = try await run(["-c", "core.fsmonitor=false", "ls-files", "--stage", "-z"], at: path)
+        var paths = Set<String>()
+        for field in output.stdout.split(separator: 0, omittingEmptySubsequences: true) {
+            guard let separator = field.firstIndex(of: 9) else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+            let metadata = field[..<separator].split(separator: 32, omittingEmptySubsequences: true)
+            let name = field[field.index(after: separator)...]
+            guard metadata.count == 3, !name.isEmpty else { throw ModuError("git-output-invalid", .invalidGitStatusRecord) }
+            if metadata[0].elementsEqual("160000".utf8), metadata[2].elementsEqual("0".utf8) {
+                paths.insert(String(decoding: name, as: UTF8.self))
+            }
+        }
+        return paths.sorted()
+    }
     func changeCount(at path: URL) async throws -> Int {
         try Self.countChanges(await changeStatus(at: path))
     }
@@ -95,9 +163,17 @@ extension Git {
     public func summary(at path: URL, origin: String? = nil, refreshBase: (@Sendable (String?) async throws -> Void)? = nil) async throws -> GitSummary {
         guard let head = try await oid("HEAD", at: path) else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
         let branch = try await run(["symbolic-ref", "--quiet", "--short", "HEAD"], at: path, allowFailure: true)
-        var summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
+        let summary = GitSummary(head: branch.status == 0 ? branch.text : "Detached at \(head.prefix(8))", headOID: head)
+        return await completeSummary(summary, at: path, origin: origin, validated: false, refreshBase: refreshBase)
+    }
+    func summary(at path: URL, workingState: GitWorkingState) async throws -> GitSummary {
+        guard let head = workingState.headOID else { throw ModuError("resource-unavailable", .headDoesNotIdentifyCommit) }
+        return await completeSummary(GitSummary(head: workingState.head, headOID: head), at: path, origin: nil, validated: true, refreshBase: nil)
+    }
+    private func completeSummary(_ initial: GitSummary, at path: URL, origin: String?, validated: Bool, refreshBase: (@Sendable (String?) async throws -> Void)?) async -> GitSummary {
+        var summary = initial
         do {
-            try await checkRepository(path, origin: origin)
+            if !validated { try await checkRepository(path, origin: origin) }
             summary.hasRemotes = !(try await run(["remote"], at: path).text.isEmpty)
             guard summary.hasRemotes else { return summary }
             var ref = try await run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)

@@ -52,18 +52,20 @@ final class AppModel {
         self.operations = operations
         let presentation = OperationPresentation(preferences: preferences, operations: operations, terminate: { NSApp.terminate(nil) })
         self.presentation = presentation
-        self.updates.onRestartFailure = { [weak presentation] in presentation?.quitPending = false }
-        self.relaunch.onFailure = { [weak presentation] error in
-            presentation?.quitPending = false
-            let text = preferences.text
-            presentation?.presentMessage(text.string(.uiLanguageSavedRestartManually) + "\n\n" + text.string(.uiDetails) + ":\n" + Git.sanitize(error.localizedDescription),
-                                         title: text.string(.uiCanTRestartModu), host: .settings)
-        }
         let workspace = WorkspaceModel(service: service, installer: installer, preferences: preferences, operations: operations, presentation: presentation)
         self.workspace = workspace
+        operations.onBusyChange = { [weak workspace] busy in workspace?.operationsChanged(busy) }
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
         self.management = management
         workspace.onContextChange = { [weak management] rootChanged in management?.contextChanged(rootChanged: rootChanged) }
+        self.updates.onRestartFailure = { [weak self] in self?.resumeAfterFailedQuit() }
+        self.relaunch.onFailure = { [weak self] error in
+            guard let self else { return }
+            resumeAfterFailedQuit()
+            let text = self.text
+            self.presentation.presentMessage(text.string(.uiLanguageSavedRestartManually) + "\n\n" + text.string(.uiDetails) + ":\n" + Git.sanitize(error.localizedDescription),
+                                             title: text.string(.uiCanTRestartModu), host: .settings)
+        }
         for category in Set(ExternalTool.builtIn.map(\.category)) {
             preferredToolIDs[category] = preferences.defaults.string(forKey: "tool.\(category)")
         }
@@ -81,26 +83,33 @@ final class AppModel {
         guard !Task.isCancelled else { return false }
         if !cli.available || !hasSavedWorkspace { return true }
         async let pathCheck = installer.checkCLIPath()
-        if let path = defaults.string(forKey: "workspace") {
-            changeWorkspace(URL(fileURLWithPath: path), requireExistingRecord: true)
-        }
         tools = await toolService.available()
-        await operation?.value
-        if let result = presentation.result {
-            workspace.blocked = ((result.message == nil ? [] : [presentation.text.message(result)]) + result.items.filter { $0.message != nil }.map(presentation.text.message)).joined(separator: "\n")
-            workspace.blockedDetails = Git.sanitize(([result.message].compactMap { $0 } + result.items.compactMap(\.message)).joined(separator: "\n"))
-            presentation.resultHost = .main
+        guard !Task.isCancelled, !presentation.quitPending else { return false }
+        if let path = defaults.string(forKey: "workspace") {
+            do {
+                try await workspace.restoreForStartup(URL(fileURLWithPath: path))
+                guard !Task.isCancelled, !presentation.quitPending else { return false }
+                onReady()
+                await workspace.details.waitForDetail()
+                guard !Task.isCancelled, !presentation.quitPending else { return false }
+                if defaults.string(forKey: "workspace") == path {
+                    await workspace.reload(showProgress: false, maintainingWorkspace: true, cancellable: true, afterLoad: nil)
+                }
+            } catch {
+                guard !(error is CancellationError), !Task.isCancelled, !presentation.quitPending else { return false }
+                workspace.blocked = text.message(error); workspace.blockedDetails = Git.sanitize(error.localizedDescription)
+                let result = OperationResult(command: "workspace.open", workspace: path, status: .failed, items: [ItemResult(.workspace(), status: .failed, error: .wrap(error))], error: .wrap(error))
+                presentation.result = result; presentation.resultHost = .main
+                onReady()
+            }
         }
-        guard !Task.isCancelled else { return false }
-        if !presentation.quitPending || presentation.result != nil { onReady() }
-        guard !presentation.quitPending else { return false }
+        guard !Task.isCancelled, !presentation.quitPending else { return false }
         let path = await pathCheck
         return !Task.isCancelled && !path.available
     }
 
     func activate() async {
-        guard !busy else { return }
-        async let workspaceReload: Void = workspace.reload(showProgress: false, afterLoad: nil)
+        async let workspaceReload: Void = workspace.activate()
         tools = await toolService.available()
         await workspaceReload
     }
@@ -117,6 +126,7 @@ final class AppModel {
         workspace.invalidateReads(cancelReload: true)
         let task = Task {
             await previousEdit?.value
+            await workspace.waitForReadCancellation()
             let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow")
             let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: requireExistingRecord)
             var outcome = opened.result
@@ -173,10 +183,17 @@ final class AppModel {
 
     func cancel() { operations.cancel() }
 
+    func resumeAfterFailedQuit() {
+        guard presentation.quitPending else { return }
+        presentation.quitPending = false
+        workspace.resumeAfterFailedQuit()
+    }
+
     func runSetupOperation(_ body: @escaping @MainActor () async -> OperationResult) {
         guard !presentation.quitPending, presentation.result == nil, let operationID = operations.begin(.setup) else { return }
         presentation.resultHost = .setup
         let task = Task {
+            await workspace.waitForReadCancellation()
             let outcome = await body()
             operations.finish(operationID)
             if presentation.quitPending {
@@ -188,7 +205,7 @@ final class AppModel {
     }
 
     func openTool(_ tool: ExternalTool, workspaceRoot: Bool = false) {
-        guard let url = workspaceRoot ? workspace.record?.rootURL : workspace.currentURL else { return }
+        guard workspace.canManage, let url = workspaceRoot ? workspace.record?.rootURL : workspace.currentURL else { return }
         Task {
             do {
                 try await toolService.open(tool, directory: url)

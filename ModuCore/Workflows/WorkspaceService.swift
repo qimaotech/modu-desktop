@@ -127,7 +127,10 @@ public struct WorkspaceService: Sendable {
         do { return await inspect(try await read(root), scope: scope, excluding: excluded, policy: .localOnly) }
         catch { return .init(command: "workspace.inspect", workspace: root.path, status: .failed, error: .wrap(error)) }
     }
-    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, policy: InspectionPolicy = .refreshMissingBase, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
+    public func inspect(_ record: WorkspaceRecord, scope: InspectionScope = .all, excluding excluded: Resource? = nil, policy: InspectionPolicy = .refreshMissingBase, visibility: GitChangeVisibility = .all, concurrency: Int = 1, including included: Set<Resource>? = nil, publish: @Sendable (ResourceSnapshot) async -> Void = { _ in }) async -> OperationResult {
+        if concurrency > 1, case .localOnly = policy {
+            return await inspectConcurrent(record, scope: scope, excluding: excluded, visibility: visibility, concurrency: min(concurrency, 6), including: included, publish: publish)
+        }
         let root = record.rootURL
         let reader = inspectionService(for: policy)
         do { try store.checkBoundary(root) }
@@ -136,24 +139,29 @@ public struct WorkspaceService: Sendable {
         var workspace = ItemResult(.workspace())
         do { try await reader.git.checkRepository(root, main: true); workspace.data = ["root": record.root] } catch { fail(&workspace, error) }
         result.items.append(workspace)
-        for resource in resources(record) where resource != excluded && scope.includes(resource) {
+        for resource in resources(record) where resource != excluded && scope.includes(resource) && (included?.contains(resource) ?? true) {
             var item = ItemResult(resource)
             do {
-                let snapshot = try await reader.snapshot(resource, in: record, policy: policy)
+                let snapshot = try await reader.snapshot(resource, in: record, policy: policy, visibility: visibility)
                 await publish(snapshot)
-                item.data = ["path": record.rootURL.appending(path: resource.path).path]
-                if let error = snapshot.changesError { throw error }
-                item.data?["working-tree"] = snapshot.changes?.isEmpty == true ? "clean" : "dirty"
-                if let error = snapshot.summaryError { throw error }
-                guard let summary = snapshot.summary else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
-                item.data?["head"] = summary.head; item.data?["head-oid"] = summary.headOID
-                item.data?["base"] = summary.base; item.data?["base-oid"] = summary.baseOID
-                item.data?["base-error"] = summary.baseError
+                try applyInspectionSnapshot(snapshot, to: &item, at: record.rootURL.appending(path: resource.path))
+                guard snapshot.summary != nil else { throw ModuError("resource-unavailable", .repositorySummaryIsUnavailable) }
             } catch { fail(&item, error) }
             result.items.append(item)
         }
         result.summarize(cancelled: result.items.contains { $0.status == .cancelled })
         return result
+    }
+    func applyInspectionSnapshot(_ snapshot: ResourceSnapshot, to item: inout ItemResult, at path: URL) throws {
+        item.data = ["path": path.path]
+        if let error = snapshot.changesError { throw error }
+        item.data?["working-tree"] = snapshot.changes?.isEmpty == true ? "clean" : "dirty"
+        if let error = snapshot.summaryError { throw error }
+        if let summary = snapshot.summary {
+            item.data?["head"] = summary.head; item.data?["head-oid"] = summary.headOID
+            item.data?["base"] = summary.base; item.data?["base-oid"] = summary.baseOID
+            item.data?["base-error"] = summary.baseError
+        }
     }
     public func resources(_ record: WorkspaceRecord) -> [Resource] {
         record.repositories.map { .repository($0.id) } + record.groups.keys.sorted().flatMap { name in
@@ -184,7 +192,7 @@ public struct WorkspaceService: Sendable {
         let common = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
         return .init(path: main, origin: origin, registrations: registrations, commonDirectory: common)
     }
-    func checkWorktree(_ resource: Resource, at path: URL, repository: RepositoryInspection) async throws {
+    func checkWorktree(_ resource: Resource, at path: URL, repository: RepositoryInspection, validateHEAD: Bool = true) async throws {
         guard repository.registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else {
             throw ModuError("resource-unavailable", resource.repo == nil ? .groupRootRegistrationIsMissing : .worktreeRegistrationIsMissing(path.path))
         }
@@ -195,7 +203,9 @@ public struct WorkspaceService: Sendable {
                 throw ModuError("resource-unavailable", resource.repo == nil ? .groupRootBelongsAnotherRepository : .worktreeBelongsAnotherRepository)
             }
         }
-        guard try await git.oid("HEAD", at: path) != nil else { throw ModuError("resource-unavailable", .worktreeHEADIsUnavailable) }
+        if validateHEAD {
+            guard try await git.oid("HEAD", at: path) != nil else { throw ModuError("resource-unavailable", .worktreeHEADIsUnavailable) }
+        }
     }
     private func checkCandidate(_ root: URL, hasRecord: Bool) async throws {
         try PathSafety.directory(root)

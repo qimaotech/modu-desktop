@@ -42,10 +42,15 @@ import Testing
     @Test func updateInstallerIsReadyBeforeTheFinalQuitAndFailureAllowsAnotherHandoff() async throws {
         let fixture = try AppUpdateFixture()
         defer { fixture.remove() }
+        let browsing = try await Fixture(createRemote: false)
+        defer { browsing.remove() }
+        #expect(await browsing.service.openWorkspace(browsing.root).status == .success)
+        try await browsing.prepareEmptyGroup("feature")
+        let record = try browsing.service.store.load(browsing.root)
         let prepared = try fixture.prepared()
         var restartRequests = 0
         let updates = AppUpdateModel(preferences: try fixture.preferences(), requestRestart: { restartRequests += 1 })
-        let model = try makeModel(fixture, updates: updates)
+        let model = try makeModel(fixture, updates: updates, service: browsing.service)
         let quit = QuitProbe()
         let delegate = AppDelegate { sender in
             #expect(PathSafety.exists(prepared.ready))
@@ -54,29 +59,44 @@ import Testing
         quit.delegate = delegate
         delegate.model = model
 
-        updates.restart(afterPreparing: prepared)
-        #expect(restartRequests == 1 && updates.restartPending)
-        #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
-        let preparation = try #require(delegate.terminationTask)
-        #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
-        await preparation.value
-        #expect(quit.replies == [.terminateNow])
-        #expect(updates.restartPending && updates.needsTerminationPreparation)
+        do {
+            model.workspace.record = record
+            model.workspace.selection = .group("feature")
+            try await waitUntil { !model.workspace.detailLoading }
+            #expect(model.workspace.detail.changes?.isEmpty == true)
+            updates.restart(afterPreparing: prepared)
+            #expect(restartRequests == 1 && updates.restartPending)
+            #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
+            let preparation = try #require(delegate.terminationTask)
+            #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
+            await preparation.value
+            #expect(quit.replies == [.terminateNow])
+            #expect(updates.restartPending && updates.needsTerminationPreparation)
+            #expect(!model.workspace.details.hasActiveReads)
+            try Data("during quit".utf8).write(to: record.groupURL("feature").appending(path: "pending.txt"))
 
-        let failure: [String: String] = ["identifier": prepared.identifier.uuidString, "code": "update-exit-timeout", "message": "Test exit timeout"]
-        try JSONSerialization.data(withJSONObject: failure).write(to: prepared.failure, options: .atomic)
-        try await waitUntil { !updates.restartPending }
-        #expect(!model.presentation.quitPending && updates.error != nil)
-        try await waitUntil { fixture.helperHasExited(prepared) }
+            let failure: [String: String] = ["identifier": prepared.identifier.uuidString, "code": "update-exit-timeout", "message": "Test exit timeout"]
+            try JSONSerialization.data(withJSONObject: failure).write(to: prepared.failure, options: .atomic)
+            try await waitUntil { !updates.restartPending }
+            #expect(!model.presentation.quitPending && updates.error != nil)
+            try await waitUntil { fixture.helperHasExited(prepared) }
+            try await waitUntil { model.workspace.detail.changes?.map(\.path) == ["pending.txt"] }
+            try Data("after failure".utf8).write(to: record.groupURL("feature").appending(path: "watched.txt"))
+            try await waitUntil { model.workspace.detail.changes?.map(\.path) == ["pending.txt", "watched.txt"] }
 
-        let retry = try fixture.prepared()
-        updates.restart(afterPreparing: retry)
-        #expect(restartRequests == 2)
-        #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
-        await (try #require(delegate.terminationTask)).value
-        #expect(PathSafety.exists(retry.ready) && quit.replies == [.terminateNow, .terminateNow])
-        AppUpdateInstaller().cancelHandoff(retry)
-        try await waitUntil { !updates.restartPending && fixture.helperHasExited(retry) }
+            let retry = try fixture.prepared()
+            updates.restart(afterPreparing: retry)
+            #expect(restartRequests == 2)
+            #expect(delegate.applicationShouldTerminate(.shared) == .terminateCancel)
+            await (try #require(delegate.terminationTask)).value
+            #expect(PathSafety.exists(retry.ready) && quit.replies == [.terminateNow, .terminateNow])
+            AppUpdateInstaller().cancelHandoff(retry)
+            try await waitUntil { !updates.restartPending && fixture.helperHasExited(retry) }
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
     }
 
     @Test func failedInstallerLaunchCancelsQuitAndRestoresUpdateControls() async throws {
@@ -99,8 +119,8 @@ import Testing
         #expect(delegate.applicationShouldTerminate(.shared) == .terminateNow)
     }
 
-    private func makeModel(_ fixture: AppUpdateFixture, updates: AppUpdateModel? = nil) throws -> AppModel {
-        AppModel(defaults: try fixture.preferences().defaults,
+    private func makeModel(_ fixture: AppUpdateFixture, updates: AppUpdateModel? = nil, service: WorkspaceService = .init()) throws -> AppModel {
+        AppModel(defaults: try fixture.preferences().defaults, service: service,
                  toolService: ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in }), updates: updates)
     }
 

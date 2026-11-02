@@ -10,6 +10,7 @@ final class OperationLifecycle {
     private(set) var progress: OperationProgress?
     private(set) var task: Task<Void, Never>?
     private var generation = 0
+    @ObservationIgnored var onBusyChange: ((Bool) -> Void)?
     private var cancellationAllowed = true
     var busy: Bool { kind != nil }
     var canCancel: Bool { busy && cancellationAllowed && !cancelling }
@@ -19,6 +20,7 @@ final class OperationLifecycle {
         generation += 1
         cancellationAllowed = cancellable
         self.kind = kind; cancelling = false; progress = nil
+        onBusyChange?(true)
         return generation
     }
 
@@ -44,5 +46,6 @@ final class OperationLifecycle {
     func finish(_ generation: Int) {
         guard self.generation == generation else { return }
         kind = nil; cancelling = false; progress = nil; task = nil
+        onBusyChange?(false)
     }
 }

@@ -13,6 +13,7 @@ struct RepositoryDetailView: View {
         GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 12) {
                 ToolBarView(tools: tools, preferredToolIDs: preferredToolIDs, directory: workspace.currentURL, gitUnavailable: workspace.selection.map { workspace.states[$0.id]?.available == false } == true, text: preferences.text, open: openTool, availableWidth: geometry.size.width - 36)
+                    .disabled(!workspace.canManage)
                     .textSelection(.disabled)
                 VStack(spacing: 12) {
                     summary(compact: geometry.size.width < 760)
@@ -128,7 +129,7 @@ struct RepositoryDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(preferences.text.string(.uiCommits)).font(.system(size: 13)).frame(height: 22)
             if let commits = workspace.detail.commits {
-                let contentHeight = CGFloat(commits.count) * 22 + (workspace.detail.canLoadMore ? 32 : 0)
+                let contentHeight = CGFloat(commits.count) * 22
                 let columnWidths = commitColumnWidths(commits)
                 GeometryReader { geometry in
                     let columnSpacing = min(36, max(12, 12 + (geometry.size.width - 640) / 20))
@@ -154,7 +155,6 @@ struct RepositoryDetailView: View {
                                 }.font(.system(size: 13)).frame(height: 22)
                                     .accessibilityElement(children: .combine)
                             }
-                            if workspace.detail.canLoadMore { Button(preferences.text.string(.uiLoadMore)) { workspace.loadMore() }.textSelection(.disabled).disabled(workspace.detailLoading).frame(height: 28).padding(.top, 4) }
                         }
                     }.padding(.leading, -9)
                 }.frame(idealHeight: contentHeight, maxHeight: contentHeight)

@@ -14,9 +14,9 @@ struct ResourceActions: View {
             if let path { Button(text.string(.uiCopyPath)) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path.path, forType: .string) } }
             Button(text.string(.uiRevealInFinder)) { if let path { NSWorkspace.shared.activateFileViewerSelecting([path]) } }.disabled(path == nil)
             Divider()
-            if resource.kind == .group { Button(text.string(.uiEditWorktreeGroup)) { workspace.selection = resource; management.pendingEdit = nil; management.sheet = .edit }.disabled(operations.busy) }
+            if resource.kind == .group { Button(text.string(.uiEditWorktreeGroup)) { workspace.selection = resource; management.pendingEdit = nil; management.sheet = .edit }.disabled(!workspace.canManage) }
             if let request = DeleteRequest(resource) {
-                Button(text.string(.uiDelete), role: .destructive) { management.prepareDelete(request) }.disabled(operations.busy)
+                Button(text.string(.uiDelete), role: .destructive) { management.prepareDelete(request) }.disabled(!workspace.canManage)
             }
         }
     }

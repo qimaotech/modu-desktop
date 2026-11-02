@@ -103,7 +103,7 @@ struct WorkspaceSidebar: View {
                 }
                     .buttonStyle(HoverPlainButtonStyle(shape: Circle(), foreground: DesignStyle.secondary, hoverForeground: DesignStyle.secondary))
                     .help(preferences.text.string(.uiUpdateRepositories)).accessibilityLabel(preferences.text.string(.uiUpdateRepositories))
-                    .disabled(operations.busy || workspace.sortedRepositories.isEmpty)
+                    .disabled(!workspace.canManage || workspace.sortedRepositories.isEmpty)
             }
             Button { management.sheet = add } label: {
                 Image(systemName: "plus")
@@ -112,7 +112,7 @@ struct WorkspaceSidebar: View {
                 .buttonStyle(HoverPlainButtonStyle(shape: Circle(), foreground: DesignStyle.secondary, hoverForeground: DesignStyle.secondary))
                 .help(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
                 .accessibilityLabel(add == .add ? preferences.text.string(.uiAddRepository2) : preferences.text.string(.uiCreateWorktreeGroup2))
-                .disabled(operations.busy || workspace.record == nil || (add == .create && workspace.sortedRepositories.isEmpty))
+                .disabled(!workspace.canManage || (add == .create && workspace.sortedRepositories.isEmpty))
         }.frame(height: 32)
     }
 

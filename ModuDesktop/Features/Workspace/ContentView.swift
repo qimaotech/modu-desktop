@@ -9,6 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            maintenanceBanner
             WorkspaceSplitView(sidebar: WorkspaceSidebar(workspace: model.workspace, management: model.management, operations: model.operations, preferences: model.preferences).id(model.workspace.record?.root), detail: detail.frame(maxWidth: .infinity, maxHeight: .infinity), defaults: model.preferences.defaults)
         }
         .background(DesignStyle.background)
@@ -48,8 +49,34 @@ struct ContentView: View {
         .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if startupCompleted { Task { await model.activate() } }
+            else { model.workspace.details.setActive(true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            model.workspace.details.setActive(false)
+        }
+        .onAppear { if !NSApp.isActive { model.workspace.details.setActive(false) } }
+    }
+
+    @ViewBuilder private var maintenanceBanner: some View {
+        if model.workspace.maintenanceState == .failed, let notice = model.workspace.notice {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.text.string(.uiWorkspaceReadOnly)).font(.system(size: 12, weight: .medium))
+                    IssueDescriptionView(message: notice, details: model.workspace.noticeDetails, text: model.text).font(.system(size: 11))
+                }
+                Spacer(minLength: 0)
+                Button(model.text.string(.uiRetryMaintenance)) { Task { await model.workspace.reload() } }.disabled(model.busy)
+            }.padding(12)
+            Divider()
+        } else if model.workspace.maintenanceState == .pending || (model.workspace.maintenanceState == .maintaining && !model.showsMainOperationProgress) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(model.text.string(.uiPreparingWorkspace)).font(.system(size: 12))
+                Spacer()
+            }.padding(12)
         }
     }
+
 
     var mainSheetPresentation: Binding<Bool> {
         Binding(get: { model.management.sheet != nil || (model.presentation.result != nil && model.presentation.resultHost == .main) }, set: {
@@ -81,11 +108,11 @@ struct ContentView: View {
                 HStack(spacing: 12) {
                     Button(model.text.string(.uiAddRepository2)) { model.management.sheet = .add }
                     Button(model.text.string(.uiCreateGroup)) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)
-                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 120 : 128)).disabled(model.busy)
+                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 120 : 128)).disabled(!model.workspace.canManage)
                 HStack(spacing: 12) {
                     ForEach(["Git GUI", "Editor", "Agent"], id: \.self) { category in
                         if model.tools.contains(where: { $0.category == category }) {
-                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.states[$0.id]?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136)
+                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.states[$0.id]?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136).disabled(!model.workspace.canManage)
                         }
                     }
                 }

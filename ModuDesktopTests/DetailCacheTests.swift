@@ -4,6 +4,70 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct DetailCacheTests {
+    @Test(arguments: [false, true])
+    func appSubmoduleFilteringPreservesCLIAndSafetyChecks(_ changesHead: Bool) async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let record = try #require(model.workspace.record)
+        let resource = Resource.repository("repo"), path = record.repositoryURL("repo")
+        let submodule = path.appending(path: "submodule")
+        _ = try await fixture.service.git.run(["submodule", "add", fixture.remoteURL, "submodule"], at: path)
+        _ = try await fixture.service.git.run(["commit", "-m", "add submodule"], at: path)
+        let head = try #require(await fixture.service.git.oid("HEAD", at: path))
+        if changesHead {
+            _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "submodule change"], at: submodule)
+            _ = try await fixture.service.git.run(["add", "--", "submodule"], at: path)
+        } else {
+            try Data("changed".utf8).write(to: submodule.appending(path: "README"))
+            _ = try await fixture.service.git.run(["add", "README"], at: submodule)
+            try Data("untracked".utf8).write(to: submodule.appending(path: "new.txt"))
+        }
+
+        do {
+            model.workspace.details.preload(in: record, force: true)
+            await model.workspace.detailPreloadTask?.value
+            #expect(model.workspace.states[resource.id]?.dirty == false)
+            model.workspace.selection = resource
+            try await waitForDetail(model)
+            #expect(model.workspace.detail.changes?.isEmpty == true && model.workspace.states[resource.id]?.dirty == false)
+            #expect(model.workspace.detail.summary?.headOID == head)
+            #expect(model.workspace.detail.commits?.map(\.subject) == ["add submodule"])
+
+            let inspection = await fixture.service.inspect(fixture.root)
+            let inspected = try #require(inspection.items.first { $0.resource == resource })
+            #expect(inspected.status == .success && inspected.data?["working-tree"] == "dirty")
+            let executable = try #require(Bundle.main.url(forResource: "modu-cli", withExtension: nil))
+            var runner = fixture.service.git.runner
+            runner.environment["MODU_TEST_SUPPORT_DIRECTORY"] = fixture.service.store.support.path
+            let output = try await runner.run(executable.path, ["repo", "list", "--json", "--workspace", fixture.root.path], at: fixture.directory)
+            let listed = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(output.status == 0 && listed.items.first { $0.resource == resource }?.data?["working-tree"] == "dirty")
+            let preview = try await fixture.service.previewDelete(.repository("repo"), at: fixture.root)
+            #expect(preview.first { $0.resource == resource }?.dirty == true)
+            let update = await fixture.service.updateRepositories(at: fixture.root)
+            let skipped = try #require(update.items.first { $0.resource == resource })
+            #expect(skipped.status == .skipped && skipped.reasonCode == "working-tree-dirty" && skipped.effects.isEmpty)
+
+            var modules = try Data(contentsOf: path.appending(path: ".gitmodules"))
+            modules.append(Data("\n# parent configuration change\n".utf8))
+            try modules.write(to: path.appending(path: ".gitmodules"))
+            try Data("visible".utf8).write(to: path.appending(path: "visible.txt"))
+            model.workspace.refreshDetail()
+            try await waitForDetail(model)
+            #expect(Set(model.workspace.detail.changes?.map(\.path) ?? []) == [".gitmodules", "visible.txt"])
+            #expect(model.workspace.states[resource.id]?.dirty == true)
+            model.workspace.selection = nil
+            model.workspace.details.preload(in: record, force: true)
+            await model.workspace.detailPreloadTask?.value
+            #expect(model.workspace.states[resource.id]?.dirty == true)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
+    }
+
     @Test(arguments: [Resource.group("a"), Resource.member("a", "repo")])
     func deletionKeepsUnaffectedSelectionVisibleAndRefreshesItsGitState(_ selected: Resource) async throws {
         let fixture = try await Fixture()
@@ -304,7 +368,7 @@ import Testing
         #expect(model.workspace.detail.behindCommits?.count == 0 && model.workspace.detail.behindCommits?.isEmpty == true)
     }
 
-    @Test func reloadPreloadsSeparateSnapshotsForRepositoriesGroupsAndMembers() async throws {
+    @Test func reloadPreloadsSidebarSnapshotsWithoutPublishingPartialDetails() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
@@ -330,7 +394,7 @@ import Testing
             (.member("feature", "repo"), "member.txt", "feature")
         ] {
             model.workspace.selection = resource
-            #expect(model.workspace.detail.changes?.map(\.path) == [file])
+            #expect(model.workspace.detail.changes == nil && model.workspace.detail.summary == nil && model.workspace.detail.commits == nil)
             try await waitForDetail(model)
             #expect(model.workspace.detail.summary?.head == head)
             #expect(model.workspace.detail.changes?.map(\.path) == [file])
@@ -378,7 +442,7 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.hasRemotes == false && model.workspace.detail.summary?.baseError == nil)
         #expect(model.workspace.detail.summary?.base == nil)
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil && !model.workspace.detail.canLoadMore)
+        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
         #expect(model.workspace.detail.summary?.head == "feature" && model.workspace.detail.summary?.headOID == head)
         #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
     }
@@ -412,7 +476,7 @@ import Testing
         #expect(cancelled.isCancelled && model.presentation.message == nil)
     }
 
-    @Test func paginationSurvivesSelectionButNotNewHeadsOrWorkspaces() async throws {
+    @Test func allAheadCommitsAreCachedAcrossSelectionButNotNewHeadsOrWorkspaces() async throws {
         let resource = Resource.repository("repo")
         let fixture = try await Fixture()
         defer { fixture.remove() }
@@ -425,30 +489,22 @@ import Testing
         model.workspace.selection = resource
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")
-        #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
-        _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
-        model.workspace.loadMore()
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
-        #expect(model.presentation.messageTitle == model.text.string(.uiCanTReadCommits))
-        #expect(model.presentation.message?.contains("invalid-date-format") == true)
+        #expect(model.workspace.detail.commits?.map(\.subject) == (0..<31).reversed().map { "change \($0)" })
         let detailView = RepositoryDetailView(workspace: model.workspace, preferences: model.preferences, tools: [], preferredToolIDs: [:], openTool: { _ in })
         #expect(detailView.showsCommits)
-        model.presentation.message = nil
-        _ = try await fixture.service.git.run(["config", "--unset", "log.date"], at: path)
-        model.workspace.loadMore()
-        try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 31 && !model.workspace.detail.canLoadMore)
+        _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
         model.workspace.selection = nil
         model.workspace.selection = resource
-        #expect(model.workspace.detail.commits?.count == 31 && !model.workspace.detail.canLoadMore)
+        #expect(model.workspace.detail.commits?.count == 31)
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 31 && !model.workspace.detail.canLoadMore)
+        #expect(model.workspace.detail.commits?.count == 31 && model.workspace.detail.commitsError == nil)
+        #expect(model.presentation.message == nil)
 
+        _ = try await fixture.service.git.run(["config", "--unset", "log.date"], at: path)
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "new head"], at: path)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 30 && model.workspace.detail.canLoadMore)
+        #expect(model.workspace.detail.commits?.count == 32)
         #expect(model.workspace.detail.commits?.first?.subject == "new head")
 
         let next = fixture.directory.appending(path: "next-workspace")
@@ -490,8 +546,9 @@ import Testing
         await model.workspace.detailPreloadTask?.value
         #expect(model.workspace.selection == nil)
         model.workspace.selection = .repository("repo")
-        #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
+        #expect(model.workspace.detail.changes == nil && model.workspace.detail.summary == nil)
         try await waitForDetail(model)
+        #expect(model.workspace.detail.changes?.map(\.path) == ["next.txt"])
         #expect(model.workspace.details.collapsedPaths.isEmpty)
         model.workspace.details.collapsedPaths = ["Tests"]
 
@@ -508,6 +565,10 @@ import Testing
         switching.workspace.record = try fixture.service.store.load(fixture.root)
         switching.workspace.selection = nil
         switching.workspace.refreshDetail()
+        let preloadDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while switching.workspace.detailPreloadTask == nil, ContinuousClock.now < preloadDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         let stalePreload = try #require(switching.workspace.detailPreloadTask)
         try await switching.switchTo(next)
         #expect(stalePreload.isCancelled)

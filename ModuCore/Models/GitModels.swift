@@ -1,5 +1,16 @@
 import Foundation
 
+public enum GitChangeVisibility: Sendable {
+    case all, application
+}
+
+public struct GitWorkingState: Sendable, Equatable {
+    public let changes: [FileChange]
+    public let headOID: String?
+    public let branch: String?
+    public var head: String { branch ?? "Detached at \((headOID ?? "").prefix(8))" }
+}
+
 public struct FileChange: Identifiable, Sendable, Equatable {
     public var path: String
     public var originalPath: String?

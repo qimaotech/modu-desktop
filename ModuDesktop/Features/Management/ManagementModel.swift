@@ -66,11 +66,10 @@ final class ManagementModel {
     }
 
     func run(_ body: @escaping @Sendable (WorkspaceService, URL, ProgressHandler) async -> OperationResult, select: Resource? = nil) {
-        guard let root = session.record?.rootURL, !busy else { return }
+        guard let root = session.record?.rootURL, session.canManage else { return }
         let previousEdit = editPreviewTask
         cancelEditPreview()
         cancelDeletePreview()
-        session.cancelDetailPreload()
         progressPresentation = sheet == nil ? nil : .init(importFileName: importFileName)
         guard let operationID = operations.begin(.management) else { return }
         formError = nil; presentation.completionMessage = nil; session.invalidateReads()
@@ -87,6 +86,7 @@ final class ManagementModel {
         } }
         let task = Task {
             await previousEdit?.value
+            await session.waitForReadCancellation()
             let outcome = await body(service, root, report)
             let isWorktreeOperation = ["worktree.create", "worktree.update", "worktree.remove"].contains(outcome.command)
             let noEffects = outcome.items.allSatisfy { $0.effects.isEmpty }
@@ -137,7 +137,7 @@ final class ManagementModel {
     func add(_ url: String, name: String) { run({ service, root, progress in await service.addRepository(.init(url: url.trimmingCharacters(in: .whitespacesAndNewlines), name: name.isEmpty ? nil : name), at: root, progress: progress) }, select: try? Resource.repository(RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)).name)) }
     func create(_ group: String, members: [String]) { run({ service, root, progress in await service.createGroup(group, repositories: members, at: root, progress: progress) }, select: .group(group)) }
     func edit(_ group: String, members: [String]) {
-        guard let root = session.record?.rootURL, !busy else { return }
+        guard let root = session.record?.rootURL, session.canManage else { return }
         let previous = editPreviewTask
         cancelEditPreview()
         let context = editPreviewGeneration
@@ -157,7 +157,7 @@ final class ManagementModel {
         }
     }
     func prepareDelete(_ request: DeleteRequest) {
-        guard let root = session.record?.rootURL, !busy else { return }
+        guard let root = session.record?.rootURL, session.canManage else { return }
         let previousEdit = editPreviewTask
         cancelEditPreview()
         let previous = deletePreviewTask
@@ -201,7 +201,7 @@ final class ManagementModel {
         else if let request = deleteRequest { run({ service, root, progress in await service.remove(request, at: root, authorization: authorization, progress: progress) }) }
     }
     func prepareRepositoryImport(_ text: String, filename: String) {
-        guard let root = session.record?.rootURL, sheet == .add, !busy else { return }
+        guard let root = session.record?.rootURL, sheet == .add, session.canManage else { return }
         formError = nil
         do {
             var seen = Set<String>()
@@ -212,7 +212,7 @@ final class ManagementModel {
         } catch { presentError(error) }
     }
     func prepareLocalRepositoryImport(_ directories: [URL]) {
-        guard let root = session.record?.rootURL, sheet == .add, !directories.isEmpty,
+        guard let root = session.record?.rootURL, sheet == .add, session.canManage, !directories.isEmpty,
               let operationID = operations.begin(.management) else { return }
         formError = nil
         progressPresentation = .init(scanningRepositories: true)
@@ -222,6 +222,7 @@ final class ManagementModel {
             progressPresentation?.progress = progress
         } }
         let task = Task {
+            await session.waitForReadCancellation()
             let outcome = await Result(catching: { try await service.scanLocalRepositories(in: directories, at: root, progress: report) })
             guard operations.isCurrent(operationID) else { return }
             operations.finish(operationID)
@@ -243,7 +244,7 @@ final class ManagementModel {
         operations.attach(task, to: operationID)
     }
     var canConfirmRepositoryImport: Bool {
-        guard sheet == .importRepositories, !busy, let repositoryImport, repositoryImport.root == session.record?.rootURL else { return false }
+        guard sheet == .importRepositories, session.canManage, let repositoryImport, repositoryImport.root == session.record?.rootURL else { return false }
         return repositoryImport.urls.contains { repositoryImport.selectedURLs.contains($0) }
     }
     func confirmRepositoryImport() {

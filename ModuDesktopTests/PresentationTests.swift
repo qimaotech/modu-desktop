@@ -115,13 +115,14 @@ import Testing
                 ("cancelled", false, false, false), ("cancelled", true, false, true),
                 ("success", true, true, true)
             ] {
-                model.presentation.quitPending = quitting; model.presentation.resultHost = .settings
+                model.presentation.quitPending = false; model.presentation.resultHost = .settings
                 model.management.run { _, root, _ in
                     var item = ItemResult(.repository("repo"), status: OperationStatus(rawValue: status)!)
                     if effects { item.effects = [.init("update-ignore", root.appending(path: ".gitignore").path)] }
                     return OperationResult(command: "workspace.import", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [item])
                 }
                 #expect(model.busy && model.presentation.resultHost == .settings)
+                model.presentation.quitPending = quitting
                 let operation = try #require(model.operation)
                 await operation.value
                 #expect(!model.busy)

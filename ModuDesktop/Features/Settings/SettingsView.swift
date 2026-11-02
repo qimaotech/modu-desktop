@@ -59,7 +59,7 @@ struct SettingsView: View {
                         HStack(spacing: 8) {
                             Text(model.text.string(.uiConfiguration))
                             Spacer()
-                            Button(model.text.string(.uiImportYAML)) { importYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
+                            Button(model.text.string(.uiImportYAML)) { importYAML() }.disabled(!model.workspace.canManage || presentingOperation || choosingWorkspace)
                             Button(model.text.string(.uiExportYAML)) { exportYAML() }.disabled(model.workspace.record == nil || model.busy || presentingOperation || choosingWorkspace)
                         }.frame(height: 48)
                             .help(model.text.string(.uiOnlySavesRepositoryAndGroupStructureNotFiles))
@@ -68,8 +68,10 @@ struct SettingsView: View {
                 if let notice = model.workspace.notice {
                     HStack(alignment: .top) {
                         ScrollView { IssueDescriptionView(message: notice, details: model.workspace.noticeDetails, text: model.text).font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 80)
-                        Button { model.workspace.notice = nil } label: { Image(systemName: "xmark") }
-                            .buttonStyle(HoverPlainButtonStyle(shape: Circle())).accessibilityLabel(model.text.string(.uiDismiss)).help(model.text.string(.uiDismiss))
+                        if model.workspace.maintenanceState != .failed {
+                            Button { model.workspace.notice = nil } label: { Image(systemName: "xmark") }
+                                .buttonStyle(HoverPlainButtonStyle(shape: Circle())).accessibilityLabel(model.text.string(.uiDismiss)).help(model.text.string(.uiDismiss))
+                        }
                     }.foregroundStyle(DesignStyle.secondary)
                 }
             }.font(.system(size: 13)).padding(.horizontal, 32).padding(.top, 36).padding(.bottom, 40)
