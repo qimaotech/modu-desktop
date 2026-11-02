@@ -6,16 +6,20 @@ struct ResultView: View {
     var text: InterfaceText
     var result: OperationResult
     var retry: (() -> Void)? = nil
+    var retryTitle: String? = nil
+    var context: String? = nil
+    var dismissTitle: String? = nil
     var dismiss: () -> Void
     var body: some View {
         if result.reasonCode == "workspace-not-empty" {
             VStack(alignment: .leading, spacing: 16) {
                 resultHeader
+                if let context { Text(context).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
                 if let workspace = result.workspace { Text(text.string(.uiWorkspace2) + (workspace as NSString).abbreviatingWithTildeInPath).font(DialogTypography.path).textSelection(.enabled) }
                 Text(text.string(.uiWorkspaceMustHaveNoRegisteredRepositoriesOrWorktree))
                 Text(text.string(.uiChooseAnotherWorkspaceInSettingsThenTryAgain))
                 Divider()
-                Button(text.string(.uiOk), action: dismiss).keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)
+                Button(dismissTitle ?? text.string(.uiOk), action: dismiss).keyboardShortcut(.defaultAction).frame(maxWidth: .infinity, alignment: .trailing)
             }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)
         } else {
             resultContents
@@ -51,6 +55,7 @@ struct ResultView: View {
         return VStack(alignment: .leading, spacing: result.command == "repo.update" ? 12 : 16) {
             VStack(alignment: .leading, spacing: result.command == "repo.update" ? 4 : 6) {
                 resultHeader
+                if let context { Text(context).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
                 if let summary = text.resultSummaryText(result) {
                     Text(summary).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
                 }
@@ -71,11 +76,11 @@ struct ResultView: View {
             Divider()
             HStack {
                 if let retry {
-                    Button(text.string(.uiChooseAnother), action: retry)
+                    Button(retryTitle ?? text.string(.uiChooseAnother), action: retry)
                     Spacer()
-                    Button(text.string(.uiCancel), role: .cancel, action: dismiss).keyboardShortcut(.cancelAction)
+                    Button(dismissTitle ?? text.string(.uiCancel), role: .cancel, action: dismiss).keyboardShortcut(.cancelAction)
                 } else {
-                    Button(text.string(.uiOk), action: dismiss).keyboardShortcut(.defaultAction)
+                    Button(dismissTitle ?? text.string(.uiOk), action: dismiss).keyboardShortcut(.defaultAction)
                 }
             }.frame(maxWidth: .infinity, alignment: .trailing)
         }.font(DialogTypography.body).padding(24).frame(width: DesignStyle.sheetWidth).background(DesignStyle.background)

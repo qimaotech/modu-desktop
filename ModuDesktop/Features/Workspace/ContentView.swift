@@ -8,10 +8,7 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(spacing: 0) {
-            maintenanceBanner
-            WorkspaceSplitView(sidebar: WorkspaceSidebar(workspace: model.workspace, management: model.management, operations: model.operations, preferences: model.preferences).id(model.workspace.record?.root), detail: detail.frame(maxWidth: .infinity, maxHeight: .infinity), defaults: model.preferences.defaults)
-        }
+        WorkspaceSplitView(sidebar: WorkspaceSidebar(workspace: model.workspace, management: model.management, operations: model.operations, preferences: model.preferences).id(model.workspace.record?.root), detail: detail.frame(maxWidth: .infinity, maxHeight: .infinity), defaults: model.preferences.defaults)
         .background(DesignStyle.background)
         .navigationTitle(model.workspace.record?.rootURL.lastPathComponent ?? "Modu")
         .toolbar(removing: .title)
@@ -20,7 +17,7 @@ struct ContentView: View {
                 if model.showsMainOperationProgress {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text(model.presentation.repositoryUpdateProgressText).monospacedDigit()
+                        Text(model.mainOperationProgressText).monospacedDigit()
                         if model.operations.canCancel || model.cancelling {
                             Button { model.cancel() } label: {
                                 Image(systemName: "xmark.circle.fill").resizable().scaledToFit()
@@ -34,17 +31,45 @@ struct ContentView: View {
                                 .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
                         }
                     }
+                } else if model.showsWorkspacePreparation {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(model.text.string(.uiPreparingWorkspace))
+                    }
+                } else if model.workspace.record != nil, model.workspace.maintenanceState == .failed {
+                    Menu {
+                        Button(model.text.string(.uiDetails)) { model.showMaintenanceFailure() }
+                            .disabled(!model.canShowMaintenanceFailure)
+                        Button(model.text.string(.uiRetryMaintenance)) { Task { await model.retryWorkspaceMaintenance() } }
+                            .disabled(!model.canShowMaintenanceFailure)
+                    } label: {
+                        Label(model.text.string(.uiWorkspaceReadOnlyStatus), systemImage: "exclamationmark.triangle")
+                    }.menuStyle(.borderlessButton).labelStyle(.titleAndIcon).fixedSize()
+                        .accessibilityLabel(model.text.string(.uiWorkspaceReadOnlyStatus))
                 } else if let completion = model.presentation.completionMessage {
                     Label(completion, systemImage: "checkmark.circle")
                 } else { Text(model.workspace.record?.rootURL.lastPathComponent ?? "Modu").font(.system(size: 13, weight: .semibold)) }
             }.sharedBackgroundVisibility(.hidden)
         }
-        .sheet(isPresented: mainSheetPresentation, onDismiss: { model.management.finishDismissal() }) {
-            if let result = model.presentation.result, model.presentation.resultHost == .main {
-                ResultView(text: model.presentation.text, result: result) { model.presentation.dismissResult() }
-            } else if let sheet = model.management.sheet {
-                ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet).id(sheet)
-            }
+        .sheet(isPresented: mainSheetPresentation, onDismiss: {
+            model.presentation.mainSheetVisible = false
+            model.management.finishDismissal()
+            model.presentMaintenanceFailureIfPossible()
+        }) {
+            Group {
+                if let result = model.presentation.result, model.presentation.resultHost == .main {
+                    ResultView(text: model.presentation.text, result: result,
+                        retry: model.presentation.isMaintenanceFailure && !model.presentation.quitPending ? { Task { await model.retryWorkspaceMaintenance() } } : nil,
+                        retryTitle: model.text.string(.uiRetryMaintenance),
+                        context: model.presentation.isMaintenanceFailure && model.workspace.record != nil ? model.text.string(.uiWorkspaceReadOnly) : nil,
+                        dismissTitle: model.presentation.isMaintenanceFailure ? model.text.string(.uiClose) : nil) { model.presentation.dismissResult() }
+                } else if let sheet = model.management.sheet {
+                    ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet).id(sheet)
+                }
+            }.onAppear { model.presentation.mainSheetVisible = true }
+        }
+        .onChange(of: model.canPresentMaintenanceFailure, initial: true) { _, canPresent in
+            if canPresent { model.presentMaintenanceFailureIfPossible() }
         }
         .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -56,27 +81,6 @@ struct ContentView: View {
         }
         .onAppear { if !NSApp.isActive { model.workspace.setActive(false) } }
     }
-
-    @ViewBuilder private var maintenanceBanner: some View {
-        if model.workspace.maintenanceState == .failed, let notice = model.workspace.notice {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.text.string(.uiWorkspaceReadOnly)).font(.system(size: 12, weight: .medium))
-                    IssueDescriptionView(message: notice, details: model.workspace.noticeDetails, text: model.text).font(.system(size: 11))
-                }
-                Spacer(minLength: 0)
-                Button(model.text.string(.uiRetryMaintenance)) { Task { await model.workspace.maintainWorkspace() } }.disabled(model.busy)
-            }.padding(12)
-            Divider()
-        } else if model.workspace.maintenanceState == .pending || (model.workspace.maintenanceState == .maintaining && !model.showsMainOperationProgress) {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(model.text.string(.uiPreparingWorkspace)).font(.system(size: 12))
-                Spacer()
-            }.padding(12)
-        }
-    }
-
 
     var mainSheetPresentation: Binding<Bool> {
         Binding(get: { model.management.sheet != nil || (model.presentation.result != nil && model.presentation.resultHost == .main) }, set: {

@@ -286,6 +286,7 @@ import SwiftUI
             let initialRead = try #require(model.workspace.details.detailTask)
             #expect(model.workspace.maintenanceState == .pending && !model.busy)
             try #require(model.changeWorkspace(next))
+            #expect(!model.showsWorkspacePreparation && !model.showsMainOperationProgress)
             let changeTask = try #require(model.operation)
             changing = changeTask
             #expect(await startup.value == false)
@@ -333,6 +334,7 @@ import SwiftUI
         do {
             try await waitForWorkspaceOperation(model)
             #expect(model.operations.canCancel && model.workspace.isReloading)
+            #expect(model.showsMainOperationProgress && model.mainOperationProgressText == model.text.string(.uiPreparingWorkspace))
             do {
                 try await model.switchTo(fixture.directory.appending(path: "missing-workspace"))
                 Issue.record("Switching to a missing workspace must fail.")
@@ -343,6 +345,13 @@ import SwiftUI
             #expect(model.workspace.record == original && model.defaults.string(forKey: "workspace") == original.root)
             #expect(!model.busy && !model.workspace.isReloading)
             #expect(model.workspace.maintenanceState == .failed && !model.workspace.canManage)
+            #expect(model.workspace.maintenanceFailure?.status == .cancelled && !model.workspace.maintenanceFailurePending)
+            #expect(model.presentation.result == nil && model.canShowMaintenanceFailure)
+            model.showMaintenanceFailure()
+            #expect(model.presentation.isMaintenanceFailure && model.presentation.result?.status == .cancelled)
+            model.presentation.dismissResult()
+            model.presentMaintenanceFailureIfPossible()
+            #expect(model.presentation.result == nil)
             await model.workspace.refreshRecord()
             #expect(model.workspace.record == original && model.workspace.blocked == nil)
             #expect(!model.busy && !model.workspace.isReloading && model.workspace.maintenanceState == .failed)
@@ -436,10 +445,13 @@ import SwiftUI
         let startup = Task { await model.start(onReady: {
             readyCount += 1
             #expect(model.workspace.record == record && !model.workspace.canManage && !model.busy)
+            #expect(model.showsWorkspacePreparation && !model.showsMainOperationProgress)
         }) }
         do {
             try await gate.waitUntilStarted()
             #expect(readyCount == 1 && model.busy)
+            #expect(model.showsMainOperationProgress && !model.showsWorkspacePreparation && model.operations.canCancel)
+            #expect(model.mainOperationProgressText == model.text.string(.uiPreparingWorkspace))
             #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
             #expect(model.workspace.detail.summary?.head == "main")
             #expect(model.workspace.detail.commits?.map(\.subject) == ["launch history"] && model.workspace.detail.behindCommits?.isEmpty == true)
@@ -650,7 +662,8 @@ import SwiftUI
             #expect(model.workspace.record != nil && model.workspace.maintenanceState == .failed && !model.workspace.canManage)
             #expect(model.workspace.notice != nil)
         }
-        #expect(model.presentation.result == nil && !model.busy && !model.openingWorkspace)
+        #expect((model.presentation.result == nil) == implicit)
+        #expect(model.presentation.isMaintenanceFailure == !implicit && !model.busy && !model.openingWorkspace)
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
         #expect(!PathSafety.exists(fixture.root.appending(path: ".agents")))
         if kind == "missing" { #expect(!PathSafety.exists(file)) }
@@ -670,15 +683,69 @@ import SwiftUI
         #expect(!model.workspace.canManage && model.workspace.notice != nil)
         #expect(model.presentation.result?.items.first?.reasonCode == "workspace-commit-failed")
         #expect(model.presentation.result?.items.first?.effects.contains { $0.action == "install-skill" } == true)
+        #expect(model.presentation.isMaintenanceFailure && !model.workspace.maintenanceFailurePending)
         #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/modu-workflow/SKILL.md")))
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
 
         _ = try await fixture.service.git.run(["config", "commit.gpgSign", "false"], at: fixture.root)
         model.presentation.dismissResult()
-        await model.workspace.maintainWorkspace()
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.result == nil && model.canShowMaintenanceFailure)
+        model.showMaintenanceFailure()
+        #expect(model.presentation.result?.items.first?.effects == model.workspace.maintenanceFailure?.items.first?.effects)
+        await model.retryWorkspaceMaintenance()
         #expect(model.workspace.record != nil && model.workspace.blocked == nil && model.presentation.result == nil)
+        #expect(model.workspace.maintenanceFailure == nil && !model.workspace.maintenanceFailurePending && !model.canShowMaintenanceFailure)
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) != head)
         #expect(try await fixture.service.git.changes(at: fixture.root).isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func maintenanceFailureWaitsForPresentationsAndDoesNotOutliveItsContext(_ switchWorkspace: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        try FileManager.default.removeItem(at: fixture.service.store.recordURL(fixture.root))
+        model.presentation.resultHost = .settings
+        model.presentation.result = .init(command: "workspace.import", workspace: fixture.root.path, status: .failed)
+        await model.workspace.maintainWorkspace(.startup)
+        #expect(model.workspace.maintenanceFailurePending && !model.canPresentMaintenanceFailure)
+        #expect(model.presentation.result?.command == "workspace.import" && model.presentation.resultHost == .settings)
+
+        model.presentation.mainSheetVisible = true
+        model.presentation.dismissResult()
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.result == nil && model.workspace.maintenanceFailurePending)
+        if switchWorkspace {
+            let next = fixture.directory.appending(path: "next-workspace")
+            try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
+            try #require(await fixture.service.openWorkspace(next).status == .success)
+            try await model.switchTo(next)
+            model.presentation.mainSheetVisible = false
+            model.presentMaintenanceFailureIfPossible()
+            #expect(model.workspace.maintenanceFailure == nil && !model.workspace.maintenanceFailurePending)
+            #expect(model.presentation.result == nil && !model.canShowMaintenanceFailure)
+            await model.workspace.stopReads()
+            return
+        }
+        model.presentation.mainSheetVisible = false
+        model.presentation.message = "Another error"
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.result == nil && model.workspace.maintenanceFailurePending)
+        model.presentation.message = nil
+        model.management.sheet = .add
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.result == nil && model.workspace.maintenanceFailurePending)
+        model.management.sheet = nil
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.isMaintenanceFailure && model.presentation.result?.command == "workspace.open")
+        #expect(!model.workspace.maintenanceFailurePending)
+
+        model.presentation.dismissResult()
+        await model.workspace.refreshRecord()
+        model.presentMaintenanceFailureIfPossible()
+        #expect(model.presentation.result == nil && model.canShowMaintenanceFailure && !model.workspace.canManage)
+        await model.workspace.stopReads()
     }
 
     @Test func startupPublishesWorkspaceAndToolsBeforeSlowResourceChecks() async throws {

@@ -34,8 +34,21 @@ final class AppModel {
     var operation: Task<Void, Never>? { operations.task }
     var hasSavedWorkspace: Bool { defaults.string(forKey: "workspace") != nil }
     var showsMainOperationProgress: Bool {
-        busy && management.sheet == nil && presentation.resultHost == .main && (!openingWorkspace || workspace.showsReloadProgress)
+        busy && management.sheet == nil && (workspace.isReloading || (presentation.resultHost == .main && !openingWorkspace))
     }
+    var showsWorkspacePreparation: Bool {
+        workspace.record != nil && workspace.blocked == nil && workspace.maintenanceState == .pending
+            && !busy && management.sheet == nil && !presentation.quitPending
+    }
+    var mainOperationProgressText: String {
+        if workspace.isReloading, !workspace.showsReloadProgress, !cancelling { return text.string(.uiPreparingWorkspace) }
+        return presentation.repositoryUpdateProgressText
+    }
+    var canShowMaintenanceFailure: Bool {
+        workspace.maintenanceState == .failed && workspace.maintenanceFailure != nil && !busy && !presentation.quitPending
+            && management.sheet == nil && presentation.result == nil && presentation.message == nil && !presentation.mainSheetVisible
+    }
+    var canPresentMaintenanceFailure: Bool { workspace.maintenanceFailurePending && canShowMaintenanceFailure }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
          updates: AppUpdateModel? = nil, relaunch: AppRelaunchModel? = nil,
@@ -61,6 +74,7 @@ final class AppModel {
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
         self.management = management
         workspace.onContextChange = { [weak management] rootChanged in management?.contextChanged(rootChanged: rootChanged) }
+        workspace.onMaintenanceFailure = { [weak self] in self?.presentMaintenanceFailureIfPossible() }
         self.updates.onRestartFailure = { [weak self] in self?.resumeAfterFailedQuit() }
         self.relaunch.onFailure = { [weak self] error in
             guard let self else { return }
@@ -185,6 +199,23 @@ final class AppModel {
     }
 
     func cancel() { operations.cancel() }
+
+    func presentMaintenanceFailureIfPossible() {
+        if canPresentMaintenanceFailure { workspace.showMaintenanceFailure() }
+    }
+
+    func showMaintenanceFailure() {
+        if canShowMaintenanceFailure { workspace.showMaintenanceFailure() }
+    }
+
+    func retryWorkspaceMaintenance() async {
+        guard workspace.maintenanceState == .failed, let failure = workspace.maintenanceFailure,
+              failure.workspace == defaults.string(forKey: "workspace"), !busy, !presentation.quitPending,
+              management.sheet == nil, presentation.message == nil,
+              presentation.result == nil || presentation.isMaintenanceFailure else { return }
+        if presentation.isMaintenanceFailure { presentation.dismissResult() }
+        await workspace.maintainWorkspace()
+    }
 
     func resumeAfterFailedQuit() {
         guard presentation.quitPending else { return }

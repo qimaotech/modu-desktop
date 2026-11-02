@@ -31,6 +31,9 @@ final class WorkspaceModel {
     let details: RepositoryDetailModel
     enum MaintenanceState { case pending, maintaining, ready, failed }
     var maintenanceState: MaintenanceState = .ready
+    private(set) var maintenanceFailure: OperationResult?
+    private(set) var maintenanceFailurePending = false
+    @ObservationIgnored var onMaintenanceFailure: (() -> Void)?
     var canManage: Bool { record != nil && maintenanceState == .ready && !busy && !presentation.quitPending }
     enum MaintenanceTrigger { case startup, manual }
     var hasActiveReads: Bool { details.hasActiveReads || reloadTask != nil }
@@ -63,6 +66,7 @@ final class WorkspaceModel {
         var maintenance: MaintenanceOptions?
         var completions: [ReloadCompletion]
         var operationID: Int?
+        var result: OperationResult?
         var intent: RefreshIntent
 
         init(path: String, maintenance: MaintenanceOptions?, intent: RefreshIntent, completion: ReloadCompletion) {
@@ -192,6 +196,12 @@ final class WorkspaceModel {
         await requestReload(maintenance: MaintenanceOptions(trigger), intent: .all)
     }
 
+    func showMaintenanceFailure() {
+        guard maintenanceState == .failed, let maintenanceFailure else { return }
+        maintenanceFailurePending = false
+        presentation.presentMaintenanceFailure(maintenanceFailure)
+    }
+
     private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
         guard !Task.isCancelled, !presentation.quitPending, let path = defaults.string(forKey: "workspace") else { return }
         let completion = ReloadCompletion(afterLoad)
@@ -266,10 +276,23 @@ final class WorkspaceModel {
             }
             if activeReload === batch { activeReload = nil }
             if let operationID = batch.operationID { operations.finish(operationID) }
+            finishMaintenance(batch, generation: generation)
             batch.finish()
             resumeReadsIfAllowed()
             if batch.operationID != nil, presentation.quitPending { presentation.finishQuitIfPossible() }
         }
+    }
+
+    private func finishMaintenance(_ batch: ReloadBatch, generation: Int) {
+        guard batch.maintenance != nil, reloadTask?.generation == generation,
+              defaults.string(forKey: "workspace") == batch.path, maintenanceState == .failed else { return }
+        let error = ModuError("cancelled", .operationCancelled)
+        var result = batch.result ?? OperationResult(command: "workspace.open", workspace: batch.path,
+            items: [ItemResult(.workspace(), status: .cancelled, error: error)], error: error)
+        if Task.isCancelled, result.status == .success { result.summarize(cancelled: true) }
+        maintenanceFailure = result
+        maintenanceFailurePending = !presentation.quitPending && (result.status != .cancelled || result.items.contains { !$0.effects.isEmpty })
+        onMaintenanceFailure?()
     }
 
     private func finishReloads(generation: Int) {
@@ -303,7 +326,10 @@ final class WorkspaceModel {
             let previousSelection = selection
             self.record = record; blocked = nil; blockedDetails = nil
             let contextChanged = recordContextChanged
-            if maintainingWorkspace { maintenanceState = .ready }
+            if maintainingWorkspace {
+                maintenanceState = .ready
+                maintenanceFailure = nil; maintenanceFailurePending = false
+            }
             readsAllowed = true
             for completion in batch.completions {
                 guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending else { return }
@@ -345,13 +371,12 @@ final class WorkspaceModel {
         } }
         let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow")
         let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: true, progress: report)
+        batch.result = opened.result
         guard isCurrent(batch, generation: generation) else { return nil }
         let noEffects = opened.result.items.allSatisfy { $0.effects.isEmpty }
-        if presentation.quitPending || ((opened.result.status != .success || Task.isCancelled) && !noEffects) {
-            presentation.result = opened.result; presentation.resultHost = .main
-        }
         if presentation.quitPending {
-            if noEffects { presentation.result = nil }
+            presentation.result = noEffects ? nil : opened.result
+            presentation.resultHost = .main
             return nil
         }
         guard !Task.isCancelled else { return nil }
@@ -398,6 +423,7 @@ final class WorkspaceModel {
         defaults.set(record.root, forKey: "workspace")
         let previousSelection = selection
         self.record = record; blocked = nil; notice = nil
+        maintenanceFailure = nil; maintenanceFailurePending = false
         maintenanceState = .ready; readsAllowed = true
         reloadStopped = false
         ensureRecordMonitoring()

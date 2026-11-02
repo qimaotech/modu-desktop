@@ -7,8 +7,10 @@ final class OperationPresentation {
     private let preferences: AppPreferences
     private let operations: OperationLifecycle
     private let terminate: () -> Void
-    var result: OperationResult?
+    var result: OperationResult? { didSet { isMaintenanceFailure = false } }
     var resultHost = ResultHost.main
+    private(set) var isMaintenanceFailure = false
+    var mainSheetVisible = false
     var message: String?
     var messageTitle: String?
     var messageHost = ResultHost.main
@@ -28,6 +30,10 @@ final class OperationPresentation {
     func dismissResult() {
         result = nil; resultHost = .main
         if quitPending { terminate() }
+    }
+
+    func presentMaintenanceFailure(_ result: OperationResult) {
+        self.result = result; resultHost = .main; isMaintenanceFailure = true
     }
 
     func presentMessage(_ message: String, title: String, host: ResultHost = .main) {

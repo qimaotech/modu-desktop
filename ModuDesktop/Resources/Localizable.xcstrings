@@ -7821,13 +7821,30 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Workspace maintenance failed. Browsing is read-only; displayed status may be out of date."
+            "value": "The workspace is read-only until maintenance succeeds. Displayed status may be out of date."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "工作区维护失败，当前仅可浏览，显示的状态可能不是最新。"
+            "value": "维护成功前工作区仅可浏览，显示的状态可能不是最新。"
+          }
+        }
+      }
+    },
+    "ui.workspaceReadOnlyStatus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace read-only"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区只读"
           }
         }
       }
