@@ -3659,23 +3659,6 @@
         }
       }
     },
-    "ui.cancelReload": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel Reload"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消重新加载"
-          }
-        }
-      }
-    },
     "ui.cancelUpdate": {
       "extractionState": "manual",
       "localizations": {

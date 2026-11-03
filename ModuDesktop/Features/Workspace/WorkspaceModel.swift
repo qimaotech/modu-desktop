@@ -46,6 +46,7 @@ final class WorkspaceModel {
         init(showProgress: Bool, cancellable: Bool) { self.showProgress = showProgress; self.cancellable = cancellable }
         init(_ trigger: MaintenanceTrigger) {
             showProgress = trigger == .manual
+            // The toolbar hides cancellation; startup still needs it for quit and workspace switches.
             cancellable = trigger == .startup
         }
     }

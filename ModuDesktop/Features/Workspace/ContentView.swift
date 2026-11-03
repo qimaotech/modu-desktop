@@ -18,7 +18,7 @@ struct ContentView: View {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
                         Text(model.mainOperationProgressText).monospacedDigit()
-                        if model.operations.canCancel || model.cancelling {
+                        if !model.openingWorkspace, model.operations.canCancel || model.cancelling {
                             Button { model.cancel() } label: {
                                 Image(systemName: "xmark.circle.fill").resizable().scaledToFit()
                                     .symbolRenderingMode(.palette).foregroundStyle(.white, DesignStyle.secondary)
@@ -27,8 +27,8 @@ struct ContentView: View {
                             }
                                 .buttonStyle(.plain)
                                 .disabled(!model.operations.canCancel)
-                                .help(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
-                                .accessibilityLabel(model.openingWorkspace ? model.text.string(.uiCancelReload) : model.text.string(.uiCancelUpdate))
+                                .help(model.text.string(.uiCancelUpdate))
+                                .accessibilityLabel(model.text.string(.uiCancelUpdate))
                         }
                     }
                 } else if model.showsWorkspacePreparation {
