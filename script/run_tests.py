@@ -21,21 +21,11 @@ ROOT = Path(__file__).resolve().parent.parent
 STYLES = {"muted": "2", "active": "1;34", "success": "32", "warning": "33", "failure": "1;31"}
 FAILURE_PATTERN = re.compile(r": (?:fatal )?error:|^error:|^ld:|^Undefined symbols|recorded an issue|"
                              r"Test .+ failed(?: after| with)|^Test (?:run|cleanup) failed:|^Test run interrupted")
-# Balance the slow Git suites; the final shard includes all remaining and future suites.
-TEST_SHARDS = (
-    ("WorkflowTests", "DeletionPreviewTests", "MockWorkspaceTests", "GitSSHTests",
-     "RepositoryRefreshTests", "WorkspaceTreeTests"),
-    ("DeletionCancellationTests", "WorktreeCreationTests", "ImportCancellationTests", "ModuCoreTests",
-     "DetailCacheTests", "WorkspaceCommitTests", "MockWorkspacePreparationTests"),
-    ("WorkspaceLoadingTests", "FailureTests", "AppUpdateInstallerTests", "RepositoryUpdateTests"),
-)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run Xcode tests in an isolated, automatically cleaned environment.")
-    selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--filter", default="ModuDesktopTests")
-    selection.add_argument("--shard", type=int, choices=range(1, len(TEST_SHARDS) + 2))
+    parser.add_argument("--filter", default="ModuDesktopTests")
     parser.add_argument("--verbose", action="store_true", help="Stream the full test log to the terminal.")
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     arguments = parser.parse_args()
@@ -46,10 +36,10 @@ def main():
     extra = [value for value in extra if value != "--verbose"]
     for number in (signal.SIGINT, signal.SIGTERM):
         signal.signal(number, interrupt)
-    return run_tests(test_selection(arguments.filter, arguments.shard), extra, verbose)
+    return run_tests(arguments.filter, extra, verbose)
 
 
-def run_tests(selection, extra, verbose=False):
+def run_tests(test_filter, extra, verbose=False):
     started = time.monotonic()
     derived = Path(os.environ.get("MODU_DERIVED_DATA_PATH", str(Path(tempfile.gettempdir()) / "modu-desktop-derived-data")))
     # Keep the log outside the disposable test environment, including on failure.
@@ -67,7 +57,7 @@ def run_tests(selection, extra, verbose=False):
         command = ["xcodebuild", "-project", str(ROOT / "ModuDesktop.xcodeproj"), "-scheme", "ModuDesktop",
                    "-configuration", "Debug", "-destination", "platform=macOS,arch=arm64",
                    "-derivedDataPath", str(derived), "-onlyUsePackageVersionsFromResolvedFile",
-                   *selection, "-parallel-testing-enabled", "NO",
+                   f"-only-testing:{test_filter}", "-parallel-testing-enabled", "NO",
                    "CODE_SIGN_STYLE=Manual", "CODE_SIGN_IDENTITY=-", "DEVELOPMENT_TEAM=", "ENABLE_CODE_COVERAGE=NO", "test"]
         if not explicit_results:
             command += ["-resultBundlePath", str(results)]
@@ -101,7 +91,7 @@ def run_tests(selection, extra, verbose=False):
             total = summary.get("totalTestCount")
             skipped = summary.get("skippedTests", 0)
             if type(total) is not int or type(skipped) is not int or total - skipped <= 0:
-                raise RuntimeError("No tests executed. Check TEST_FILTER or TEST_SHARD; Swift Testing method identifiers include parentheses, such as method(_:).")
+                raise RuntimeError("No tests executed. Check TEST_FILTER; Swift Testing method identifiers include parentheses, such as method(_:).")
             executed = styled(str(total - skipped), "success")
             skipped_text = styled(str(skipped), "warning" if skipped else "muted")
             progress.message(f"Tests executed: {executed}; skipped: {skipped_text}.")
@@ -294,17 +284,6 @@ def print_failure_summary(path, reported=()):
         for text in diagnostics if found else tail:
             console_message(text[:800], "failure")
     console_message(f"Full diagnostics: {path}", "muted")
-
-
-def test_selection(test_filter, shard):
-    if shard is None:
-        return [f"-only-testing:{test_filter}"]
-    console_message(f"Test shard: {shard}/{len(TEST_SHARDS) + 1}", "active")
-    if shard <= len(TEST_SHARDS):
-        return [f"-only-testing:ModuDesktopTests/{suite}" for suite in TEST_SHARDS[shard - 1]]
-    return ["-only-testing:ModuDesktopTests"] + [
-        f"-skip-testing:ModuDesktopTests/{suite}" for group in TEST_SHARDS for suite in group
-    ]
 
 
 def test_environment(directory, suite):
