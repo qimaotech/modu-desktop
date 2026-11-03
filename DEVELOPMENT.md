@@ -116,7 +116,7 @@
 ### 版本生成与本地准备
 
 - [generate_version.sh](script/generate_version.sh) 从 [Version.xcconfig](Version.xcconfig) 生成 Core 的 `ModuVersion`，App Info.plist 与 CLI 的 `--version` 使用同一配置；DMG 文件名随产品版本生成。
-- 版本选择、格式、构建号递增、CHANGELOG 收录、暂存提交及 tag 授权、失败续跑按 [发布流程](.agents/skills/modu-desktop-release/SKILL.md) 执行，仅在用户显式调用该流程时运行完整步骤。
+- 版本选择、格式、构建号递增、CHANGELOG 收录、暂存提交及 tag 授权、失败续跑按 [发布流程](.agents/skills/release-modu-desktop/SKILL.md) 执行，仅在用户显式调用该流程时运行完整步骤。
 
 | 任务 | 命令 |
 | --- | --- |
@@ -139,7 +139,7 @@
 | 提示词 | 实现核对入口 |
 | --- | --- |
 | [内置工作流 SKILL.md](ModuDesktop/Resources/modu-workflow/SKILL.md)、[openai.yaml](ModuDesktop/Resources/modu-workflow/agents/openai.yaml) | `ModuCLI/Commands/` 与 Core 的操作结果 |
-| [发布 SKILL.md](.agents/skills/modu-desktop-release/SKILL.md)、[openai.yaml](.agents/skills/modu-desktop-release/agents/openai.yaml) | `Version.xcconfig`、`script/release_notes.py` 和 `.github/workflows/ci.yml` |
+| [发布 SKILL.md](.agents/skills/release-modu-desktop/SKILL.md)、[openai.yaml](.agents/skills/release-modu-desktop/agents/openai.yaml) | `Version.xcconfig`、`script/release_notes.py` 和 `.github/workflows/ci.yml` |
 
 - 详细规则维护单一来源，其他入口保留摘要与引用；完整参数说明引用 CLI `--help` 或脚本，发布说明的收录标准维护在发布流程中。
 - 纯文档或提示词改动检查路径、命令、交叉引用及 `git diff --check`。

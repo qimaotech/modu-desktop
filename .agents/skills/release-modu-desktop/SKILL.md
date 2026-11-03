@@ -1,9 +1,9 @@
 ---
-name: modu-desktop-release
-description: Update the Modu Desktop version and CHANGELOG, then create a local release commit and Git tag, only when explicitly invoked as $modu-desktop-release.
+name: release-modu-desktop
+description: Update the Modu Desktop version and CHANGELOG, then create a local release commit and Git tag, only when explicitly invoked as $release-modu-desktop.
 ---
 
-# Modu Desktop Release
+# Release Modu Desktop
 
 ## Scope and entry points
 
