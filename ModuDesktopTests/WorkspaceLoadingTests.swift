@@ -433,12 +433,22 @@ import SwiftUI
     @Test func maintenanceRefreshesStatusesWithoutDiscardingWarmPreparation() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         let trace = fixture.directory.appending(path: "maintenance-read-trace")
+        try #require(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try #require(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        try #require(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        // Start record monitoring after the fixture has its final membership.
         let model = try await makeModel(fixture, trace: trace)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         let member = Resource.member("feature", "repo")
+        let readState = {
+            let detail = model.workspace.detail
+            return """
+            loading=\(model.workspace.detailLoading), preload=\(model.workspace.detailPreloadTask != nil), summary=\(detail.summary != nil), \
+            changes=\(String(describing: detail.changes?.map(\.path))), changesError=\(String(describing: detail.changesError)), \
+            summaryError=\(String(describing: detail.summaryError)), member=\(String(describing: model.workspace.state(for: member)))
+            """
+        }
         let originalBusyChange = model.operations.onBusyChange
         var gate: ReloadValidationGate?
         var maintenance: Task<Void, Never>?
@@ -447,7 +457,7 @@ import SwiftUI
             model.workspace.record = record
             model.workspace.selection = .repository("repo")
             model.workspace.setVisibleResources([.repository("repo"), member], in: record.root)
-            try await waitUntil {
+            try await waitUntil(diagnostics: "Initial clean state: \(readState())") {
                 !model.workspace.detailLoading && model.workspace.detail.summary != nil
                     && model.workspace.detail.changes?.isEmpty == true && model.workspace.detail.changesError == nil
                     && model.workspace.detail.summaryError == nil && model.workspace.state(for: member)?.dirty == false
@@ -468,7 +478,7 @@ import SwiftUI
             try Data("member change".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
             try gate!.resume()
             await maintenance?.value
-            try await waitUntil {
+            try await waitUntil(diagnostics: "Refreshed state after maintenance: \(readState())") {
                 model.workspace.detail.changes?.map(\.path) == ["main.txt"]
                     && model.workspace.state(for: member)?.dirty == true
                     && !model.workspace.detailLoading && model.workspace.detailPreloadTask == nil
@@ -1668,10 +1678,11 @@ import SwiftUI
         throw ModuError("test-timeout", "Workspace reload did not acquire its read lock.")
     }
 
-    private func waitUntil(_ condition: () -> Bool) async throws {
+    private func waitUntil(diagnostics: @autoclosure () -> String = "", sourceLocation: SourceLocation = #_sourceLocation,
+                           _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try #require(condition())
+        try #require(condition(), "\(diagnostics())", sourceLocation: sourceLocation)
     }
 }
 
