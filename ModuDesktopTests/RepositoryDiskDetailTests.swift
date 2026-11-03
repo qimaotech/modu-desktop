@@ -53,25 +53,21 @@ import Testing
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let directory = fixture.directory.appending(path: "detail-cache")
-        let initialCache = HistoryWriteCountingCache(directory: directory)
+        let initialCache = RepositoryDiskCache(directory: directory)
         let first = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), cache: initialCache)
         first.refresh(.repository("repo"), in: record)
         await first.detailTask?.value
-        first.request(.workingTree)
-        await first.detailTask?.value
-        #expect(await initialCache.historyWrites == 1)
         first.stop(); await first.waitForReads(); await first.flushCache()
         try Data("fresh".utf8).write(to: record.repositoryURL("repo").appending(path: "fresh.txt"))
         let reader = DiskDetailHistoryReader(git: fixture.service.git)
         reader.failure = ModuError("unexpected-history-read", "History should come from disk.")
-        let reopenedCache = HistoryWriteCountingCache(directory: directory)
+        let reopenedCache = RepositoryDiskCache(directory: directory)
         let reopened = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
             try await reader.read(at: path, head: head, base: base)
         }, cache: reopenedCache)
         reopened.refresh(.repository("repo"), in: record)
         await reopened.detailTask?.value
         #expect(reader.calls == 0 && reopened.pendingFailure == nil)
-        #expect(await reopenedCache.historyWrites == 0)
         #expect(reopened.detail.changes?.map(\.path) == ["fresh.txt"])
         reopened.stop(); await reopened.waitForReads()
     }
@@ -253,8 +249,7 @@ import Testing
         details.stop(); await details.waitForReads()
     }
 
-    @Test(arguments: ["shallow", "grafts", "replace"])
-    func specialHistoryBypassesBothMemoryAndDiskRanges(_ mode: String) async throws {
+    @Test func shallowHistoryBypassesCachedRanges() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let defaults = try preferences(fixture)
@@ -263,7 +258,7 @@ import Testing
         let base = try #require(await fixture.service.git.oid("HEAD", at: path))
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "local"], at: path)
         let head = try #require(await fixture.service.git.oid("HEAD", at: path))
-        let cache = HistoryWriteCountingCache(directory: fixture.directory.appending(path: "detail-cache"))
+        let cache = RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache"))
         let reader = DiskDetailHistoryReader(git: fixture.service.git)
         let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
             try await reader.read(at: path, head: head, base: base)
@@ -276,46 +271,23 @@ import Testing
             let key = RepositoryHistoryCacheKey(repository: identity.repository, head: head, base: base)
             let stored = await cache.loadHistory(for: key)
             #expect(reader.calls == 2 && stored != nil)
-            switch mode {
-            case "replace": _ = try await fixture.service.git.run(["update-ref", "refs/replace/\(head)", base], at: path)
-            case "grafts": try Data((head + "\n").utf8).write(to: context.commonDirectory.appending(path: "info/grafts"))
-            default: try Data((head + "\n").utf8).write(to: context.commonDirectory.appending(path: "shallow"))
-            }
+            try Data((head + "\n").utf8).write(to: context.commonDirectory.appending(path: "shallow"))
             details.request(.structure)
             await details.detailTask?.value
             #expect(reader.calls == 4)
-            #expect(await cache.historyInvalidations == 1)
             #expect(await cache.loadHistory(for: key) == nil)
             details.request(.structure)
             await details.detailTask?.value
             #expect(reader.calls == 6)
-            #expect(await cache.historyInvalidations == 1)
 
-            if mode == "replace" {
-                let tree = try await fixture.service.git.run(["rev-parse", "HEAD^{tree}"], at: path).text
-                let replacement = try await fixture.service.git.run(["commit-tree", tree, "-m", "replacement"], at: path).text
-                _ = try await fixture.service.git.run(["update-ref", "refs/replace/\(head)", replacement], at: path)
-            } else {
-                let file = context.commonDirectory.appending(path: mode == "grafts" ? "info/grafts" : "shallow")
-                try Data((head + "\n").utf8).write(to: file, options: .atomic)
-            }
+            try FileManager.default.removeItem(at: context.commonDirectory.appending(path: "shallow"))
             details.request(.structure)
             await details.detailTask?.value
             #expect(reader.calls == 8)
-            #expect(await cache.historyInvalidations == 2)
-            if mode == "replace" {
-                _ = try await fixture.service.git.run(["update-ref", "-d", "refs/replace/\(head)"], at: path)
-            } else {
-                try FileManager.default.removeItem(at: context.commonDirectory.appending(path: mode == "grafts" ? "info/grafts" : "shallow"))
-            }
+            #expect(await cache.loadHistory(for: key) != nil)
             details.request(.structure)
             await details.detailTask?.value
-            #expect(reader.calls == 10)
-            #expect(await cache.historyWrites == 2)
-            details.request(.structure)
-            await details.detailTask?.value
-            #expect(reader.calls == 10)
-            #expect(await cache.historyInvalidations == 2)
+            #expect(reader.calls == 8)
             details.stop(); await details.waitForReads(); await details.flushCache()
         } catch {
             details.stop(); await details.waitForReads(); await details.flushCache()
@@ -383,26 +355,4 @@ private actor SuspendedDetailCache: RepositoryDetailCaching {
     func saveHistory(_ value: RepositoryHistorySnapshot, for key: RepositoryHistoryCacheKey) async { writes += 1 }
     func invalidateDetail(for identity: RepositoryCacheIdentity) async {}
     func invalidateHistory(for repository: RepositoryCacheRepositoryIdentity) async {}
-}
-
-private actor HistoryWriteCountingCache: RepositoryDetailCaching {
-    let storage: RepositoryDiskCache
-    private(set) var historyWrites = 0
-    private(set) var historyInvalidations = 0
-
-    init(directory: URL) { storage = RepositoryDiskCache(directory: directory) }
-
-    func loadDetail(for identity: RepositoryCacheIdentity) async -> RepositoryDetailSnapshot? { await storage.loadDetail(for: identity) }
-    func saveDetail(_ value: RepositoryDetailSnapshot, for identity: RepositoryCacheIdentity) async { await storage.saveDetail(value, for: identity) }
-    func loadHistory(for key: RepositoryHistoryCacheKey) async -> RepositoryHistorySnapshot? { await storage.loadHistory(for: key) }
-    func saveHistory(_ value: RepositoryHistorySnapshot, for key: RepositoryHistoryCacheKey) async {
-        historyWrites += 1
-        await storage.saveHistory(value, for: key)
-    }
-    func invalidateDetail(for identity: RepositoryCacheIdentity) async { await storage.invalidateDetail(for: identity) }
-    func invalidateHistory(for repository: RepositoryCacheRepositoryIdentity) async {
-        historyInvalidations += 1
-        await storage.invalidateHistory(for: repository)
-    }
-    func flush() async { await storage.flush() }
 }

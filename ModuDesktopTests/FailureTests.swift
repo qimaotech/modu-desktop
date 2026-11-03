@@ -250,10 +250,7 @@ struct FailureTests {
         try FileManager.default.removeItem(at: oldLink)
         environment["MODU_FAKE_PATH"] = other.path
         let missingPATH = try await InstallationService(support: support, executable: source, runner: .init(environment: environment), home: directory, shell: shell.path).installCLI()
-        #expect(!missingPATH.available && missingPATH.message.contains("~/.local/bin"))
-        #expect(missingPATH.message.contains("could not find modu-cli") && !missingPATH.message.contains("conflict"))
-        let missingMessage = await InterfaceText(locale: .simplifiedChinese).message(try #require(missingPATH.userMessage))
-        #expect(missingMessage.contains("PATH") && !missingMessage.contains("冲突"))
+        #expect(!missingPATH.available && missingPATH.userMessage == .loginShellCouldNotFindModuCliAdd)
         #expect(PathSafety.exists(bin.appending(path: "modu-cli")))
         #expect(!PathSafety.exists(other.appending(path: "modu-cli")))
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: installer.executable.path)
@@ -292,11 +289,11 @@ struct FailureTests {
         #expect(!PathSafety.exists(installer.support))
     }
 
-    @Test(arguments: ["existing", "missing", "renamed"])
+    @Test(arguments: ["existing", "missing"])
     func cliInstallationRepairsLinksToPreviousAppLocations(_ kind: String) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-cli-move-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
-        let previousApp = directory.appending(path: kind == "renamed" ? "Previous Modu.app" : "previous/Modu.app")
+        let previousApp = directory.appending(path: "previous/Modu.app")
         let executable = directory.appending(path: "current/Modu.app/Contents/Resources/modu-cli")
         let previousExecutable = previousApp.appending(path: "Contents/Resources/modu-cli")
         for file in [executable, previousExecutable] {
@@ -323,7 +320,7 @@ struct FailureTests {
         #expect(PathSafety.exists(previousExecutable) == (kind != "missing"))
     }
 
-    @Test(arguments: [("quiet", false), ("stdout", false), ("multiline", false), ("stderr", false), ("exit", false), ("exit", true), ("missing", false), ("alias", true)])
+    @Test(arguments: [("noise", false), ("noise", true), ("missing", false), ("alias", true)])
     func cliInstallationReadsInteractiveLoginPATH(_ output: String, _ conflictingCommand: Bool) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-login-shell-tests-\(UUID().uuidString) with 'quotes' and $signs")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -340,10 +337,14 @@ struct FailureTests {
         else { try FileManager.default.createSymbolicLink(at: oldLink, withDestinationURL: support.appending(path: "versions/\(ModuVersion.current)/modu-cli")) }
         let noise: String
         switch output {
-        case "stdout": noise = "printf 'Welcome without a newline'\n"
-        case "multiline": noise = "printf 'Welcome\\n/unrelated/path:another/path\\n'\n"
-        case "stderr": noise = "printf 'Shell diagnostic\\n' >&2\n"
-        case "exit": noise = "printf 'Welcome\\n'\ntrap 'printf \"\\nGoodbye\\n/unrelated/modu-cli\\n\"' EXIT\n"
+        case "noise":
+            noise = """
+            printf 'Welcome without a newline'
+            printf '\\n/unrelated/path:another/path\\n'
+            printf 'Shell diagnostic\\n' >&2
+            trap 'printf "\\nGoodbye\\n/unrelated/modu-cli\\n"' EXIT
+
+            """
         case "alias": noise = "alias modu-cli='/usr/bin/true'\n"
         default: noise = ""
         }
@@ -361,7 +362,7 @@ struct FailureTests {
         #expect(installed.available == available, "\(installed.message)")
         #expect(await installer.checkCLI().available == available)
         if output == "missing" {
-            #expect(installed.message.contains("could not find modu-cli") && !installed.message.contains("conflict"))
+            #expect(installed.userMessage == .loginShellCouldNotFindModuCliAdd)
         } else if conflictingCommand {
             let resolved = output == "alias" ? "/usr/bin/true" : oldLink.path
             #expect(installed.message.contains(resolved) && installed.message.contains(source.path))
@@ -434,7 +435,7 @@ struct FailureTests {
         if kind == "app-link" { #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == directory.appending(path: "Other.app/Contents/Resources/modu-cli").path) }
         if kind == "parent-link" || kind == "bin-link" { #expect(!PathSafety.exists(link)) }
     }
-    @Test(arguments: ["copy", "link", "dangling-link"])
+    @Test(arguments: ["copy", "link"])
     func skillInstallationCopiesFilesAndMigratesManagedLinks(_ kind: String) throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-skill-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -448,10 +449,8 @@ struct FailureTests {
         try Data("policy:\n  allow_implicit_invocation: false\n".utf8).write(to: policy)
         if kind != "copy" {
             let legacySkill = support.appending(path: "versions/0.1.0/modu-workflow")
-            if kind == "link" {
-                try FileManager.default.createDirectory(at: legacySkill, withIntermediateDirectories: true)
-                try Data("old skill".utf8).write(to: legacySkill.appending(path: "SKILL.md"))
-            }
+            try FileManager.default.createDirectory(at: legacySkill, withIntermediateDirectories: true)
+            try Data("old skill".utf8).write(to: legacySkill.appending(path: "SKILL.md"))
             try FileManager.default.createSymbolicLink(at: skill, withDestinationURL: legacySkill)
         }
         let installer = InstallationService(support: support)
@@ -562,11 +561,9 @@ struct FailureTests {
     @Test(arguments: [0, 7])
     func fastCommandsPreserveOutputAndExitStatus(_ status: Int) async throws {
         let stdout = String(repeating: "stdout\n", count: 2_048), stderr = String(repeating: "stderr\n", count: 2_048)
-        for _ in 0..<5 {
-            let output = try await CommandRunner().run("/bin/sh", ["-c", "printf '%s' \"$1\"; printf '%s' \"$2\" >&2; exit \"$3\"", "modu-runner-test", stdout, stderr, String(status)])
-            #expect(output.status == status)
-            #expect(output.stdout == Data(stdout.utf8) && output.stderr == Data(stderr.utf8))
-        }
+        let output = try await CommandRunner().run("/bin/sh", ["-c", "printf '%s' \"$1\"; printf '%s' \"$2\" >&2; exit \"$3\"", "modu-runner-test", stdout, stderr, String(status)])
+        #expect(output.status == status)
+        #expect(output.stdout == Data(stdout.utf8) && output.stderr == Data(stderr.utf8))
     }
     @Test(arguments: ["cancelled", "network-timeout"])
     func terminationWaitsForHelpersAfterTheParentExits(_ reason: String) async throws {

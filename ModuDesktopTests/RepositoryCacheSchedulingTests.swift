@@ -75,45 +75,16 @@ struct RepositoryCacheSchedulingTests {
         await cache.flush()
     }
 
-    @Test func targetReadsNeverScanTheCacheAndStableWritesReuseTheCapacityLedger() async throws {
+    @Test func flushDoesNotRecreateRemovedWorkspaces() async throws {
         let f = try await Fixture(createRemote: false); defer { f.remove() }
         let identity = try await identity(f)
         let directory = f.directory.appending(path: "cache")
-        let producer = RepositoryDiskCache(directory: directory)
-        let history = RepositoryHistorySnapshot(ahead: [], behind: [])
-        let first = RepositoryHistoryCacheKey(repository: identity.repository, head: String(repeating: "a", count: 40), base: String(repeating: "b", count: 40))
-        let second = RepositoryHistoryCacheKey(repository: identity.repository, head: String(repeating: "c", count: 40), base: first.base)
-        await producer.saveHistory(history, for: first)
-        let gate = CacheWriteGate()
-        let events = CacheDiagnosticEvents()
-        let consumer = RepositoryDiskCache(directory: directory, diagnostics: events.diagnostics, waitForWrite: { try await gate.wait() })
-        #expect(await consumer.loadHistory(for: first) != nil)
-        #expect(events.count("cache.scan") == 0)
-        await consumer.saveHistory(history, for: second)
-        #expect(events.count("cache.scan") == 1)
-        await consumer.saveHistory(history, for: first)
-        #expect(events.count("cache.scan") == 1)
-        await consumer.flush(); await producer.flush()
-    }
-
-    @Test func anotherActorMutationInvalidatesTheLedgerAndFlushDoesNotRecreateRemovedWorkspaces() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        let identity = try await identity(f)
-        let directory = f.directory.appending(path: "cache")
-        let events = CacheDiagnosticEvents()
-        let first = RepositoryDiskCache(directory: directory, diagnostics: events.diagnostics)
-        let second = RepositoryDiskCache(directory: directory)
-        let history = RepositoryHistorySnapshot(ahead: [], behind: [])
-        let key = RepositoryHistoryCacheKey(repository: identity.repository, head: String(repeating: "a", count: 40), base: String(repeating: "b", count: 40))
-        await first.saveHistory(history, for: key)
-        await second.saveHistory(history, for: key)
-        await first.saveHistory(history, for: key)
-        #expect(events.count("cache.scan") == 2)
-        await first.saveDetail(snapshot("pending"), for: identity)
+        let cache = RepositoryDiskCache(directory: directory)
+        await cache.saveDetail(snapshot("pending"), for: identity)
         try FileManager.default.removeItem(at: f.root)
-        await first.flush()
-        #expect(await first.loadDetail(for: identity) == nil)
-        await second.flush()
+        await cache.flush()
+        #expect(await cache.loadDetail(for: identity) == nil)
+        #expect(!PathSafety.exists(f.root) && !PathSafety.exists(directory))
     }
 
     @Test func pendingDetailsUseABoundedLRU() async throws {

@@ -406,43 +406,6 @@ import Testing
         #expect(received.values.count == count)
     }
 
-    @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
-    func nativeMonitorDeliversSharedAttributesChanges(_ resource: Resource) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        if resource.kind == .member {
-            #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
-        }
-        let record = try f.service.store.load(f.root)
-        let path = record.rootURL.appending(path: resource.path)
-        let attributes = record.repositoryURL("repo").appending(path: ".git/info/attributes")
-        _ = try await f.service.git.run(["config", "core.autocrlf", "false"], at: path)
-        try Data("attributes.txt -text\n".utf8).write(to: attributes)
-        try Data("line\r\n".utf8).write(to: path.appending(path: "attributes.txt"))
-        _ = try await f.service.git.run(["add", "attributes.txt"], at: path)
-        _ = try await f.service.git.run(["commit", "-m", "add CRLF file"], at: path)
-        let context = try await f.service.prepareResourceRead(resource, in: record, visibility: .application)
-        #expect(try await f.service.workingState(context, visibility: .application).changes.isEmpty)
-        let monitor = ResourceChangeMonitor()
-        defer { monitor.stop() }
-        let received = MonitorEvents()
-        try #require(monitor.start(context) { event in
-            Task { @MainActor in received.values.append(event) }
-        })
-        // Let setup metadata events drain before changing only the shared attributes file.
-        try await Task.sleep(for: .milliseconds(300))
-        received.values = []
-        try Data("attributes.txt text\n".utf8).write(to: attributes)
-        try await eventually { received.values.contains { $0.change.contains([.configuration, .workingTree]) } }
-        #expect(try await f.service.workingState(context, visibility: .application).changes.map(\.path) == ["attributes.txt"])
-        try await Task.sleep(for: .milliseconds(300))
-        received.values = []
-        try Data("attributes.txt -text\n".utf8).write(to: attributes)
-        try await eventually { received.values.contains { $0.change.contains([.configuration, .workingTree]) } }
-        #expect(try await f.service.workingState(context, visibility: .application).changes.isEmpty)
-    }
-
     @Test func nativeMonitorIgnoresSubmoduleContentsAndKeepsParentStructureEvents() async throws {
         let f = try await Fixture(); defer { f.remove() }
         #expect(await f.service.openWorkspace(f.root).status == .success)

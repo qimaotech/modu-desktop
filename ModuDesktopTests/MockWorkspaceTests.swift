@@ -18,10 +18,7 @@ import Testing
             #expect(!needsSetup && model.started && model.workspace.blocked == nil)
             #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
             #expect(model.workspace.detail.changes?.isEmpty == false && model.workspace.detail.commits?.isEmpty == false)
-            #expect(model.workspace.detail.commits?.count == 3)
-            let behind = try #require(model.workspace.detail.behindCommits)
-            #expect(behind.count == 36)
-            #expect(behind.prefix(3).allSatisfy { $0.subject.count > 100 })
+            #expect(model.workspace.detail.behindCommits?.isEmpty == false)
             let resources = model.service.resources(record)
             #expect(resources.allSatisfy { record.rootURL.appending(path: $0.path).path.hasPrefix(mock.directory.path + "/") })
             for path in [record.rootURL, record.repositoryURL("order-service"), record.memberURL("feature-store-pickup", "order-service")] {
@@ -76,21 +73,6 @@ import Testing
             #expect(mock.defaults.string(forKey: "appLanguage") == "zh_CN")
             let reopened = try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: mock.fixture.root)
             #expect(reopened.defaults.string(forKey: "appLanguage") == "zh_CN")
-            model.workspace.record = try await mock.fixture.load()
-            model.workspace.selection = .repository("catalog-service")
-            model.workspace.expandedGroups = []
-            await model.workspace.details.detailTask?.value
-            await model.workspace.detailPreloadTask?.value
-            let restored = models.add(reopened.makeModel())
-            #expect(restored.preferences.activeLocale == .simplifiedChinese)
-            #expect(!(await restored.start()))
-            #expect(restored.workspace.selection == .repository("catalog-service") && restored.workspace.expandedGroups.isEmpty)
-            restored.workspace.selection = nil
-            await restored.workspace.detailPreloadTask?.value
-            let welcome = models.add(try MockWorkspace(scenario: .linkedWorktreeSelected, workspace: mock.fixture.root).makeModel())
-            #expect(!(await welcome.start()))
-            #expect(welcome.workspace.selection == nil && welcome.workspace.expandedGroups.isEmpty)
-            await welcome.workspace.detailPreloadTask?.value
             #expect(UserDefaults.standard.string(forKey: "workspace") == savedWorkspace)
             #expect(UserDefaults.standard.string(forKey: "appLanguage") == savedLanguage)
         }

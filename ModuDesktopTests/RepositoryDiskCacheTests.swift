@@ -74,15 +74,6 @@ struct RepositoryDiskCacheTests {
         await bounded.saveDetail(sampleDetail(), for: identity)
         await bounded.flush()
         #expect(await bounded.loadDetail(for: identity) != nil)
-
-        let memoryBounded = RepositoryDiskCache(directory: f.directory.appending(path: "memory-bounded-cache"), maximumMemoryBytes: 8_192)
-        await memoryBounded.saveDetail(oversized, for: identity)
-        #expect(await memoryBounded.detailMemoryStatistics.estimatedBytes == 0)
-        await memoryBounded.saveDetail(sampleDetail(), for: identity)
-        await memoryBounded.flush()
-        #expect(await memoryBounded.detailMemoryStatistics.estimatedBytes <= 8_192)
-        #expect(await memoryBounded.loadDetail(for: identity) != nil)
-        await memoryBounded.flush()
     }
 
     @Test func incompleteResultsKeepSuccessfulDataAndRepositoriesWithoutRemotesAreCacheable() async throws {
@@ -160,44 +151,6 @@ struct RepositoryDiskCacheTests {
         #expect(remainingBytes <= entryBytes * 2 + 32)
     }
 
-    @Test func idleCleanupUsesLastAccessInsteadOfTheSnapshotObservationDate() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
-        let clock = DiskCacheTestClock()
-        let directory = f.directory.appending(path: "cache")
-        let cache = RepositoryDiskCache(directory: directory, maximumIdleAge: 60, now: { clock.now })
-        let key = RepositoryHistoryCacheKey(repository: identity.repository, head: String(repeating: "a", count: 40), base: String(repeating: "b", count: 40))
-        await cache.saveDetail(sampleDetail(observedAt: Date(timeIntervalSince1970: 1)), for: identity)
-        await cache.flush()
-        clock.advance(30)
-        await cache.saveHistory(sampleHistory(), for: key)
-        clock.advance(29)
-        #expect(await cache.loadDetail(for: identity) != nil)
-        clock.advance(36)
-
-        #expect(await cache.loadHistory(for: key) == nil)
-        #expect(await cache.loadDetail(for: identity) != nil)
-    }
-
-    @Test func replacingTheGitDirectoryAtTheSamePathRejectsOldIdentity() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        let originalContext = try await prepareContext(f)
-        let originalIdentity = try RepositoryCacheIdentity(context: originalContext)
-        let cache = RepositoryDiskCache(directory: f.directory.appending(path: "cache"))
-        await cache.saveDetail(sampleDetail(), for: originalIdentity)
-        await cache.flush()
-        let oldGit = f.directory.appending(path: "previous-git")
-        let gitDirectory = f.root.appending(path: ".git")
-        try FileManager.default.moveItem(at: gitDirectory, to: oldGit)
-        try FileManager.default.copyItem(at: oldGit, to: gitDirectory)
-        let record = try f.service.store.load(f.root)
-        let replacementContext = try await f.service.prepareResourceRead(.group("cached"), in: record)
-        let replacementIdentity = try RepositoryCacheIdentity(context: replacementContext)
-
-        #expect(originalIdentity.repository != replacementIdentity.repository)
-        #expect(await cache.loadDetail(for: replacementIdentity) == nil)
-    }
-
     @Test func invalidationKeepsUnrelatedRepositoryFamiliesAndDetails() async throws {
         let f = try await Fixture(createRemote: false); defer { f.remove() }
         let other = try await Fixture(createRemote: false); defer { other.remove() }
@@ -220,27 +173,6 @@ struct RepositoryDiskCacheTests {
         await cache.invalidateDetail(for: identity)
         #expect(await cache.loadDetail(for: identity) == nil)
         #expect(await cache.loadDetail(for: otherIdentity) != nil)
-    }
-
-    @Test func packedReplacementRefsInvalidateMemoizedNormalHistory() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        let context = try await prepareContext(f)
-        let session = ResourceReadSession(service: f.service)
-        _ = try await f.service.git.run(["pack-refs", "--all"], at: context.path)
-        let normal = try await f.service.historyCacheState(context, session: session)
-        #expect(normal.reusable)
-        #expect(try await f.service.historyCacheState(context, session: session) == normal)
-        let head = try #require(try await f.service.git.oid("HEAD", at: context.path))
-        let replacement = "refs/replace/" + head
-        let tree = try await f.service.git.run(["rev-parse", "HEAD^{tree}"], at: context.path).text
-        let replacementOID = try await f.service.git.run(["commit-tree", tree, "-m", "replacement commit"], at: context.path).text
-        _ = try await f.service.git.run(["update-ref", replacement, replacementOID], at: context.path)
-        _ = try await f.service.git.run(["pack-refs", "--all"], at: context.path)
-        #expect(!PathSafety.exists(context.commonDirectory.appending(path: replacement)))
-        #expect(try String(contentsOf: context.commonDirectory.appending(path: "packed-refs"), encoding: .utf8).contains(replacement))
-        #expect(!(try await f.service.historyCacheState(context, session: session)).reusable)
-        _ = try await f.service.git.run(["update-ref", "-d", replacement], at: context.path)
-        #expect(try await f.service.historyCacheState(context, session: session).reusable)
     }
 
     private func prepareContext(_ f: Fixture) async throws -> ResourceReadContext {

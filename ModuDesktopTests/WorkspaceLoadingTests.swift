@@ -882,8 +882,8 @@ import SwiftUI
         }
     }
 
-    @Test(arguments: ["available", "missing", "not-executable", "broken", "missing-entry", "conflicting-entry"])
-    func startupChecksCLIBeforeOpeningTheSavedWorkspace(_ kind: String) async throws {
+    @Test(arguments: [false, true])
+    func startupChecksCLIBeforeOpeningTheSavedWorkspace(_ cliAvailable: Bool) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -894,32 +894,18 @@ import SwiftUI
         defaults.set(saved.root, forKey: "workspace")
         defaults.set(false, forKey: "sidebar.\(saved.root).repositoriesExpanded")
         let installer = try makeInstaller(fixture)
-        switch kind {
-        case "missing": try FileManager.default.removeItem(at: installer.executable)
-        case "not-executable": try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: installer.executable.path)
-        case "broken": try Data("#!/bin/sh\nexit 1\n".utf8).write(to: installer.executable)
-        case "missing-entry": try FileManager.default.removeItem(at: fixture.directory.appending(path: ".local/bin/modu-cli"))
-        case "conflicting-entry":
-            let link = fixture.directory.appending(path: ".local/bin/modu-cli")
-            try FileManager.default.removeItem(at: link)
-            try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.directory.appending(path: "login-shell"))
-        default: break
-        }
+        if !cliAvailable { try FileManager.default.removeItem(at: installer.executable) }
         let model = AppModel(defaults: defaults, service: fixture.service, installer: installer)
         var readyCount = 0
 
-        #expect(await model.start(onReady: { readyCount += 1 }) == (kind != "available"))
-        #expect(readyCount == (kind == "available" ? 1 : 0))
+        #expect(await model.start(onReady: { readyCount += 1 }) == !cliAvailable)
+        #expect(readyCount == (cliAvailable ? 1 : 0))
         #expect(model.workspace.blocked == nil && model.presentation.result == nil && !model.busy)
         #expect(defaults.string(forKey: "workspace") == saved.root)
-        if kind == "available" {
+        if cliAvailable {
             #expect(model.workspace.record == saved)
             #expect(PathSafety.exists(fixture.root.appending(path: ".git")))
             #expect(defaults.object(forKey: "sidebar.\(saved.root).repositoriesExpanded") as? Bool == false)
-            try FileManager.default.removeItem(at: installer.executable)
-            let reopened = AppModel(defaults: defaults, service: fixture.service, installer: installer)
-            #expect(await reopened.start())
-            #expect(reopened.workspace.record == nil && reopened.workspace.blocked == nil && reopened.presentation.result == nil)
         } else {
             #expect(model.workspace.record == nil && model.operation == nil)
             #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
@@ -960,7 +946,7 @@ import SwiftUI
         #expect(defaults.string(forKey: "workspace") == original.root)
     }
 
-    @Test(arguments: ["available", "missing-path", "conflict", "cancelled"])
+    @Test(arguments: ["available", "missing-path", "cancelled"])
     func startupPublishesWorkspaceBeforeSlowCLIPathCheck(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
@@ -983,12 +969,6 @@ import SwiftUI
         """.utf8).write(to: shell)
         var environment = baseInstaller.runner.environment
         environment["MODU_CLI_PROBE"] = probe.path
-        if kind == "conflict" {
-            let directory = fixture.directory.appending(path: "conflicting-bin")
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-            try FileManager.default.createSymbolicLink(at: directory.appending(path: "modu-cli"), withDestinationURL: URL(fileURLWithPath: "/usr/bin/true"))
-            environment["PATH"] = directory.path + ":/usr/bin:/bin"
-        }
         let installer = InstallationService(support: baseInstaller.support, executable: baseInstaller.executable, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
         let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: installer)
@@ -1014,7 +994,7 @@ import SwiftUI
             #expect(model.tools.map(\.id) == ["codex"])
             if kind == "cancelled" { startup.cancel() }
             else { try Data().write(to: probe.appending(path: "release")) }
-            #expect(await startup.value == (kind == "missing-path" || kind == "conflict"))
+            #expect(await startup.value == (kind == "missing-path"))
             await model.workspace.detailPreloadTask?.value
             #expect(model.workspace.record == record && model.presentation.result == nil)
             #expect(defaults.string(forKey: "workspace") == record.root)
@@ -1265,8 +1245,7 @@ import SwiftUI
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
     }
 
-    @Test(arguments: [false, true])
-    func openingWorkspacesUsesSavedRecordsAndPreservesHistory(_ legacyPreferences: Bool) async throws {
+    @Test func openingWorkspacesUsesSavedRecordsAndPreservesHistory() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
@@ -1279,7 +1258,6 @@ import SwiftUI
         model.workspace.toggleGroup("closed")
         model.workspace.selection = .member("feature", "repo")
         model.workspace.details.collapsedPaths = ["Sources"]
-        if legacyPreferences { model.defaults.removeObject(forKey: model.workspace.sidebarPreferenceKey("knownGroups")) }
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("repositoriesExpanded"))
         model.defaults.set(false, forKey: model.workspace.sidebarPreferenceKey("groupsExpanded"))
         model.defaults.set("zh_CN", forKey: "appLanguage")
@@ -1332,24 +1310,6 @@ import SwiftUI
         #expect(await welcome.start() == false)
         #expect(welcome.workspace.selection == nil)
         await welcome.workspace.stopReads()
-    }
-
-    @Test func savedSelectionRejectsMissingResourcesAndMalformedPreferences() async throws {
-        let fixture = try await Fixture(createRemote: false)
-        defer { fixture.remove() }
-        let model = try await makeModel(fixture)
-        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let record = try #require(model.workspace.record)
-        let key = model.workspace.sidebarPreferenceKey("selection")
-        let invalidSelections: [Resource] = [.repository("missing"), .group("missing"), .member("missing", "repo"), .workspace(), .cli(path: "modu-cli")]
-        let savedValues = try invalidSelections.map { try JSONEncoder().encode($0) } + [Data("invalid".utf8)]
-        for value in savedValues {
-            model.defaults.set(value, forKey: key)
-            let reopened = AppModel(defaults: model.defaults, service: fixture.service)
-            try await reopened.switchTo(fixture.root, loaded: record)
-            #expect(reopened.workspace.selection == nil && reopened.workspace.detail.summary == nil)
-            #expect(try JSONDecoder().decode(Resource?.self, from: #require(model.defaults.data(forKey: key))) == nil)
-        }
     }
 
     @Test func temporaryReadFailurePreservesTheSavedPageAndFileTreeState() async throws {

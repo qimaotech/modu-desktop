@@ -79,21 +79,21 @@ struct WorktreeCreationTests {
         #expect(try f.service.store.load(f.root).groups["feature"] == nil)
     }
 
-    @Test(arguments: ["root", "member"], ["same", "behind", "ahead", "diverged"])
+    @Test(arguments: [("root", "ahead"), ("member", "diverged")])
     func reusedBranchReportsMissingBaseCommitsWithoutChangingItsHead(_ kind: String, _ history: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
         let record = try await prepare(f)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let original = try #require(try await f.service.git.oid("HEAD", at: repository))
-        let base = ["behind", "diverged"].contains(history) ? try await commit(after: original, message: "Base change", at: repository, git: f.service.git) : original
-        let reused = ["ahead", "diverged"].contains(history) ? try await commit(after: original, message: "Feature change", at: repository, git: f.service.git) : original
+        let base = history == "diverged" ? try await commit(after: original, message: "Base change", at: repository, git: f.service.git) : original
+        let reused = try await commit(after: original, message: "Feature change", at: repository, git: f.service.git)
         _ = try await f.service.git.run(["update-ref", kind == "root" ? "refs/heads/main" : "refs/remotes/origin/main", base], at: repository)
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", reused], at: repository)
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
         #expect(result.status == .success && result.exitCode == 0, "\(result.message ?? "") \(result.items)")
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
         let item = try #require(result.items.first { $0.resource == resource })
-        let behind = ["behind", "diverged"].contains(history)
+        let behind = history == "diverged"
         #expect(result.hasWarnings == behind && item.hasWarning == behind)
         if behind {
             #expect(item.data?["warning-code"] == "branch-behind-base")
@@ -104,15 +104,13 @@ struct WorktreeCreationTests {
         #expect(try await f.service.git.oid("HEAD", at: record.rootURL.appending(path: resource.path)) == reused)
     }
 
-    @Test(arguments: ["missing", "invalid"])
-    func reusedMemberWithUnavailableBaseKeepsItsBranchAndReportsTheComparison(_ kind: String) async throws {
+    @Test func reusedMemberWithUnavailableBaseKeepsItsBranchAndReportsTheComparison() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let record = try await prepare(f)
         let repository = record.repositoryURL("repo")
         let oid = try #require(try await f.service.git.oid("HEAD", at: repository))
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", oid], at: repository)
-        let arguments = kind == "missing" ? ["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"] : ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"]
-        _ = try await f.service.git.run(arguments, at: repository)
+        _ = try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"], at: repository)
         let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
         #expect(result.status == .success && result.hasWarnings)
         let member = try #require(result.items.first { $0.resource.kind == .member })

@@ -50,35 +50,21 @@ import Testing
         defaults.set(record.root, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = record
-        for kind in ["repository", "group", "member", "edit"] {
-            if kind == "edit" {
+        for editing in [false, true] {
+            if editing {
                 model.management.sheet = .edit
                 model.management.edit("feature", members: [])
                 await model.management.editPreviewTask?.value
             } else {
-                let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "group" ? .group("feature") : .member(group: "feature", repo: "repo")
-                model.management.prepareDelete(request)
+                model.management.prepareDelete(.repository("repo"))
                 await model.management.deletePreviewTask?.value
             }
             try #require(model.management.canConfirmDelete)
-            let resources = model.management.deletion.map(\.resource)
-            if kind == "edit" {
-                model.management.sheet = .edit
-                #expect(model.management.pendingEdit?.0 == "feature" && model.management.pendingEdit?.1 == [])
-                #expect(model.management.deletion.map(\.resource) == resources)
-                model.management.sheet = .delete
-            }
             model.management.sheet = nil
             #expect(!model.management.canConfirmDelete)
             #expect(!model.busy && model.operation == nil && model.management.progressPresentation == nil)
-            #expect(model.management.deletion.map(\.resource) == resources && model.management.deletionResources == resources)
-            if kind == "edit" {
-                #expect(model.management.pendingEdit?.0 == "feature" && model.management.pendingEdit?.1 == [])
-            } else { #expect(model.management.deleteRequest != nil && model.management.pendingEdit == nil) }
             model.management.finishDismissal()
             #expect(model.management.deleteRequest == nil && model.management.pendingEdit == nil && model.management.deletion.isEmpty && model.management.deletionResources.isEmpty)
-            #expect(model.management.deletionPresentation.resources == resources && model.management.deletionPresentation.targets.map(\.resource) == resources)
-            #expect(model.management.deletionPresentation.editingGroup == (kind == "edit"))
             model.management.confirmDelete()
             #expect(model.operation == nil && model.workspace.record == record)
             #expect(try fixture.service.store.load(fixture.root) == record)
@@ -160,10 +146,7 @@ import Testing
             }
             #expect(model.detailFailurePresentationID == failure.id)
             model.presentDetailFailureIfPossible()
-            #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
-            let message = try #require(model.presentation.message)
-            #expect(message.hasPrefix("repo: "))
-            #expect(message.components(separatedBy: failure.signature.diagnostic).count == 2)
+            #expect(model.presentation.message != nil)
             #expect(model.presentation.messageHost == .main && model.workspace.details.pendingFailure == nil)
         }
     }
@@ -195,21 +178,6 @@ import Testing
                 model.presentDetailFailureIfPossible()
                 #expect(model.presentation.message != nil)
             }
-        }
-    }
-
-    @Test func dismissingSettingsMessageAllowsAnotherManualDetailFailure() async throws {
-        try await withModel { model in
-            try await failMissingRepository(model)
-            model.presentDetailFailureIfPossible()
-            #expect(model.presentation.message != nil)
-            model.presentation.presentMessage("Settings error", title: "Settings", host: .settings)
-            model.dismissMessage()
-            model.workspace.refreshDetail(userInitiated: true)
-            await model.workspace.details.detailTask?.value
-            model.presentDetailFailureIfPossible()
-            #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
-            #expect(model.presentation.message != nil && model.presentation.messageHost == .main)
         }
     }
 

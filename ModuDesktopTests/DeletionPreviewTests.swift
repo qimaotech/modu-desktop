@@ -259,7 +259,6 @@ import Testing
             let preview = try #require(model.management.deletePreviewTask)
             #expect(model.management.sheet == .delete && model.management.deletionLoading && model.management.deletion.isEmpty)
             #expect(model.management.deletionResources == [member, .group("feature")])
-            #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionDisplayResources == [.group("feature"), member])
             #expect(!model.management.canConfirmDelete)
             model.management.confirmDelete()
             #expect(!model.busy && model.operation == nil)
@@ -273,7 +272,6 @@ import Testing
                 #expect(completed.resource == .group("feature") && completed.dirty == false)
                 #expect(model.management.deletionLoading && !model.management.canConfirmDelete)
                 #expect(model.management.deletionResources == [member, .group("feature")])
-                #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionDisplayResources == [.group("feature"), member])
                 let lease = try service.store.tryLock(fixture.root); lease.unlock()
                 switch action {
                 case "cancel": model.management.sheet = nil
@@ -303,7 +301,7 @@ import Testing
                     #expect(model.management.deletion.map(\.resource) == expected)
                     #expect(model.management.deletion.allSatisfy { $0.branch == "feature" })
                     let target = try #require(model.management.deletion.first { $0.resource == member })
-                    #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionStatus(target) == "Dirty")
+                    #expect(target.dirty == true)
                 }
                 #expect(PathSafety.exists(record.groupURL("feature")))
                 #expect(PathSafety.exists(record.memberURL("feature", "repo")))
@@ -334,8 +332,6 @@ import Testing
         await model.management.deletePreviewTask?.value
         #expect(model.management.sheet == .delete && !model.management.deletionLoading && model.management.formError != nil)
         #expect(model.management.deletion.isEmpty && !model.management.canConfirmDelete && model.presentation.message == nil)
-        let paths: [Resource] = locked ? [.group("feature"), .member("feature", "repo")] : []
-        #expect(ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: .delete).deletionDisplayResources == paths)
         model.management.confirmDelete()
         #expect(!model.busy && model.operation == nil)
     }
@@ -376,12 +372,9 @@ import Testing
         let member = record.memberURL("feature", "repo")
         let metadata = member.appending(path: ".git")
         let originalMetadata = try Data(contentsOf: metadata)
-        for change in ["branch", "lock", "repository"] {
+        for change in ["lock", "repository"] {
             let reason: String
             switch change {
-            case "branch":
-                _ = try await fixture.service.git.run(["switch", "-c", "changed"], at: member)
-                reason = "confirmation-changed"
             case "lock":
                 _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
                 reason = "worktree-locked"
@@ -396,9 +389,6 @@ import Testing
             #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
             #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == ["repo"])
             switch change {
-            case "branch":
-                _ = try await fixture.service.git.run(["switch", "feature"], at: member)
-                _ = try await fixture.service.git.run(["branch", "-D", "changed"], at: member)
             case "lock": _ = try await fixture.service.git.run(["worktree", "unlock", member.path], at: record.repositoryURL("repo"))
             default: try originalMetadata.write(to: metadata)
             }

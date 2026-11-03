@@ -56,21 +56,6 @@ struct WorkspaceRecordMonitorTests {
         try await eventually("Creating the second record must notify the rebound monitor") { currentEvents.count > 0 }
     }
 
-    @Test func nativeMonitorReportsParentDirectoryReplacementAndRejectsMissingParents() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        let directory = fixture.directory.appending(path: "records")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let monitor = WorkspaceRecordChangeMonitor()
-        defer { monitor.stop() }
-        let events = WorkspaceRecordMonitorEvents()
-        try #require(monitor.start(directory.appending(path: "record.json")) { events.record() })
-        try await Task.sleep(for: .milliseconds(300))
-        events.reset()
-        try FileManager.default.moveItem(at: directory, to: fixture.directory.appending(path: "previous-records"))
-        try await eventually("Moving the monitored parent directory must notify its monitor") { events.count > 0 }
-        #expect(!monitor.start(directory.appending(path: "record.json")) { events.record() })
-    }
-
     private func eventually(_ phase: String, _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }

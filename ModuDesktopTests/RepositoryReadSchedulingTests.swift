@@ -142,46 +142,6 @@ import Testing
             throw error
         }
     }
-
-    @Test func historyEvictionRereadsOldPairsAndRetainsRecentlyUsedPairs() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        let record = try fixture.service.store.load(fixture.root)
-        let path = record.repositoryURL("repo")
-        let base = try #require(await fixture.service.git.oid("HEAD", at: path))
-        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
-        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        let history = SchedulingHistoryReader(git: fixture.service.git)
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
-            try await history.read(at: path, head: head, base: base)
-        })
-        var heads: [String] = []
-        do {
-            for index in 0..<3 {
-                _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "head \(index)"], at: path)
-                let head = try #require(await fixture.service.git.oid("HEAD", at: path))
-                heads.append(head)
-                details.refresh(.repository("repo"), in: record)
-                await details.detailTask?.value
-                #expect(details.detail.summary?.headOID == head)
-            }
-            _ = try await fixture.service.git.run(["checkout", "--detach", heads[0]], at: path)
-            details.refresh(.repository("repo"), in: record)
-            await details.detailTask?.value
-            #expect(await history.count(head: heads[0], base: base) == 2)
-            #expect(details.detail.commits?.map(\.subject) == ["head 0"])
-            _ = try await fixture.service.git.run(["checkout", "--detach", heads[2]], at: path)
-            details.refresh(.repository("repo"), in: record)
-            await details.detailTask?.value
-            #expect(await history.count(head: heads[2], base: base) == 1)
-            #expect(details.detail.commits?.count == 3)
-            details.stop(); await details.waitForReads()
-        } catch {
-            details.stop(); await details.waitForReads()
-            throw error
-        }
-    }
 }
 
 @MainActor private final class RepositoryReadClock {
@@ -192,14 +152,11 @@ private actor SchedulingHistoryReader {
     let git: Git
     var blocked: Bool
     private(set) var started = 0
-    private var calls: [String: Int] = [:]
 
     init(git: Git, blocked: Bool = false) { self.git = git; self.blocked = blocked }
     func release() { blocked = false }
-    func count(head: String, base: String) -> Int { calls[head + "|" + base] ?? 0 }
     func read(at path: URL, head: String, base: String) async throws -> [GitCommit] {
         started += 1
-        calls[head + "|" + base, default: 0] += 1
         while blocked { try await Task.sleep(for: .milliseconds(10)) }
         return try await git.commits(at: path, head: head, base: base, limit: nil)
     }

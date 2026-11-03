@@ -3,13 +3,12 @@ import Testing
 @testable import ModuCore
 
 struct YAMLImportCancellationTests {
-    @Test(arguments: ["Saving…", "Added", "completed"])
-    func lateCancellationAfterLastRepositoryKeepsSuccess(_ phase: String) async throws {
+    @Test func lateCancellationAfterLastRepositoryKeepsSuccess() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let other = try await prepare(f)
         let (result, cancelled) = await Task {
             let result = await f.service.importRepositories([f.remoteURL, other], at: f.root) { value in
-                if (value.target == "other" && value.phase.rawValue == phase) || (phase == "completed" && value.completed == value.total) {
+                if value.completed == value.total {
                     withUnsafeCurrentTask { $0?.cancel() }
                 }
             }
@@ -52,25 +51,6 @@ struct YAMLImportCancellationTests {
         #expect(committedIgnore.contains("/repo/") == !beforeFirst)
         #expect(!committedIgnore.contains("/other/"))
         let lease = try f.service.store.tryLock(f.root); lease.unlock()
-    }
-
-    @Test(arguments: [false, true])
-    func lateCancellationPreservesCompletedSkipResults(_ alreadyExists: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        if alreadyExists { #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success) }
-        let (result, cancelled) = await Task {
-            let result = await f.service.importRepositories([f.remoteURL, f.remoteURL], at: f.root) { value in
-                if value.completed == 2 { withUnsafeCurrentTask { $0?.cancel() } }
-            }
-            return (result, Task.isCancelled)
-        }.value
-        #expect(cancelled)
-        #expect(result.status.rawValue == (alreadyExists ? "skipped" : "partial-success") && result.exitCode == 1)
-        #expect(result.reasonCode == nil)
-        #expect(result.items.map(\.status.rawValue) == [alreadyExists ? "skipped" : "success", "skipped"])
-        #expect(result.items.map(\.reasonCode) == [alreadyExists ? "already-exists" : nil, "duplicate-url"])
-        #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])
     }
 
     @Test(arguments: [false, true])

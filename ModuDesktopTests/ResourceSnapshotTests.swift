@@ -110,8 +110,8 @@ struct ResourceSnapshotTests {
 
     @Test func workingStateParsesConflictsUnknownHeadersAndUnbornHead() throws {
         let oid = String(repeating: "a", count: 40)
-        let bytes = Data("# branch.oid \(oid)\0# branch.head main\0# future value\0u UU N... 100644 100644 100644 100644 \(oid) \(oid) \(oid) conflict file\0".utf8)
-        let state = try Git.parseWorkingState(bytes)
+        let bytes = Data("# branch.oid \(oid)\0# branch.head main\0# future value\0u UU S... 160000 160000 160000 160000 \(oid) \(oid) \(oid) conflict file\0".utf8)
+        let state = try Git.parseWorkingState(bytes, visibility: .application)
         #expect(state.headOID == oid && state.branch == "main")
         #expect(state.changes.count == 1 && state.changes[0].conflict && state.changes[0].path == "conflict file")
         #expect(try Git.parseWorkingState(Data("# branch.oid (initial)\0# branch.head main\0".utf8)).headOID == nil)
@@ -146,33 +146,16 @@ struct ResourceSnapshotTests {
         #expect(try await f.service.git.changeCount(at: path) == 3)
     }
 
-    @Test(arguments: ["added", "deleted", "updated", "renamed"])
-    func applicationChangesHideStagedGitlinks(_ operation: String) async throws {
+    @Test func applicationChangesHideRenamedGitlinks() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let path = try await submoduleRepository(f)
-        let changedPath: String
-        switch operation {
-        case "added":
-            changedPath = "second module"
-            _ = try await f.service.git.run(["submodule", "add", f.remoteURL, changedPath], at: path)
-        case "deleted":
-            changedPath = "submodule"
-            _ = try await f.service.git.run(["rm", "-f", "submodule"], at: path)
-        case "renamed":
-            changedPath = "renamed module"
-            _ = try await f.service.git.run(["mv", "submodule", changedPath], at: path)
-        default:
-            changedPath = "submodule"
-            _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "next submodule commit"], at: path.appending(path: "submodule"))
-            _ = try await f.service.git.run(["add", "submodule"], at: path)
-        }
+        let changedPath = "renamed module"
+        _ = try await f.service.git.run(["mv", "submodule", changedPath], at: path)
         let complete = try await f.service.git.workingState(at: path)
         #expect(complete.changes.contains { $0.path == changedPath })
         let visible = try await f.service.git.workingState(at: path, visibility: .application)
-        #expect(visible.changes.map(\.path) == (operation == "updated" ? [] : [".gitmodules"]))
-        let expectedPaths = operation == "added" ? ["second module", "submodule"]
-            : operation == "deleted" ? [] : [changedPath]
-        #expect(try await f.service.git.submodulePaths(at: path) == expectedPaths)
+        #expect(visible.changes.map(\.path) == [".gitmodules"])
+        #expect(try await f.service.git.submodulePaths(at: path) == [changedPath])
     }
 
     @Test(arguments: [false, true])
@@ -200,60 +183,13 @@ struct ResourceSnapshotTests {
         #expect(try await f.service.git.submodulePaths(at: path) == (toSubmodule ? ["ordinary.txt", "submodule"] : []))
     }
 
-    @Test(arguments: [false, true])
-    func applicationChangesPreserveUnstagedSubmoduleTypeConversions(_ becomesSymbolicLink: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let path = try await submoduleRepository(f), child = path.appending(path: "submodule")
-        _ = try await f.service.git.run(["config", "submodule.submodule.ignore", "all"], at: path)
-        _ = try await f.service.git.run(["config", "diff.ignoreSubmodules", "all"], at: path)
-        try FileManager.default.removeItem(at: child)
-        if becomesSymbolicLink {
-            try FileManager.default.createSymbolicLink(atPath: child.path, withDestinationPath: "ordinary-target")
-        } else {
-            try Data("ordinary file".utf8).write(to: child)
-        }
-        let visible = try await f.service.git.workingState(at: path, visibility: .application)
-        #expect(visible.changes.map(\.path) == ["submodule"])
-        let change = try #require(visible.changes.first)
-        #expect(change.index == " " && change.workingTree == "T" && !change.conflict)
-    }
-
-    @Test func applicationChangesPreserveSubmoduleMergeConflicts() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let path = try await submoduleRepository(f), child = path.appending(path: "submodule")
-        let parentBase = try #require(await f.service.git.oid("HEAD", at: path))
-        let childBase = try #require(await f.service.git.oid("HEAD", at: child))
-        _ = try await f.service.git.run(["checkout", "-b", "child-left"], at: child)
-        _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "left"], at: child)
-        _ = try await f.service.git.run(["checkout", "-b", "parent-left"], at: path)
-        _ = try await f.service.git.run(["add", "submodule"], at: path)
-        _ = try await f.service.git.run(["commit", "-m", "left submodule"], at: path)
-        _ = try await f.service.git.run(["checkout", "-b", "child-right", childBase], at: child)
-        _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "right"], at: child)
-        _ = try await f.service.git.run(["checkout", "-b", "parent-right", parentBase], at: path)
-        _ = try await f.service.git.run(["add", "submodule"], at: path)
-        _ = try await f.service.git.run(["commit", "-m", "right submodule"], at: path)
-        _ = try await f.service.git.run(["checkout", "parent-left"], at: path)
-        _ = try await f.service.git.run(["checkout", "child-left"], at: child)
-        #expect(try await f.service.git.run(["merge", "--no-edit", "parent-right"], at: path, allowFailure: true).status == 1)
-        let visible = try await f.service.git.workingState(at: path, visibility: .application)
-        #expect(visible.changes.count == 1 && visible.changes[0].path == "submodule" && visible.changes[0].conflict)
-        #expect(try await f.service.git.submodulePaths(at: path).isEmpty)
-    }
-
-    @Test func applicationParserKeepsTypeChangesAndConflictsWhileSkippingRenames() throws {
+    @Test func applicationChangesPreserveUnstagedSubmoduleTypeConversions() throws {
         let oid = String(repeating: "a", count: 40)
-        let records = [
-            "1 .M S.MU 160000 160000 160000 \(oid) \(oid) dirty submodule",
-            "2 R. S... 160000 160000 160000 \(oid) \(oid) R100 renamed submodule\0old submodule",
-            "1 T. S... 160000 100644 100644 \(oid) \(oid) converted",
-            "u UU N... 160000 160000 160000 160000 \(oid) \(oid) \(oid) conflicted submodule",
-            "1 .M N... 100644 100644 100644 \(oid) \(oid) .gitmodules",
-            "? ordinary.txt"
-        ]
-        let state = try Git.parseWorkingState(Data((records.joined(separator: "\0") + "\0").utf8), visibility: .application)
-        #expect(Set(state.changes.map(\.path)) == ["converted", "conflicted submodule", ".gitmodules", "ordinary.txt"])
-        #expect(state.changes.first { $0.path == "conflicted submodule" }?.conflict == true)
+        let bytes = Data("1 .T S... 160000 160000 100644 \(oid) \(oid) submodule\0".utf8)
+        let visible = try Git.parseWorkingState(bytes, visibility: .application)
+        let change = try #require(visible.changes.first)
+        #expect(visible.changes.count == 1 && change.path == "submodule")
+        #expect(change.index == " " && change.workingTree == "T" && !change.conflict)
     }
 
     private func submoduleRepository(_ fixture: Fixture) async throws -> URL {

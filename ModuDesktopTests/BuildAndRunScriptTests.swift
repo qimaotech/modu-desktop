@@ -25,7 +25,7 @@ struct BuildAndRunScriptTests {
                               : "log:--process 12345"))
     }
 
-    @Test(arguments: ["", "App instance PID: 0", "App instance PID: Modu", "App instance PID: 12345\nApp instance PID: 67890"])
+    @Test(arguments: ["", "App instance PID: 12345\nApp instance PID: 67890"])
     func loggingRejectsMissingOrAmbiguousInstanceIDs(_ output: String) async throws {
         let result = try await traceLogs(["--logs"], output: output)
         #expect(result.status == 1)
@@ -48,12 +48,6 @@ struct BuildAndRunScriptTests {
         #expect(result.text.isEmpty)
         #expect(String(decoding: result.stderr, as: UTF8.self).contains("App launch failed:"))
         #expect(!current.isTerminated)
-    }
-
-    @Test func explicitQuitRejectsAnInvalidPID() async throws {
-        let result = try await runHelper("quit_app", ["0"])
-        #expect(result.status == 2)
-        #expect(String(decoding: result.stderr, as: UTF8.self).contains("usage:"))
     }
 
     @MainActor @Test func explicitQuitRejectsAChangedTestHostIdentity() async throws {

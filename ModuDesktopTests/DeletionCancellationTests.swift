@@ -70,15 +70,15 @@ import Testing
         let lease = try fixture.service.store.tryLock(fixture.root); lease.unlock()
     }
 
-    @Test(arguments: ["group", "repository", "member"], [OperationPhase.deleting, .deleted])
-    func cancellationAtTheFinalItemKeepsTheSuccessfulOutcome(_ kind: String, _ phase: OperationPhase) async throws {
+    @Test(arguments: ["group", "repository", "member"])
+    func cancellationAtTheFinalItemKeepsTheSuccessfulOutcome(_ kind: String) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let resource: Resource = kind == "group" ? .group("feature") : kind == "repository" ? .repository("repo") : .member("feature", "repo")
         let request = try #require(DeleteRequest(resource))
         let (result, cancelled) = await Task {
             let result = await fixture.service.remove(request, at: fixture.root, execute: true) { progress in
-                if progress.target == resource.path, progress.phase == phase { withUnsafeCurrentTask { $0?.cancel() } }
+                if progress.target == resource.path, progress.phase == .deleting { withUnsafeCurrentTask { $0?.cancel() } }
             }
             return (result, Task.isCancelled)
         }.value

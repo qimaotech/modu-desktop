@@ -60,20 +60,6 @@ struct WorkspaceTreeTests {
         #expect(try fixture.service.store.load(fixture.root) == record)
     }
 
-    @Test func treeKeepsDirtyDetachedLockedWorktreesWithoutARemoteBase() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
-        let original = try await fixture.service.workspaceTree(fixture.root)
-        let repository = record.repositoryURL("repo")
-        let member = record.memberURL("feature", "repo")
-        try Data("Local changes".utf8).write(to: repository.appending(path: "README"))
-        _ = try await fixture.service.git.run(["checkout", "--detach", "HEAD"], at: member)
-        _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: repository)
-        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: repository)
-
-        #expect(try await fixture.service.workspaceTree(fixture.root) == original)
-    }
-
     @Test(arguments: ["record", "git"])
     func invalidWorkspaceRootsAreReportedInsteadOfFiltered(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }

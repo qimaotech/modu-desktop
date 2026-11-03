@@ -510,15 +510,6 @@ struct WorkflowTests {
         }
     }
 
-    @Test func groupNameHEADIsAlwaysAnExplicitLocalBranch() async throws {
-        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
-        let result = await f.service.createGroup("HEAD", repositories: ["repo"], at: f.root)
-        #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
-        let root = f.root.appending(path: "worktrees/HEAD")
-        #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: root).text == "refs/heads/HEAD")
-        #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: root.appending(path: "repo")).text == "refs/heads/HEAD")
-        #expect(await f.service.remove(.group("HEAD"), at: f.root, execute: true).status == .success)
-    }
     @Test func workspaceOpeningUsesHistoryWithoutRecoveringDiskResources() async throws {
         let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
         #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)

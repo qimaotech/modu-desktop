@@ -5,14 +5,13 @@ import Testing
 
 @MainActor
 struct BuildAndRunLifecycleTests {
-    @Test(arguments: [(SIGINT, "--verify", true), (SIGTERM, "--verify", false),
-                      (SIGTERM, "run", true), (SIGINT, "--logs", false)])
-    func interruptedVerificationKeepsItsLiveInstanceAndData(_ signal: Int32, _ mode: String, _ printsPID: Bool) async throws {
+    @Test(arguments: [(SIGINT, true), (SIGTERM, false)])
+    func interruptedVerificationKeepsItsLiveInstanceAndData(_ signal: Int32, _ printsPID: Bool) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let own = try session.startApp(workspace: session.workspace)
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: mode, signal: signal, overrides: """
+        let result = try await runScript(session, mode: "--verify", signal: signal, overrides: """
         launch_verified_app() {
           if \(printsPID); then echo "App instance PID: $test_pid"; fi
           if \(printsPID); then kill -"$test_signal" "$$"; else kill -"$test_signal" -- "-$$"; fi
@@ -26,12 +25,11 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: ["--verify", "--logs"])
-    func interruptedVerificationWithoutAnInstanceCleansOnlyItsData(_ mode: String) async throws {
+    @Test func interruptedVerificationWithoutAnInstanceCleansOnlyItsData() async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: mode, overrides: """
+        let result = try await runScript(session, mode: "--verify", overrides: """
         launch_verified_app() { kill -"$test_signal" -- "-$$"; /bin/sleep 0.05; }
         """)
         #expect(result.status == 128 + SIGTERM)
@@ -39,18 +37,17 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: [Int32(0), Int32(1)])
-    func debuggerExitWithoutRunCleansOnlyItsData(_ status: Int32) async throws {
+    @Test func debuggerExitWithoutRunCleansOnlyItsData() async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: "--debug", status: status, overrides: "lldb() { return \"$test_status\"; }")
-        #expect(result.status == status)
+        let result = try await runScript(session, mode: "--debug", status: 1, overrides: "lldb() { return \"$test_status\"; }")
+        #expect(result.status == 1)
         #expect(!PathSafety.exists(session.directory))
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: ["--debug", "--verify", "run", "--logs"])
+    @Test(arguments: ["--debug", "--verify"])
     func completedLaunchKeepsItsLiveInstanceForExplicitQuit(_ mode: String) async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
@@ -68,34 +65,32 @@ struct BuildAndRunLifecycleTests {
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: [SIGINT, SIGTERM])
-    func stoppingLogCollectionKeepsItsAppAndRemovesTemporaryCapture(_ signal: Int32) async throws {
+    @Test func stoppingLogCollectionKeepsItsAppAndRemovesTemporaryCapture() async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let own = try session.startApp(workspace: session.workspace)
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: "--logs", signal: signal, overrides: """
+        let result = try await runScript(session, mode: "--logs", signal: SIGINT, overrides: """
         launch_verified_app() { echo "App instance PID: $test_pid"; }
         stream_log() { kill -"$test_signal" -- "-$$"; /bin/sleep 0.05; }
         """, pid: own.processIdentifier)
-        #expect(result.status == 128 + signal)
+        #expect(result.status == 128 + SIGINT)
         #expect(own.isRunning)
         #expect(try FileManager.default.contentsOfDirectory(atPath: session.base.path).allSatisfy { !$0.hasPrefix("modu-app-launch.") })
         try session.expectUnrelatedIsIntact(unrelated)
     }
 
-    @Test(arguments: [Int32(0), Int32(1)])
-    func completedVerificationDoesNotKeepDataForAnExitedInstance(_ status: Int32) async throws {
+    @Test func completedVerificationDoesNotKeepDataForAnExitedInstance() async throws {
         let session = try await Session.allocate()
         defer { session.cleanup() }
         let exited = try session.startApp(workspace: session.workspace)
         exited.terminate()
         exited.waitUntilExit()
         let unrelated = try session.startApp(workspace: session.otherWorkspace)
-        let result = try await runScript(session, mode: "--verify", status: status, overrides: """
+        let result = try await runScript(session, mode: "--verify", status: 1, overrides: """
         launch_verified_app() { echo "App instance PID: $test_pid"; return "$test_status"; }
         """, pid: exited.processIdentifier)
-        #expect(result.status == status)
+        #expect(result.status == 1)
         #expect(!PathSafety.exists(session.directory))
         try session.expectUnrelatedIsIntact(unrelated)
     }

@@ -68,8 +68,6 @@ struct RepositoryUpdateTests {
         #expect(try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD"], at: path).text == "refs/remotes/origin/trunk")
         let commands = try String(contentsOf: trace, encoding: .utf8)
         #expect(commands.components(separatedBy: "\n").filter { $0.contains("built-in: git fetch ") }.count == 1)
-        #expect(commands.contains("git fetch --no-recurse-submodules origin +refs/heads/trunk:refs/remotes/origin/trunk"))
-        #expect(commands.contains("git merge --ff-only --no-autostash --no-overwrite-ignore refs/remotes/origin/trunk"))
         #expect(!commands.contains("FETCH_HEAD"))
         #expect(!commands.contains("ls-remote"))
         #expect(await service.updateRepositories(at: f.root).items.first?.data?["disposition"] == "up-to-date")

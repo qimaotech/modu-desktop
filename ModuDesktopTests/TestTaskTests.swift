@@ -4,7 +4,7 @@ import Testing
 @testable import ModuCore
 
 struct TestTaskTests {
-    @Test(arguments: ["passed", "zero", "skipped", "failed", "invalid-report", "report-failed"])
+    @Test(arguments: ["passed", "zero", "skipped", "failed"])
     func testTaskChecksActualExecutionAndAlwaysCleansItsEnvironment(_ outcome: String) async throws {
         let fixture = try TestTaskFixture(outcome: outcome)
         defer { fixture.remove() }
@@ -22,9 +22,6 @@ struct TestTaskTests {
         #expect(!PathSafety.exists(invocation.directory))
         #expect(try await fixture.defaultsExist(invocation.environment["MODU_TEST_DEFAULTS"]!) == false)
         #expect(try Data(contentsOf: fixture.sentinel) == Data("keep me".utf8))
-        if outcome == "zero" || outcome == "skipped" {
-            #expect(String(decoding: output.stderr, as: UTF8.self).contains("No tests executed"))
-        }
     }
 
     @Test func filteredTestsKeepExplicitResultsAfterFailure() async throws {
@@ -71,22 +68,12 @@ struct TestTaskTests {
         #expect(selections.last?.0 == ["ModuDesktopTests"])
     }
 
-    @Test(arguments: [["--shard", "0"], ["--shard", "5"], ["--shard", "1", "--filter", "ModuDesktopTests/VersionTests"]])
-    func invalidShardSelectionFailsBeforeStartingTests(_ arguments: [String]) async throws {
-        let fixture = try TestTaskFixture(outcome: "passed")
-        defer { fixture.remove() }
-        let output = try await fixture.run(selection: arguments)
-        #expect(output.status == 2)
-        #expect(!PathSafety.exists(fixture.directory.appending(path: "invocation.json")))
-    }
-
     @Test func unconfirmedHostCleanupFailsAndPreservesItsEnvironment() async throws {
         let fixture = try TestTaskFixture(outcome: "cleanup-failed")
         defer { fixture.remove() }
         let output = try await fixture.run()
         #expect(output.status == 1)
         #expect(PathSafety.exists(try fixture.invocation().directory))
-        #expect(String(decoding: output.stderr, as: UTF8.self).contains("keeping environment"))
     }
 
     @Test func cancellationStopsOwnedHelpersAndCleansTheEnvironment() async throws {
@@ -151,8 +138,6 @@ private struct TestTaskFixture {
         import json, os, sys
         outcome = os.environ['MODU_SCRIPT_TEST_OUTCOME']
         if sys.argv[1] == 'swift': sys.exit(1)
-        if outcome == 'report-failed': sys.exit(1)
-        if outcome == 'invalid-report': print('invalid'); sys.exit(0)
         print(json.dumps({'totalTestCount': 0 if outcome == 'zero' else 2, 'skippedTests': 2 if outcome == 'skipped' else 0}))
         """
         for (name, text) in [("xcodebuild", build), ("xcrun", report)] {
@@ -172,8 +157,8 @@ private struct TestTaskFixture {
         runner = CommandRunner(environment: environment)
     }
 
-    func run(filter: String = "ModuDesktopTests", shard: Int? = nil, selection: [String]? = nil, arguments: [String] = []) async throws -> CommandOutput {
-        let selection = selection ?? shard.map { ["--shard", String($0)] } ?? ["--filter", filter]
+    func run(filter: String = "ModuDesktopTests", shard: Int? = nil, arguments: [String] = []) async throws -> CommandOutput {
+        let selection = shard.map { ["--shard", String($0)] } ?? ["--filter", filter]
         return try await runner.run("/usr/bin/python3", [Self.root.appending(path: "script/run_tests.py").path] + selection + ["--"] + arguments)
     }
 

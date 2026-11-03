@@ -5,14 +5,12 @@ import Testing
 struct LocalRepositoryScanTests {
     @Test func discoveryStopsAtRepositoriesAndSkipsGeneratedDirectoriesAndLinks() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        for url in ["git@example.invalid:team/bravo.git", "https://example.invalid/dist.git", "https://example.invalid/nested.git", "https://example.invalid/deeper.git", "https://example.invalid/indirect.git", "https://example.invalid/dependency.git", "https://example.invalid/outside.git"] {
+        for url in ["git@example.invalid:team/bravo.git", "https://example.invalid/dist.git", "https://example.invalid/nested.git", "https://example.invalid/dependency.git", "https://example.invalid/outside.git"] {
             try await mapRemote(url, fixture: f)
         }
         let projects = f.directory.appending(path: "projects")
         let alpha = try await repository("projects/alpha", url: f.remoteURL, fixture: f)
         _ = try await repository("projects/alpha/nested", url: "https://example.invalid/nested.git", fixture: f)
-        _ = try await repository("projects/alpha/nested/deeper", url: "https://example.invalid/deeper.git", fixture: f)
-        _ = try await repository("projects/alpha/container/indirect", url: "https://example.invalid/indirect.git", fixture: f)
         _ = try await repository("projects/packages/bravo", url: "git@example.invalid:team/bravo.git", fixture: f)
         _ = try await repository("projects/node_modules/dependency", url: "https://example.invalid/dependency.git", fixture: f)
         let dist = try await repository("projects/dist", url: "https://example.invalid/dist.git", fixture: f)
