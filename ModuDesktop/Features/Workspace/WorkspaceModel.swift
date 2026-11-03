@@ -72,8 +72,8 @@ final class WorkspaceModel {
         var intent: RefreshIntent
         var recordActivation = false
 
-        init(path: String, maintenance: MaintenanceOptions?, intent: RefreshIntent, completion: ReloadCompletion) {
-            self.path = path; self.maintenance = maintenance; self.intent = intent; completions = [completion]
+        init(path: String, maintenance: MaintenanceOptions?, intent: RefreshIntent, completion: ReloadCompletion? = nil) {
+            self.path = path; self.maintenance = maintenance; self.intent = intent; completions = completion.map { [$0] } ?? []
         }
         func merge(_ request: ReloadBatch) {
             intent.formUnion(request.intent)
@@ -351,6 +351,11 @@ final class WorkspaceModel {
                 guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending else { return }
                 completion.apply()
             }
+            guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
+                  !busy || batch.operationID.map(operations.isCurrent) == true else { return }
+            if batch.recordActivation, let current = self.record, current.root == path {
+                details.activatePreload(in: current, including: sidebarResources)
+            }
             if selection == previousSelection, contextChanged || batch.intent.contains(.current) { refreshDetail() }
             if batch.intent.contains(.sidebar) { details.invalidate(resources: sidebarResources.subtracting(selection.map { [$0] } ?? [])) }
         } catch {
@@ -463,18 +468,23 @@ final class WorkspaceModel {
             if let record { details.activatePreload(in: record, including: sidebarResources) }
             return
         }
-        await requestReload(maintenance: nil, intent: .record, afterLoad: { [weak self] in
-            guard let self, let record = self.record else { return }
-            self.details.activatePreload(in: record, including: self.sidebarResources)
-        }, wait: !busy, recordActivation: true)
+        await requestReload(maintenance: nil, intent: .record, wait: !busy, recordActivation: true)
     }
 
     func operationsChanged(_ busy: Bool) {
         if busy {
             details.pause()
             if activeReload?.maintenance == nil, let load = reloadTask {
+                let interrupted = activeReload
                 cancelledReload = load.task; load.task.cancel(); refreshGeneration += 1
                 activeReload?.finish(); pendingReload?.finish()
+                if let interrupted, !reloadStopped, switchingGeneration == nil, !presentation.quitPending,
+                   defaults.string(forKey: "workspace") == interrupted.path {
+                    // The cancelled task still owns its batch; only its refresh intent survives.
+                    let retry = ReloadBatch(path: interrupted.path, maintenance: nil, intent: interrupted.intent)
+                    retry.recordActivation = interrupted.recordActivation
+                    enqueueReload(retry)
+                }
             }
         } else {
             Task { [weak self] in

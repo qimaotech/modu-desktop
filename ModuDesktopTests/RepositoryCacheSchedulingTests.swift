@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import ModuCore
 
@@ -113,6 +114,89 @@ struct RepositoryCacheSchedulingTests {
         await first.flush()
         #expect(await first.loadDetail(for: identity) == nil)
         await second.flush()
+    }
+
+    @Test func pendingDetailsUseABoundedLRU() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let first = try await identity(f)
+        var identities = [first]
+        for group in ["second", "third"] {
+            try await f.prepareEmptyGroup(group)
+            identities.append(try RepositoryCacheIdentity(context: await f.service.prepareResourceRead(.group(group), in: f.service.store.load(f.root))))
+        }
+        let gate = CacheWriteGate()
+        let directory = f.directory.appending(path: "cache")
+        let cache = RepositoryDiskCache(directory: directory, maximumDetailCount: 2, waitForWrite: { try await gate.wait() })
+        await cache.saveDetail(snapshot("first"), for: identities[0])
+        await cache.saveDetail(snapshot("second"), for: identities[1])
+        #expect(await cache.loadDetail(for: identities[0])?.summary.head == "first")
+        await cache.saveDetail(snapshot("third"), for: identities[2])
+        #expect(await cache.detailMemoryStatistics.count == 2)
+        await cache.flush()
+        let reopened = RepositoryDiskCache(directory: directory)
+        #expect(await reopened.loadDetail(for: identities[0])?.summary.head == "first")
+        #expect(await reopened.loadDetail(for: identities[1]) == nil)
+        #expect(await reopened.loadDetail(for: identities[2])?.summary.head == "third")
+        await reopened.flush()
+    }
+
+    @Test func flushReleasesPendingDetailsWhenTheCacheIsLocked() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let identity = try await identity(f)
+        let directory = f.directory.appending(path: "cache")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let descriptor = open(directory.appending(path: ".write.lock").path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
+        try #require(descriptor >= 0)
+        defer { flock(descriptor, LOCK_UN); close(descriptor) }
+        try #require(flock(descriptor, LOCK_EX | LOCK_NB) == 0)
+        let cache = RepositoryDiskCache(directory: directory)
+        await cache.saveDetail(snapshot("blocked"), for: identity)
+        await cache.flush()
+        #expect(await cache.detailMemoryStatistics.count == 0)
+        #expect(await cache.loadDetail(for: identity) == nil)
+    }
+
+    @Test func delayedOlderDetailsCannotReplaceAnotherActorsSnapshot() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let identity = try await identity(f)
+        let directory = f.directory.appending(path: "cache")
+        let gate = CacheWriteGate()
+        let first = RepositoryDiskCache(directory: directory, waitForWrite: { try await gate.wait() })
+        let second = RepositoryDiskCache(directory: directory)
+        let observedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        await first.saveDetail(snapshot("older", observedAt: observedAt), for: identity)
+        try await eventually { await gate.pending == 1 }
+        let newer = observedAt.addingTimeInterval(1)
+        await second.saveDetail(snapshot("newer", observedAt: newer), for: identity)
+        await second.flush()
+        await first.flush()
+        let reopened = RepositoryDiskCache(directory: directory)
+        let restored = try #require(await reopened.loadDetail(for: identity))
+        #expect(restored.summary.head == "newer" && restored.observedAt == newer)
+        await reopened.flush(); await second.flush()
+    }
+
+    @Test func externalWritesRevalidateDeduplicationAndObservationTimes() async throws {
+        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let identity = try await identity(f)
+        let directory = f.directory.appending(path: "cache")
+        let clock = SchedulingCacheClock()
+        let first = RepositoryDiskCache(directory: directory, now: { clock.now })
+        let second = RepositoryDiskCache(directory: directory, now: { clock.now })
+        await first.saveDetail(snapshot("first", observedAt: clock.now), for: identity)
+        await first.flush()
+        clock.advance(1)
+        await second.saveDetail(snapshot("second", observedAt: clock.now), for: identity)
+        await second.flush()
+        clock.advance(1)
+        await first.saveDetail(snapshot("first", observedAt: clock.now), for: identity)
+        await first.flush()
+        #expect(await second.loadDetail(for: identity)?.summary.head == "first")
+        clock.advance(1)
+        await second.saveDetail(snapshot("first", observedAt: clock.now), for: identity)
+        await second.flush()
+        #expect(await first.loadDetail(for: identity)?.observedAt == clock.now)
+        await first.flush(); await second.flush()
     }
 
     private func identity(_ fixture: Fixture) async throws -> RepositoryCacheIdentity {

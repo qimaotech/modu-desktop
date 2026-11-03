@@ -57,6 +57,7 @@ struct RepositoryDiskCacheTests {
         let unavailable = RepositoryDiskCache(directory: conflict)
         await unavailable.saveDetail(sampleDetail(), for: identity)
         await unavailable.flush()
+        #expect(await unavailable.detailMemoryStatistics.count == 0)
         #expect(await unavailable.loadDetail(for: identity) == nil)
         #expect(try Data(contentsOf: conflict) == Data("existing file".utf8))
 
@@ -68,10 +69,20 @@ struct RepositoryDiskCacheTests {
                                               behindCommits: [], observedAt: oversized.observedAt)
         await bounded.saveDetail(oversized, for: identity)
         await bounded.flush()
+        #expect(await bounded.detailMemoryStatistics.count == 0)
         #expect(await bounded.loadDetail(for: identity) == nil)
         await bounded.saveDetail(sampleDetail(), for: identity)
         await bounded.flush()
         #expect(await bounded.loadDetail(for: identity) != nil)
+
+        let memoryBounded = RepositoryDiskCache(directory: f.directory.appending(path: "memory-bounded-cache"), maximumMemoryBytes: 8_192)
+        await memoryBounded.saveDetail(oversized, for: identity)
+        #expect(await memoryBounded.detailMemoryStatistics.estimatedBytes == 0)
+        await memoryBounded.saveDetail(sampleDetail(), for: identity)
+        await memoryBounded.flush()
+        #expect(await memoryBounded.detailMemoryStatistics.estimatedBytes <= 8_192)
+        #expect(await memoryBounded.loadDetail(for: identity) != nil)
+        await memoryBounded.flush()
     }
 
     @Test func incompleteResultsKeepSuccessfulDataAndRepositoriesWithoutRemotesAreCacheable() async throws {

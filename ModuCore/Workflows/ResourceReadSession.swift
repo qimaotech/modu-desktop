@@ -6,6 +6,7 @@ public actor ResourceReadSession {
     private var contexts: [ContextKey: ContextEntry] = [:]
     private var repositories: [FamilyKey: FamilyEntry] = [:]
     private var replacementDecisions: [String: (fingerprint: String, value: Bool)] = [:]
+    private var configurationLocations: ConfigurationLocations?
     private var generation = 0
 
     public init(service: WorkspaceService, diagnostics: RepositoryReadDiagnostics? = nil) {
@@ -31,8 +32,9 @@ public actor ResourceReadSession {
         var prepared = repositories[family]
         if let current = prepared, !current.isCurrent() { prepared = nil }
         if var current = prepared, revalidateConfiguration {
-            let updated = try await ConfigurationSnapshot.capture(git: service.git, at: current.inspection.path,
-                                                                    gitDirectory: current.inspection.path.appending(path: ".git"))
+            let updated = try await captureConfiguration(at: current.inspection.path,
+                                                        gitDirectory: current.inspection.path.appending(path: ".git"),
+                                                        commonDirectory: URL(fileURLWithPath: current.inspection.commonDirectory))
             try checkGeneration(token)
             if let updated, updated.output == current.configuration.output {
                 current.configuration = updated
@@ -44,7 +46,8 @@ public actor ResourceReadSession {
            let rebound = entry.context.rebinding(to: record), entry.configuration.isCurrent() {
             var configuration = entry.configuration
             if revalidateConfiguration {
-                let updated = try await ConfigurationSnapshot.capture(git: service.git, at: rebound.path, gitDirectory: rebound.gitDirectory)
+                let updated = try await captureConfiguration(at: rebound.path, gitDirectory: rebound.gitDirectory,
+                                                            commonDirectory: rebound.commonDirectory)
                 try checkGeneration(token)
                 if let updated, updated.output == configuration.output { configuration = updated }
                 else { return try await rebuild(resource, record: record, visibility: visibility, family: family, key: key, prepared: prepared, token: token, repositoryProvider: repositoryProvider) }
@@ -91,8 +94,8 @@ public actor ResourceReadSession {
             if let repositoryProvider { inspection = try await repositoryProvider() }
             else { inspection = try await service.checkedRepository(for: resource, in: record) }
             try checkGeneration(token)
-            let configuration = try await ConfigurationSnapshot.capture(git: service.git, at: inspection.path,
-                                                                        gitDirectory: inspection.path.appending(path: ".git"))
+            let configuration = try await captureConfiguration(at: inspection.path, gitDirectory: inspection.path.appending(path: ".git"),
+                                                              commonDirectory: URL(fileURLWithPath: inspection.commonDirectory))
             try checkGeneration(token)
             if let configuration {
                 guard configuration.matches(origin: inspection.origin) else {
@@ -109,7 +112,8 @@ public actor ResourceReadSession {
         let context = try await service.prepareResourceRead(resource, in: record, repository: inspection, visibility: visibility)
         try checkGeneration(token)
         if let entry, entry.isCurrent(),
-           let configuration = try await ConfigurationSnapshot.capture(git: service.git, at: context.path, gitDirectory: context.gitDirectory) {
+           let configuration = try await captureConfiguration(at: context.path, gitDirectory: context.gitDirectory,
+                                                              commonDirectory: context.commonDirectory) {
             try checkGeneration(token)
             guard configuration.matches(origin: inspection.origin) else {
                 throw ModuError("origin-mismatch", .repositoryOriginDoesNotMatchWorkspaceRecord(context.path.path))
@@ -119,6 +123,17 @@ public actor ResourceReadSession {
         } else { contexts.removeValue(forKey: key) }
         diagnostics?.record("prepare.miss", duration: start.duration(to: .now))
         return context
+    }
+
+    private func captureConfiguration(at path: URL, gitDirectory: URL, commonDirectory: URL) async throws -> ConfigurationSnapshot? {
+        if configurationLocations == nil {
+            let locations = try await ConfigurationLocations.discover(git: service.git, at: path)
+            try service.checkCancellation()
+            configurationLocations = locations
+        }
+        guard let configurationLocations, case .available(let locations) = configurationLocations else { return nil }
+        return try await ConfigurationSnapshot.capture(git: service.git, at: path, gitDirectory: gitDirectory,
+                                                       commonDirectory: commonDirectory, defaultLocations: locations)
     }
 
     private func checkGeneration(_ token: Int) throws {
@@ -185,41 +200,118 @@ public actor ResourceReadSession {
         }
     }
 
+    private enum ConfigurationLocations: Sendable {
+        case available([String])
+        case unavailable
+
+        static func discover(git: Git, at path: URL) async throws -> Self {
+            let environment = git.runner.environment
+            guard ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "HOME", "XDG_CONFIG_HOME"].allSatisfy({ key in
+                environment[key]?.contains(where: { $0 == "\n" || $0 == "\0" }) != true
+            }) else { return .unavailable }
+            var locations: [String] = []
+            for variable in ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"] {
+                let output: CommandOutput
+                do { output = try await git.run(["var", variable], at: path, allowFailure: true) }
+                catch {
+                    if Task.isCancelled || (error as? ModuError)?.code == "cancelled" { throw error }
+                    return .unavailable
+                }
+                if output.status == 1, output.stdout.isEmpty, output.stderr.isEmpty { continue }
+                guard output.status == 0, let text = String(data: output.stdout, encoding: .utf8),
+                      !text.contains("\0"), text.hasSuffix("\n") else { return .unavailable }
+                let paths = text.dropLast().split(separator: "\n", omittingEmptySubsequences: false)
+                guard paths.allSatisfy({ !$0.isEmpty }) else { return .unavailable }
+                locations += paths.map(String.init)
+            }
+            return .available(locations)
+        }
+    }
+
     private struct ConfigurationSnapshot {
         let output: Data
         let files: [ReadPathIdentity]
         let origin: String?
 
-        static func capture(git: Git, at path: URL, gitDirectory: URL) async throws -> ConfigurationSnapshot? {
+        static func capture(git: Git, at path: URL, gitDirectory: URL, commonDirectory: URL,
+                            defaultLocations: [String]) async throws -> ConfigurationSnapshot? {
             let output: Data
             do { output = try await git.run(["config", "--null", "--show-origin", "--includes", "--list"], at: path).stdout }
             catch {
                 if Task.isCancelled || (error as? ModuError)?.code == "cancelled" { throw error }
                 return nil
             }
-            let fields = output.split(separator: 0, omittingEmptySubsequences: false)
-            guard fields.count % 2 == 1, fields.last?.isEmpty == true else { return nil }
+            guard let entries = parse(output, at: path) else { return nil }
             var sources = Set<URL>()
             var origin: String?
-            var index = 0
-            while index + 1 < fields.count {
-                let location = String(decoding: fields[index], as: UTF8.self)
-                let pair = fields[index + 1].split(separator: 10, maxSplits: 1, omittingEmptySubsequences: false)
-                if pair.first?.elementsEqual("remote.origin.url".utf8) == true, pair.count == 2 {
-                    origin = String(decoding: pair[1], as: UTF8.self)
-                }
-                index += 2
-                guard location.hasPrefix("file:") else { return nil }
-                let source = String(location.dropFirst(5))
-                guard !source.isEmpty else { return nil }
-                sources.insert(PathSafety.canonical(URL(fileURLWithPath: source, relativeTo: URL(fileURLWithPath: path.path, isDirectory: true))))
+            for location in defaultLocations {
+                guard let url = fileURL(location, relativeTo: path) else { return nil }
+                sources.insert(url)
             }
-            sources.insert(gitDirectory.appending(path: "HEAD"))
+            for entry in entries {
+                sources.insert(entry.source)
+                if entry.key == "remote.origin.url" { origin = entry.value }
+            }
+            let includes = entries.filter(\.isInclude)
+            if !includes.isEmpty {
+                let expanded: CommandOutput
+                do {
+                    expanded = try await git.run(["config", "--null", "--show-origin", "--includes", "--type=path", "--get-regexp",
+                                                  #"^(include\.path|includeif\..*\.path)$"#], at: path, allowFailure: true)
+                } catch {
+                    if Task.isCancelled || (error as? ModuError)?.code == "cancelled" { throw error }
+                    return nil
+                }
+                guard expanded.status == 0, let paths = parse(expanded.stdout, at: path), paths.count == includes.count,
+                      zip(paths, includes).allSatisfy({ pair in pair.0.source == pair.1.source && pair.0.key == pair.1.key }) else { return nil }
+                for entry in paths {
+                    guard let value = entry.value, let url = fileURL(value, relativeTo: entry.source.deletingLastPathComponent()) else { return nil }
+                    sources.insert(url)
+                }
+            }
+            // Reftable publishes HEAD changes through tables.list rather than rewriting HEAD.
+            sources.formUnion([gitDirectory.appending(path: "HEAD"), gitDirectory.appending(path: "reftable/tables.list"),
+                               commonDirectory.appending(path: "reftable/tables.list")])
             guard let files = try? sources.sorted(by: { $0.path < $1.path }).map(ReadPathIdentity.init) else { return nil }
             return ConfigurationSnapshot(output: output, files: files, origin: origin)
         }
 
         func isCurrent() -> Bool { files.allSatisfy { (try? ReadPathIdentity($0.url)) == $0 } }
         func matches(origin expected: String?) -> Bool { expected == nil || origin == expected }
+
+        private static func parse(_ output: Data, at path: URL) -> [Entry]? {
+            let fields = output.split(separator: 0, omittingEmptySubsequences: false)
+            guard fields.count % 2 == 1, fields.last?.isEmpty == true else { return nil }
+            var entries: [Entry] = []
+            var index = 0
+            while index + 1 < fields.count {
+                guard let location = String(data: fields[index], encoding: .utf8) else { return nil }
+                guard location.hasPrefix("file:") else { return nil }
+                guard let source = fileURL(String(location.dropFirst(5)), relativeTo: path) else { return nil }
+                let pair = fields[index + 1].split(separator: 10, maxSplits: 1, omittingEmptySubsequences: false)
+                guard let first = pair.first, let key = String(data: first, encoding: .utf8), !key.isEmpty else { return nil }
+                let value: String?
+                if pair.count == 2 {
+                    guard let text = String(data: pair[1], encoding: .utf8) else { return nil }
+                    value = text
+                } else { value = nil }
+                entries.append(Entry(source: source, key: key, value: value))
+                index += 2
+            }
+            return entries
+        }
+
+        private static func fileURL(_ value: String, relativeTo directory: URL) -> URL? {
+            guard !value.isEmpty, !value.contains("\0") else { return nil }
+            // Keep the source spelling so retargeting a configuration symlink invalidates its identity.
+            return URL(fileURLWithPath: value.hasPrefix("/") ? value : directory.path + "/" + value)
+        }
+
+        private struct Entry {
+            let source: URL
+            let key: String
+            let value: String?
+            var isInclude: Bool { key == "include.path" || key.hasPrefix("includeif.") && key.hasSuffix(".path") }
+        }
     }
 }

@@ -120,6 +120,7 @@ public final class ResourceChangeMonitor: ResourceChangeMonitoring, @unchecked S
                 return relative.split(separator: "/").count <= 2 || relative.hasSuffix("/gitdir") || relative.hasSuffix("/commondir") ? .structure : nil
             }
             if directory != gitPath, relative == "HEAD" || relative == "index" { return nil }
+            if relative == "reftable" || relative.hasPrefix("reftable/") { return .summary }
             if relative == "HEAD" || relative == "packed-refs" || relative == "refs" || relative.hasPrefix("refs/") || relative == "shallow" || relative == "info/grafts" { return .summary }
             if relative == "index" || relative.hasPrefix("sharedindex.") { return .index }
             if relative == "info/exclude" || relative == "info/attributes" { return [.configuration, .workingTree] }

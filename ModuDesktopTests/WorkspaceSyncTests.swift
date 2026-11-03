@@ -67,6 +67,62 @@ import Testing
         }
     }
 
+    @Test func interruptedRecordEventPreservesPendingRefreshWithoutRevivingCallbacks() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareEmptyGroup("visible")
+        let monitor = WorkspaceRecordMonitorStub()
+        let model = try makeModel(fixture, monitor: monitor)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let original = try #require(model.workspace.record)
+        let resource = Resource.group("visible")
+        var changed = original
+        changed.groups["external"] = WorktreeGroup()
+        var gate: ReloadValidationGate?
+        defer { try? gate?.resume() }
+        var callbacks: [String] = []
+        var pending: Task<Void, Never>?
+        var writing: Task<Void, Never>?
+        do {
+            model.workspace.setVisibleResources([resource], in: original.root)
+            try await eventually { model.workspace.state(for: resource)?.dirty == false }
+            await model.workspace.detailPreloadTask?.value
+            try Data("changed".utf8).write(to: original.groupURL("visible").appending(path: "new.txt"))
+            try fixture.service.store.save(changed)
+            gate = try ReloadValidationGate(fixture.root)
+            monitor.emit()
+            try await gate!.waitUntilStarted()
+            var requested = false
+            pending = Task {
+                requested = true
+                await model.workspace.refreshRecord { callbacks.append("pending") }
+            }
+            try await eventually { requested }
+            await Task.yield()
+            model.management.sheet = .add
+            model.management.run { _, root, _ in
+                OperationResult(command: "repo.add", workspace: root.path, status: .failed, error: ModuError("test-failure", "Could not add repository."))
+            }
+            let task: Task<Void, Never> = try #require(model.operation)
+            writing = task
+            await model.workspace.refreshRecord(refreshingSidebar: false) { callbacks.append("fresh") }
+            await pending?.value
+            #expect(callbacks.isEmpty)
+            try gate!.resume()
+            await writing?.value
+            try await eventually { model.workspace.record == changed && model.workspace.state(for: resource)?.dirty == true }
+            #expect(callbacks == ["fresh"])
+            #expect(model.management.formError != nil)
+            await model.workspace.stopReads()
+        } catch {
+            try? gate?.resume()
+            model.cancel(); pending?.cancel()
+            await model.workspace.stopReads()
+            await pending?.value; await writing?.value
+            throw error
+        }
+    }
+
     @Test func cancelledDebounceCannotClearItsReplacementAfterTheDelayCompletes() async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
@@ -222,6 +278,66 @@ import Testing
             await model.workspace.stopReads()
             await activation.value
             await joining?.value
+            throw error
+        }
+    }
+
+    @Test func interruptedActivationStartsCooldownWhenItsRetryCompletes() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareEmptyGroup("visible")
+        let clock = WorkspaceSyncClock()
+        let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let original = try #require(model.workspace.record)
+        let resource = Resource.group("visible")
+        var changed = original
+        changed.groups["external"] = WorktreeGroup()
+        var gate: ReloadValidationGate?
+        defer { try? gate?.resume() }
+        var activation: Task<Void, Never>?
+        var writing: Task<Void, Never>?
+        do {
+            model.workspace.setVisibleResources([resource], in: original.root)
+            try await eventually { model.workspace.state(for: resource)?.dirty == false }
+            await model.workspace.detailPreloadTask?.value
+            try Data("changed".utf8).write(to: original.groupURL("visible").appending(path: "new.txt"))
+            try fixture.service.store.save(changed)
+            gate = try ReloadValidationGate(fixture.root)
+            activation = Task { await model.workspace.activate() }
+            try await gate!.waitUntilStarted()
+            model.workspace.setActive(false)
+            model.management.sheet = .add
+            model.management.run { _, root, _ in
+                OperationResult(command: "repo.add", workspace: root.path, status: .failed, error: ModuError("test-failure", "Could not add repository."))
+            }
+            let task: Task<Void, Never> = try #require(model.operation)
+            writing = task
+            await activation?.value
+            try gate!.resume()
+            await writing?.value
+            #expect(model.workspace.record == original && model.workspace.state(for: resource)?.dirty == false)
+
+            clock.now = clock.now.advanced(by: .seconds(20))
+            model.workspace.setActive(true, refresh: false)
+            try await eventually {
+                model.workspace.record == changed && model.workspace.state(for: resource)?.dirty == true && !model.workspace.hasActiveReads
+            }
+            let retried = changed
+            changed.groups["latest"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+            clock.now = clock.now.advanced(by: .milliseconds(9_999))
+            await model.activate()
+            #expect(model.workspace.record == retried)
+            clock.now = clock.now.advanced(by: .milliseconds(1))
+            await model.activate()
+            #expect(model.workspace.record == changed)
+            await model.workspace.stopReads()
+        } catch {
+            try? gate?.resume()
+            model.cancel(); activation?.cancel()
+            await model.workspace.stopReads()
+            await activation?.value; await writing?.value
             throw error
         }
     }

@@ -6,11 +6,14 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
     public let directory: URL
     private let maximumBytes: Int
     private let maximumEntryBytes: Int
+    private let maximumMemoryBytes: Int
+    private let maximumDetailCount: Int
     private let maximumIdleAge: TimeInterval
     private let now: @Sendable () -> Date
     private let diagnostics: RepositoryReadDiagnostics?
     private let waitForWrite: @Sendable () async throws -> Void
     private var details: [String: Detail] = [:]
+    private var detailUse = 0
     private var pendingDetails = Set<String>()
     private var invalidatedDetails = Set<String>()
     private var invalidatedHistories = Set<RepositoryCacheRepositoryIdentity>()
@@ -26,6 +29,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
     private var ledgerDirectoryStamp: String?
 
     public init(directory: URL, maximumBytes: Int = 64 * 1_024 * 1_024, maximumEntryBytes: Int = 8 * 1_024 * 1_024,
+                maximumMemoryBytes: Int = 32 * 1_024 * 1_024, maximumDetailCount: Int = 64,
                 maximumIdleAge: TimeInterval = 30 * 24 * 60 * 60, now: @escaping @Sendable () -> Date = { Date() },
                 diagnostics: RepositoryReadDiagnostics? = nil, waitForWrite: (@Sendable () async throws -> Void)? = nil) {
         var ancestor = directory.standardizedFileURL
@@ -40,6 +44,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         if let resolved { free(resolved) }
         self.directory = missing.reversed().reduce(parent) { $0.appending(path: $1, directoryHint: .isDirectory) }
         self.maximumBytes = max(0, maximumBytes); self.maximumEntryBytes = max(0, maximumEntryBytes)
+        self.maximumMemoryBytes = max(0, maximumMemoryBytes); self.maximumDetailCount = max(0, maximumDetailCount)
         self.maximumIdleAge = max(0, maximumIdleAge); self.now = now; self.diagnostics = diagnostics
         self.waitForWrite = waitForWrite ?? { try await Task.sleep(for: .seconds(1)) }
     }
@@ -47,36 +52,43 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
     public func loadDetail(for identity: RepositoryCacheIdentity) async -> RepositoryDetailSnapshot? {
         guard !Task.isCancelled, identity.isCurrent(), let key = digest(identity), !invalidatedDetails.contains(key) else { return nil }
         if let remembered = details[key], pendingDetails.contains(key), pendingStorageIsUsable() {
+            let refreshed = refreshPersistedDetail(remembered, key: key)
+            remember(refreshed, key: key)
             diagnostics?.record("cache.detail.hit")
-            return remembered.latest
+            return refreshed.latest
         }
-        let loaded: RepositoryDetailSnapshot? = load(key: key, kind: "detail", repository: identity.repository)
-        guard let loaded, loaded.isComplete, !Task.isCancelled, identity.isCurrent() else {
-            if !Task.isCancelled { details.removeValue(forKey: key) }
+        guard let loaded = loadDiskDetail(for: identity, key: key), !Task.isCancelled, identity.isCurrent() else {
+            if !Task.isCancelled { forgetDetail(key) }
             return nil
         }
-        if let remembered = details[key], remembered.latest.hasSameContent(as: loaded) {
-            return remembered.latest
-        }
-        details[key] = Detail(identity: identity, latest: loaded, persisted: loaded, checkpointedAt: now())
-        return loaded
+        let latest = details[key].flatMap { remembered in
+            remembered.latest.hasSameContent(as: loaded.value) && remembered.latest.observedAt > loaded.value.observedAt ? remembered.latest : nil
+        } ?? loaded.value
+        let detail = makeDetail(identity: identity, latest: latest, persisted: loaded.value, stamp: loaded.stamp)
+        remember(detail, key: key)
+        return latest
     }
 
     public func saveDetail(_ value: RepositoryDetailSnapshot, for identity: RepositoryCacheIdentity) async {
         guard !Task.isCancelled, maximumBytes > 0, maximumEntryBytes > 0,
               identity.isCurrent(), value.isComplete, let key = digest(identity) else { return }
-        if details[key] == nil, !invalidatedDetails.contains(key) {
-            let stored: RepositoryDetailSnapshot? = load(key: key, kind: "detail", repository: identity.repository)
-            if let stored, stored.isComplete {
-                details[key] = Detail(identity: identity, latest: stored, persisted: stored, checkpointedAt: now())
-            }
+        var remembered: Detail
+        if let current = details[key] {
+            remembered = refreshPersistedDetail(current, key: key)
+        } else if !invalidatedDetails.contains(key), let stored = loadDiskDetail(for: identity, key: key, recordingAccess: false) {
+            remembered = makeDetail(identity: identity, latest: stored.value, persisted: stored.value, stamp: stored.stamp)
+        } else {
+            remembered = makeDetail(identity: identity, latest: value)
         }
         guard !Task.isCancelled, identity.isCurrent() else { return }
-        var remembered = details[key] ?? Detail(identity: identity, latest: value, persisted: nil, checkpointedAt: now())
-        remembered.latest = value
-        details[key] = remembered
+        let sameContent = value.hasSameContent(as: remembered.latest)
+        if value.observedAt > remembered.latest.observedAt || sameContent {
+            if !sameContent { remembered.latestCost = memoryCost(value) }
+            if value.observedAt >= remembered.latest.observedAt { remembered.latest = value }
+        }
+        guard remember(remembered, key: key) else { return }
         invalidatedDetails.remove(key)
-        let contentChanged = remembered.persisted.map { !value.hasSameContent(as: $0) } ?? true
+        let contentChanged = remembered.persisted.map { !remembered.latest.hasSameContent(as: $0) } ?? true
         let checkpointDue = now().timeIntervalSince(remembered.checkpointedAt) >= 60
         if contentChanged || checkpointDue {
             let beginsBatch = pendingDetails.isEmpty
@@ -86,6 +98,10 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
             pendingDetails.remove(key)
             diagnostics?.record("cache.detail.unchanged")
         }
+    }
+
+    var detailMemoryStatistics: (count: Int, estimatedBytes: Int) {
+        (details.count, details.values.reduce(0) { Self.addingCost($0, $1.memoryCost) })
     }
 
     public func loadHistory(for key: RepositoryHistoryCacheKey) async -> RepositoryHistorySnapshot? {
@@ -106,8 +122,8 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
 
     public func invalidateDetail(for identity: RepositoryCacheIdentity) async {
         guard !Task.isCancelled, let key = digest(identity) else { return }
-        pendingDetails.remove(key); details.removeValue(forKey: key); invalidatedDetails.insert(key)
-        if pendingDetails.isEmpty { cancelWriter() }
+        forgetDetail(key); invalidatedDetails.insert(key)
+        if pendingDetails.isEmpty, pendingAccesses.isEmpty, !maintenanceRequested { cancelWriter() }
         withMutation(create: false) { self.remove(self.entryURL(key: key, kind: "detail")) }
     }
 
@@ -155,33 +171,121 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
     }
 
     private func persistPending() {
-        pendingDetails = pendingDetails.filter { key in
-            guard let detail = details[key], detail.identity.isCurrent(), !invalidatedDetails.contains(key) else {
-                details.removeValue(forKey: key)
-                return false
-            }
-            return true
+        for key in pendingDetails {
+            if details[key]?.identity.isCurrent() != true || invalidatedDetails.contains(key) { forgetDetail(key) }
         }
         guard !pendingDetails.isEmpty || !pendingAccesses.isEmpty || maintenanceRequested else { return }
-        withMutation(create: !pendingDetails.isEmpty) {
-            let requested = self.pendingDetails
-            self.pendingDetails = []
+        let requested = pendingDetails
+        pendingDetails = []
+        let mutated = withMutation(create: !requested.isEmpty) {
             for key in requested {
-                guard var detail = self.details[key] else { continue }
+                guard let current = self.details[key] else { continue }
+                var detail = self.refreshPersistedDetail(current, key: key)
                 guard detail.identity.isCurrent(), !self.invalidatedDetails.contains(key) else {
-                    self.details.removeValue(forKey: key); continue
+                    self.forgetDetail(key); continue
+                }
+                if let persisted = detail.persisted, persisted.observedAt >= detail.latest.observedAt {
+                    self.remember(detail, key: key)
+                    continue
                 }
                 if self.write(detail.latest, key: key, kind: "detail", repository: detail.identity.repository) {
+                    let file = self.entryURL(key: key, kind: "detail")
+                    guard self.ledger?[file.lastPathComponent] != nil, let stamp = self.fileStamp(file) else {
+                        self.forgetDetail(key); continue
+                    }
                     detail.persisted = detail.latest; detail.checkpointedAt = self.now()
-                    self.details[key] = detail
-                }
+                    detail.persistedCost = detail.latestCost; detail.persistedStamp = stamp
+                    self.remember(detail, key: key)
+                } else { self.forgetDetail(key) }
             }
             self.persistAccesses()
             self.maintainIfNeeded()
         }
+        if !mutated { for key in requested { forgetDetail(key) } }
     }
 
-    private func load<Value: Codable & Sendable>(key: String, kind: String, repository: RepositoryCacheRepositoryIdentity) -> Value? {
+    private func loadDiskDetail(for identity: RepositoryCacheIdentity, key: String, recordingAccess: Bool = true) -> (value: RepositoryDetailSnapshot, stamp: FileStamp)? {
+        let file = entryURL(key: key, kind: "detail")
+        guard let before = fileStamp(file) else { return nil }
+        let value: RepositoryDetailSnapshot? = load(key: key, kind: "detail", repository: identity.repository, recordingAccess: recordingAccess)
+        guard let value, value.isComplete, before == fileStamp(file) else { return nil }
+        return (value, before)
+    }
+
+    private func refreshPersistedDetail(_ current: Detail, key: String) -> Detail {
+        guard current.persistedStamp != fileStamp(entryURL(key: key, kind: "detail")) else { return current }
+        var detail = current
+        let loaded = loadDiskDetail(for: current.identity, key: key, recordingAccess: false)
+        detail.persisted = loaded?.value; detail.persistedStamp = loaded?.stamp
+        detail.persistedCost = loaded.map { memoryCost($0.value) } ?? 0
+        detail.checkpointedAt = now()
+        if let loaded, loaded.value.observedAt >= detail.latest.observedAt {
+            detail.latest = loaded.value; detail.latestCost = detail.persistedCost
+            pendingDetails.remove(key)
+        }
+        return detail
+    }
+
+    private func makeDetail(identity: RepositoryCacheIdentity, latest: RepositoryDetailSnapshot,
+                            persisted: RepositoryDetailSnapshot? = nil, stamp: FileStamp? = nil) -> Detail {
+        Detail(identity: identity, latest: latest, persisted: persisted, latestCost: memoryCost(latest),
+               persistedCost: persisted.map(memoryCost) ?? 0, persistedStamp: stamp, checkpointedAt: now(), lastUse: 0)
+    }
+
+    @discardableResult private func remember(_ value: Detail, key: String) -> Bool {
+        guard maximumDetailCount > 0, value.memoryCost != Int.max, value.memoryCost <= maximumMemoryBytes else { forgetDetail(key); return false }
+        var others = details.filter { $0.key != key }
+        while others.count >= maximumDetailCount || exceedsMemoryBudget(Self.addingCost(others.values.reduce(0) { Self.addingCost($0, $1.memoryCost) }, value.memoryCost)) {
+            guard let oldest = others.min(by: { $0.value.lastUse < $1.value.lastUse }) else { break }
+            others.removeValue(forKey: oldest.key)
+            forgetDetail(oldest.key)
+        }
+        var detail = value
+        detailUse += 1; detail.lastUse = detailUse
+        details[key] = detail
+        return true
+    }
+
+    private func exceedsMemoryBudget(_ cost: Int) -> Bool { cost == Int.max || cost > maximumMemoryBytes }
+
+    private func forgetDetail(_ key: String) {
+        details.removeValue(forKey: key); pendingDetails.remove(key)
+    }
+
+    private func memoryCost(_ value: RepositoryDetailSnapshot) -> Int {
+        var cost = MemoryLayout<RepositoryDetailSnapshot>.stride
+        cost = Self.addingCost(cost, stringCost(value.summary.head))
+        cost = Self.addingCost(cost, stringCost(value.summary.headOID))
+        cost = Self.addingCost(cost, stringCost(value.summary.base))
+        cost = Self.addingCost(cost, stringCost(value.summary.baseOID))
+        cost = Self.addingCost(cost, Self.multiplyingCost(value.changes.count, MemoryLayout<FileChange>.stride))
+        for change in value.changes {
+            for string in [change.path, change.originalPath, change.index, change.workingTree] { cost = Self.addingCost(cost, stringCost(string)) }
+        }
+        for commits in [value.commits, value.behindCommits] {
+            guard let commits else { continue }
+            cost = Self.addingCost(cost, Self.multiplyingCost(commits.count, MemoryLayout<GitCommit>.stride))
+            for commit in commits {
+                for string in [commit.id, commit.subject, commit.author, commit.date] { cost = Self.addingCost(cost, stringCost(string)) }
+            }
+        }
+        // Charge both snapshots independently even when their arrays share copy-on-write storage.
+        return cost
+    }
+
+    private func stringCost(_ value: String?) -> Int { value.map { Self.addingCost(32, Self.multiplyingCost($0.utf8.count, 2)) } ?? 0 }
+
+    private static func addingCost(_ lhs: Int, _ rhs: Int) -> Int {
+        let result = lhs.addingReportingOverflow(rhs)
+        return result.overflow ? Int.max : result.partialValue
+    }
+
+    private static func multiplyingCost(_ lhs: Int, _ rhs: Int) -> Int {
+        let result = lhs.multipliedReportingOverflow(by: rhs)
+        return result.overflow ? Int.max : result.partialValue
+    }
+
+    private func load<Value: Codable & Sendable>(key: String, kind: String, repository: RepositoryCacheRepositoryIdentity, recordingAccess: Bool = true) -> Value? {
         guard !Task.isCancelled, (try? checkDirectory(create: false)) != nil else { return nil }
         let file = entryURL(key: key, kind: kind)
         do {
@@ -189,25 +293,27 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
             guard let persisted = attributes[.modificationDate] as? Date else { return nil }
             let lastAccess = max(persisted, accesses[file.lastPathComponent] ?? persisted)
             guard now().timeIntervalSince(lastAccess) < maximumIdleAge else {
-                requestMaintenance()
+                if recordingAccess { requestMaintenance() }
                 return nil
             }
             let data = try read(file)
             let entry = try JSONDecoder().decode(Entry<Value>.self, from: data)
             guard entry.version == 1, entry.key == key, entry.repository == repository, !Task.isCancelled else {
-                if kind == "detail", !Task.isCancelled { details.removeValue(forKey: key) }
+                if kind == "detail", !Task.isCancelled { forgetDetail(key) }
                 return nil
             }
-            accesses[file.lastPathComponent] = now()
-            if persistedAccesses[file.lastPathComponent] == nil { persistedAccesses[file.lastPathComponent] = persisted }
-            if now().timeIntervalSince(persistedAccesses[file.lastPathComponent] ?? persisted) >= 60 {
-                pendingAccesses.insert(file.lastPathComponent); scheduleWriter()
+            if recordingAccess {
+                accesses[file.lastPathComponent] = now()
+                if persistedAccesses[file.lastPathComponent] == nil { persistedAccesses[file.lastPathComponent] = persisted }
+                if now().timeIntervalSince(persistedAccesses[file.lastPathComponent] ?? persisted) >= 60 {
+                    pendingAccesses.insert(file.lastPathComponent); scheduleWriter()
+                }
+                requestMaintenance()
             }
-            requestMaintenance()
             diagnostics?.record("cache.\(kind).hit", bytes: data.count)
             return entry.value
         } catch {
-            if kind == "detail", !Task.isCancelled { details.removeValue(forKey: key) }
+            if kind == "detail", !Task.isCancelled { forgetDetail(key) }
             diagnostics?.record("cache.\(kind).miss")
             return nil
         }
@@ -219,13 +325,13 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         }
     }
 
-    private func withMutation(create: Bool, _ body: () -> Void) {
-        guard !Task.isCancelled, (try? checkDirectory(create: create)) != nil else { return }
+    @discardableResult private func withMutation(create: Bool, _ body: () -> Void) -> Bool {
+        guard !Task.isCancelled, (try? checkDirectory(create: create)) != nil else { return false }
         let lock = directory.appending(path: ".write.lock")
         let descriptor = open(lock.path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR)
-        guard descriptor >= 0 else { return }
+        guard descriptor >= 0 else { return false }
         defer { close(descriptor) }
-        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { return }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { return false }
         defer { flock(descriptor, LOCK_UN) }
         do {
             let generation = try readGeneration()
@@ -235,12 +341,13 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
             }
             let replacement = UUID().uuidString
             let generationURL = directory.appending(path: ".generation")
-            if PathSafety.exists(generationURL), !isRegularFile(generationURL) { return }
+            if PathSafety.exists(generationURL), !isRegularFile(generationURL) { return false }
             try Data(replacement.utf8).write(to: generationURL, options: .atomic)
             ledgerGeneration = replacement
             body()
             ledgerDirectoryStamp = directoryStamp()
-        } catch { ledger = nil }
+            return true
+        } catch { ledger = nil; return false }
     }
 
     private func write<Value: Codable & Sendable>(_ value: Value, key: String, kind: String, repository: RepositoryCacheRepositoryIdentity) -> Bool {
@@ -307,7 +414,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
             pendingAccesses.remove(name)
             if name.hasPrefix("detail-") {
                 let key = String(name.dropFirst(7).dropLast(5))
-                details.removeValue(forKey: key); pendingDetails.remove(key)
+                forgetDetail(key)
             }
             return true
         } catch { return false }
@@ -366,6 +473,14 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         return "\(metadata.st_dev):\(metadata.st_ino):\(metadata.st_mtimespec.tv_sec):\(metadata.st_mtimespec.tv_nsec):\(metadata.st_ctimespec.tv_sec):\(metadata.st_ctimespec.tv_nsec)"
     }
 
+    private func fileStamp(_ file: URL) -> FileStamp? {
+        var metadata = stat()
+        guard lstat(file.path, &metadata) == 0, metadata.st_mode & S_IFMT == S_IFREG else { return nil }
+        return FileStamp(device: UInt64(bitPattern: Int64(metadata.st_dev)), inode: UInt64(metadata.st_ino), size: metadata.st_size,
+                         modifiedSeconds: metadata.st_mtimespec.tv_sec, modifiedNanoseconds: metadata.st_mtimespec.tv_nsec,
+                         changedSeconds: metadata.st_ctimespec.tv_sec, changedNanoseconds: metadata.st_ctimespec.tv_nsec)
+    }
+
     private func files() -> [File] {
         diagnostics?.record("cache.scan")
         guard let entries = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
@@ -394,7 +509,22 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         let identity: RepositoryCacheIdentity
         var latest: RepositoryDetailSnapshot
         var persisted: RepositoryDetailSnapshot?
+        var latestCost: Int
+        var persistedCost: Int
+        var persistedStamp: FileStamp?
         var checkpointedAt: Date
+        var lastUse: Int
+        var memoryCost: Int { RepositoryDiskCache.addingCost(MemoryLayout<Self>.stride, RepositoryDiskCache.addingCost(latestCost, persistedCost)) }
+    }
+
+    private struct FileStamp: Equatable {
+        let device: UInt64
+        let inode: UInt64
+        let size: Int64
+        let modifiedSeconds: Int
+        let modifiedNanoseconds: Int
+        let changedSeconds: Int
+        let changedNanoseconds: Int
     }
 
     private struct Entry<Value: Codable & Sendable>: Codable {
