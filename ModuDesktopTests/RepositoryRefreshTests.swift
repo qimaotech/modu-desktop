@@ -204,8 +204,6 @@ import Testing
         let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
             try await gate.read(at: path, head: head, base: base)
         })
-        var reportedError = false
-        details.onCommitsError = { _ in reportedError = true }
         details.refresh(resource, in: record)
         do {
             try await eventually { gate.started.contains(head) }
@@ -220,7 +218,7 @@ import Testing
             if switchesSelection { details.refresh(nil, in: record) }
             else { details.pause(); await details.waitForReads() }
             await reading.value
-            #expect(reading.isCancelled && !details.detailLoading && !reportedError)
+            #expect(reading.isCancelled && !details.detailLoading && details.pendingFailure == nil)
             #expect(details.detail.changes == nil && details.detail.summary == nil && details.detail.commits == nil)
             gate.blockedHead = nil
             if switchesSelection { details.refresh(resource, in: record) }

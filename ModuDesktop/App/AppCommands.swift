@@ -18,7 +18,7 @@ struct AppCommands: Commands {
             Button(model.text.string(.uiModuSetup)) { openWindow(id: "setup") }.disabled(model.busy || !startupWindowReady)
         }
         CommandGroup(after: .newItem) {
-            Button(model.text.string(.uiRefreshChanges)) { model.workspace.refreshDetail() }.keyboardShortcut("r").disabled(model.workspace.selection == nil)
+            Button(model.text.string(.uiRefreshChanges)) { model.workspace.refreshDetail(userInitiated: true) }.keyboardShortcut("r").disabled(model.workspace.selection == nil)
             Button(model.text.string(.uiOpenWorkspaceInCodex)) { if let codex = model.tools.first(where: { $0.id == "codex" }) { model.openTool(codex, workspaceRoot: true) } }.disabled(!model.workspace.canManage || !model.tools.contains { $0.id == "codex" })
                 .help(model.text.string(.uiStartCodexFromWorkspaceRootDiscoverWorkflowSkill))
                 .accessibilityHint(model.text.string(.uiStartCodexFromWorkspaceRootDiscoverWorkflowSkill))

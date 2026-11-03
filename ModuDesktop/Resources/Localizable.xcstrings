@@ -3358,23 +3358,6 @@
         }
       }
     },
-    "ui.awaitingVerification": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Awaiting verification"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待校验"
-          }
-        }
-      }
-    },
     "ui.back": {
       "extractionState": "manual",
       "localizations": {
@@ -3570,23 +3553,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法打开工作区"
-          }
-        }
-      }
-    },
-    "ui.canTReadCommits": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can’t read commits"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法读取提交记录"
           }
         }
       }
@@ -5048,6 +5014,23 @@
         }
       }
     },
+    "ui.gitDetailsRefreshFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git Details Refresh Failed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 详情刷新失败"
+          }
+        }
+      }
+    },
     "ui.gitGUI": {
       "extractionState": "manual",
       "localizations": {
@@ -5554,6 +5537,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载提交…"
+          }
+        }
+      }
+    },
+    "ui.loadingGitDetails": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading Git details"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载 Git 详情"
           }
         }
       }
@@ -6931,6 +6931,23 @@
         }
       }
     },
+    "ui.showingPreviousResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing previous results."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍显示上次结果。"
+          }
+        }
+      }
+    },
     "ui.skipped": {
       "extractionState": "manual",
       "localizations": {
@@ -7522,23 +7539,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在更新工作树分组…"
-          }
-        }
-      }
-    },
-    "ui.verificationFailedShowingPreviousResults": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t verify. Showing previous results."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "校验失败，显示上次结果"
           }
         }
       }

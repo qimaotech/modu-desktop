@@ -49,6 +49,13 @@ final class AppModel {
             && management.sheet == nil && presentation.result == nil && presentation.message == nil && !presentation.mainSheetVisible
     }
     var canPresentMaintenanceFailure: Bool { workspace.maintenanceFailurePending && canShowMaintenanceFailure }
+    var detailFailurePresentationID: UUID? {
+        guard !busy, !presentation.quitPending, management.sheet == nil, presentation.result == nil,
+              presentation.message == nil, !presentation.mainSheetVisible, !workspace.maintenanceFailurePending,
+              let failure = workspace.details.failureForPresentation,
+              workspace.record?.root == failure.workspace, workspace.selection == failure.resource else { return nil }
+        return failure.id
+    }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
          cache: (any RepositoryDetailCaching)? = nil,
@@ -205,6 +212,22 @@ final class AppModel {
 
     func presentMaintenanceFailureIfPossible() {
         if canPresentMaintenanceFailure { workspace.showMaintenanceFailure() }
+    }
+
+    func presentDetailFailureIfPossible() {
+        guard detailFailurePresentationID != nil, let failure = workspace.details.takeFailureForPresentation() else { return }
+        let resource = failure.resource.repo ?? failure.resource.group ?? failure.resource.path
+        let overview = Git.sanitize(text.message(failure.error)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let diagnostic = failure.signature.diagnostic.trimmingCharacters(in: .whitespacesAndNewlines)
+        var message = resource + ": " + overview
+        if failure.keepsPreviousResult { message += " " + text.string(.uiShowingPreviousResults) }
+        if !diagnostic.isEmpty, diagnostic != overview { message += "\n\n" + text.string(.uiDetails) + ":\n" + diagnostic }
+        presentation.presentMessage(message, title: text.string(.uiGitDetailsRefreshFailed))
+    }
+
+    func dismissMessage() {
+        workspace.details.dismissFailure()
+        presentation.message = nil
     }
 
     func showMaintenanceFailure() {

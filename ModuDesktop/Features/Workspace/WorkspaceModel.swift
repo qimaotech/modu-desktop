@@ -36,7 +36,6 @@ final class WorkspaceModel {
     private(set) var maintenanceFailurePending = false
     @ObservationIgnored var onMaintenanceFailure: (() -> Void)?
     var canManage: Bool { record != nil && maintenanceState == .ready && !busy && !presentation.quitPending }
-    var canRefreshDetail: Bool { record != nil && selection != nil && !busy && !presentation.quitPending && readsAllowed && maintenanceState != .maintaining }
     enum MaintenanceTrigger { case startup, manual }
     var hasActiveReads: Bool { details.hasActiveReads || reloadTask != nil }
     var needsReadTermination: Bool { hasActiveReads || recordMonitoring || recordDebounceTask != nil || details.needsCacheTermination }
@@ -157,10 +156,6 @@ final class WorkspaceModel {
         }
         details = RepositoryDetailModel(service: service, defaults: preferences.defaults, cache: cache, now: now, diagnostics: diagnostics)
         details.onIdle = { [weak self] in self?.startDetailPreload() }
-        details.onCommitsError = { [weak self] error in
-            guard let self, !self.presentation.quitPending else { return }
-            self.presentation.presentMessage(Git.sanitize(error.message), title: self.text.string(.uiCanTReadCommits))
-        }
     }
 
     func sidebarPreferenceKey(_ name: String) -> String { "sidebar.\(record?.root ?? defaults.string(forKey: "workspace") ?? "").\(name)" }
@@ -452,7 +447,7 @@ final class WorkspaceModel {
         ensureRecordMonitoring()
         if selection == previousSelection { refreshDetail() }
     }
-    func refreshDetail() { details.refresh(selection, in: record) }
+    func refreshDetail(userInitiated: Bool = false) { details.refresh(selection, in: record, userInitiated: userInitiated) }
 
     func setActive(_ active: Bool, refresh: Bool = true) {
         self.active = active

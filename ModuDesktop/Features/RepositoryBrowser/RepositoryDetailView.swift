@@ -43,9 +43,17 @@ struct RepositoryDetailView: View {
 
     private func summary(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(workspace.selection?.path ?? "").font(.system(size: 13)).lineLimit(1).truncationMode(.middle)
-                .help(workspace.currentURL?.path ?? "").accessibilityValue(workspace.currentURL?.path ?? "")
-                .frame(height: 22)
+            HStack(spacing: 6) {
+                Text(workspace.selection?.path ?? "").font(.system(size: 13)).lineLimit(1).truncationMode(.middle)
+                    .help(workspace.currentURL?.path ?? "").accessibilityValue(workspace.currentURL?.path ?? "")
+                ZStack {
+                    if workspace.detailLoading {
+                        ProgressView().controlSize(.mini)
+                            .accessibilityLabel(preferences.text.string(.uiLoadingGitDetails))
+                    }
+                }.frame(width: 14, height: 14)
+                Spacer(minLength: 0)
+            }.frame(height: 22)
             if let summary = workspace.detail.summary {
                 HStack(spacing: compact ? 8 : 12) {
                     if summary.hasRemotes {
@@ -75,26 +83,7 @@ struct RepositoryDetailView: View {
             } else if let error = workspace.detail.summaryError { IssueDescriptionView(message: preferences.text.message(error), details: error.message, text: preferences.text).foregroundStyle(.secondary) }
             else { Color.clear.frame(height: 22).accessibilityElement()
                 .accessibilityLabel(preferences.text.string(.uiLoadingSummary)) }
-            if workspace.details.detailIsStale { verificationStatus.padding(.top, 4) }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading).detailCard()
-    }
-
-    @ViewBuilder private var verificationStatus: some View {
-        if let error = workspace.details.detailRefreshError {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 8) {
-                    Label(preferences.text.string(.uiVerificationFailedShowingPreviousResults), systemImage: "exclamationmark.triangle")
-                    Spacer(minLength: 0)
-                    Button(preferences.text.string(.uiRetry)) { workspace.refreshDetail() }
-                        .controlSize(.small).disabled(!workspace.canRefreshDetail || workspace.detailLoading)
-                }.font(.system(size: 12))
-                IssueDescriptionView(message: preferences.text.message(error), details: Git.sanitize(error.message), text: preferences.text)
-                    .font(.system(size: 11))
-            }.foregroundStyle(DesignStyle.secondary)
-        } else {
-            Label(preferences.text.string(.uiAwaitingVerification), systemImage: "clock")
-                .font(.system(size: 12)).foregroundStyle(DesignStyle.secondary)
-        }
     }
 
     private var changesSection: some View {

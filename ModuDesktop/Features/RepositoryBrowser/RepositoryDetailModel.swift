@@ -24,9 +24,7 @@ final class RepositoryDetailModel {
         }
     }
     private(set) var detail = RepositoryDetailState()
-    private(set) var detailIsStale = false
-    private(set) var detailRefreshError: ModuError?
-    private(set) var detailObservedAt: Date?
+    private(set) var pendingFailure: RepositoryDetailFailure?
     private(set) var changesLoading = false
     private(set) var summaryLoading = false
     var hasActiveReads: Bool { detailTask != nil || detailPreloadTask != nil || eventFilterTask != nil || cancellationDrain != nil || monitoring || fallbackTask != nil }
@@ -42,6 +40,8 @@ final class RepositoryDetailModel {
     private var changeBurstStart: ContinuousClock.Instant?
     private var pendingChange: ResourceChange?
     private var revalidateConfiguration = false
+    private var userInitiatedRefresh = false
+    private var presentedFailure: RepositoryDetailFailure?
     private var pendingCandidates = Set<String>()
     private var eventFilterTask: Task<Void, Never>?
     private var cancellationDrain: Task<Void, Never>?
@@ -65,7 +65,6 @@ final class RepositoryDetailModel {
     private var clearedHistoryStates: [RepositoryCacheRepositoryIdentity: RepositoryHistoryCacheState] = [:]
     private var pendingSessionInvalidations = Set<Resource>()
     @ObservationIgnored var onIdle: (() -> Void)?
-    @ObservationIgnored var onCommitsError: ((ModuError) -> Void)?
     private var collapsedPathsPreferenceKey: String? {
         guard let workspace, let selection else { return nil }
         return "detail.\(workspace.root).\(selection.id).collapsedPaths"
@@ -116,7 +115,7 @@ final class RepositoryDetailModel {
         return contextChanged
     }
 
-    func refresh(_ selection: Resource?, in workspace: WorkspaceRecord?) {
+    func refresh(_ selection: Resource?, in workspace: WorkspaceRecord?, userInitiated: Bool = false) {
         let changedSelection = self.selection != selection
         applyWorkspace(workspace)
         if changedSelection {
@@ -125,13 +124,11 @@ final class RepositoryDetailModel {
             let saved = selection.flatMap { resources[$0]?.lastSuccessfulDetail }
             if saved != nil { diagnostics?.record("detail.memory.hit") }
             detail = saved.map(RepositoryDetailState.init) ?? .init()
-            detailObservedAt = saved?.observedAt
-            detailIsStale = saved != nil
-            detailRefreshError = nil
             collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? [])
             updatePreloadScope(visiblePreloadResources)
         }
         guard selection != nil, workspace != nil else { onIdle?(); return }
+        userInitiatedRefresh = userInitiatedRefresh || userInitiated
         diagnostics?.record("detail.request.refresh")
         request(.structure, revalidatingConfiguration: true)
     }
@@ -157,7 +154,6 @@ final class RepositoryDetailModel {
         pendingChange = (pendingChange ?? []).union(change)
         revalidateConfiguration = revalidateConfiguration || revalidatingConfiguration
         if let selection { resources[selection, default: .init()].invalidated = true }
-        if detailObservedAt != nil { detailIsStale = true }
         cancelPreload()
         startRefresh()
     }
@@ -205,6 +201,22 @@ final class RepositoryDetailModel {
     }
 
     func flushCache() async { await diskCache?.flush() }
+
+    var failureForPresentation: RepositoryDetailFailure? {
+        guard let failure = pendingFailure, active, !suspended, !detailLoading, pendingChange == nil,
+              isCurrent(failure.generation, resource: failure.resource, root: failure.workspace) else { return nil }
+        return failure
+    }
+
+    func takeFailureForPresentation() -> RepositoryDetailFailure? {
+        guard let failure = failureForPresentation else { return nil }
+        pendingFailure = nil
+        resources[failure.resource, default: .init()].lastPresentedError = failure.signature
+        presentedFailure = failure
+        return failure
+    }
+
+    func dismissFailure() { presentedFailure = nil }
 
     func cache(_ state: ResourceState) {
         guard selection != state.resource else { return }
@@ -300,8 +312,8 @@ final class RepositoryDetailModel {
         guard detailTask == nil, !suspended, active, pendingChange != nil, let selection, let workspace else { return }
         let token = generation
         changesLoading = true
-        if detailObservedAt != nil { detailIsStale = true }
-        detailRefreshError = nil
+        userInitiatedRefresh = userInitiatedRefresh || pendingFailure?.userInitiated == true
+        pendingFailure = nil
         detailTask = Task(priority: .userInitiated) {
             await invalidateDiskDetails()
             await invalidateSessionReads()
@@ -317,6 +329,7 @@ final class RepositoryDetailModel {
             }
             guard isCurrent(token, resource: selection, root: workspace.root) else { return }
             detailTask = nil; changesLoading = false; summaryLoading = false
+            if pendingChange == nil { userInitiatedRefresh = false }
             finishDetail()
             onIdle?()
         }
@@ -339,6 +352,7 @@ final class RepositoryDetailModel {
             readContext = context
             let currentIdentity = try RepositoryCacheIdentity(context: context)
             identity = currentIdentity
+            if resources[resource]?.identity != currentIdentity { resources[resource]?.lastPresentedError = nil }
             if let previous = resources[resource]?.identity, previous != currentIdentity {
                 pendingDetailInvalidations.insert(previous)
                 resources[resource]?.lastSuccessfulDetail = nil
@@ -354,8 +368,6 @@ final class RepositoryDetailModel {
                 if let saved {
                     resources[resource, default: .init()].lastSuccessfulDetail = saved
                     detail = RepositoryDetailState(saved)
-                    detailObservedAt = saved.observedAt
-                    detailIsStale = true
                     next = detail
                 }
             }
@@ -399,23 +411,16 @@ final class RepositoryDetailModel {
         if let saved = next.successfulSnapshot(observedAt: date()) {
             resources[resource, default: .init()].lastSuccessfulDetail = saved
             detail = next
-            detailObservedAt = saved.observedAt
-            detailIsStale = pendingChange != nil
-            detailRefreshError = nil
+            pendingFailure = nil
+            resources[resource]?.lastPresentedError = nil
             if let diskCache, let identity {
                 await diskCache.saveDetail(saved, for: identity)
                 guard isCurrent(token, resource: resource, root: workspace.root) else { return }
             }
         } else if let saved = resources[resource]?.lastSuccessfulDetail {
             detail = RepositoryDetailState(saved)
-            detailObservedAt = saved.observedAt
-            detailIsStale = true
-            detailRefreshError = error
         } else {
             detail = next
-            detailObservedAt = nil
-            detailIsStale = false
-            detailRefreshError = nil
         }
         changesLoading = false; summaryLoading = false
         await invalidateDiskDetails()
@@ -423,9 +428,18 @@ final class RepositoryDetailModel {
         resources[resource, default: .init()].lastDetailAttempt = now()
         updateState(resource, changes: next.changes, error: next.changesError, invalidated: pendingChange != nil)
         diagnostics?.record("detail.completed", duration: readStarted.duration(to: .now))
-        if pendingChange == nil, resources[resource]?.lastSuccessfulDetail == nil,
-           let error = next.commitsError, next.summary?.baseOID != nil { onCommitsError?(error) }
+        if pendingChange == nil, let error { enqueueFailure(error, resource: resource, root: workspace.root, token: token) }
         finishDetail()
+    }
+
+    private func enqueueFailure(_ error: ModuError, resource: Resource, root: String, token: Int) {
+        let failure = RepositoryDetailFailure(workspace: root, resource: resource, generation: token,
+                                              error: error, keepsPreviousResult: resources[resource]?.lastSuccessfulDetail != nil,
+                                              userInitiated: userInitiatedRefresh)
+        if let presentedFailure, presentedFailure.workspace == root, presentedFailure.resource == resource,
+           presentedFailure.signature == failure.signature { return }
+        guard userInitiatedRefresh || resources[resource]?.lastPresentedError != failure.signature else { return }
+        pendingFailure = failure
     }
 
     private func readHistory(_ initial: RepositoryDetailState, context: ResourceReadContext, identity: RepositoryCacheIdentity, token: Int) async -> RepositoryDetailState {
@@ -520,7 +534,7 @@ final class RepositoryDetailModel {
     }
 
     private func clearDetail() {
-        detail = .init(); detailObservedAt = nil; detailRefreshError = nil; detailIsStale = false
+        detail = .init()
     }
 
     private func readHistoryRange(at path: URL, head: String, base: String, cached: [GitCommit]?) async -> Result<[GitCommit], ModuError> {
@@ -638,6 +652,7 @@ final class RepositoryDetailModel {
     }
 
     private func cancelCurrent() {
+        pendingFailure = nil; userInitiatedRefresh = false
         if (!pendingCandidates.isEmpty || eventFilterTask != nil), let selection {
             resources[selection, default: .init()].invalidated = true
         }
@@ -731,6 +746,7 @@ final class RepositoryDetailModel {
         var lastSuccessfulDetail: RepositoryDetailSnapshot?
         var identity: RepositoryCacheIdentity?
         var invalidated = true
+        var lastPresentedError: RepositoryDetailFailure.Signature?
     }
 
     private struct ResourceIdentity: Equatable {
@@ -759,6 +775,22 @@ final class RepositoryDetailModel {
         var ahead: [GitCommit]?
         var behind: [GitCommit]?
         var lastUse = 0
+    }
+}
+
+struct RepositoryDetailFailure: Identifiable {
+    let id = UUID()
+    let workspace: String
+    let resource: Resource
+    let generation: Int
+    let error: ModuError
+    let keepsPreviousResult: Bool
+    let userInitiated: Bool
+    var signature: Signature { .init(code: error.code, diagnostic: Git.sanitize(error.message)) }
+
+    struct Signature: Equatable {
+        let code: String
+        let diagnostic: String
     }
 }
 

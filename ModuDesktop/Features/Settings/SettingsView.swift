@@ -77,7 +77,7 @@ struct SettingsView: View {
             }.font(.system(size: 13)).padding(.horizontal, 32).padding(.top, 36).padding(.bottom, 40)
         }.background(DesignStyle.background)
         .navigationTitle(model.text.string(.uiSettings))
-        .alert(model.presentation.messageTitle ?? model.text.string(.uiConfigurationError), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
+        .alert(model.presentation.messageTitle ?? model.text.string(.uiConfigurationError), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .settings }, set: { if !$0 && model.presentation.messageHost == .settings { model.dismissMessage() } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .sheet(isPresented: operationSheetPresentation, onDismiss: {
             if closingAfterWorkspaceChange {
                 closingAfterWorkspaceChange = false

@@ -252,7 +252,7 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.summary?.baseError == nil)
         #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
-        #expect(model.workspace.details.detailIsStale && model.workspace.details.detailRefreshError?.code == "base-unavailable")
+        #expect(model.workspace.details.pendingFailure?.error.code == "base-unavailable" && model.workspace.details.pendingFailure?.keepsPreviousResult == true)
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
 
         try FileManager.default.removeItem(at: path)
@@ -362,7 +362,7 @@ import Testing
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.behindCommits?.count == 31)
-        #expect(model.workspace.details.detailIsStale && model.workspace.details.detailRefreshError?.code == "base-unavailable")
+        #expect(model.workspace.details.pendingFailure?.error.code == "base-unavailable" && model.workspace.details.pendingFailure?.keepsPreviousResult == true)
         _ = try await fixture.service.git.run(["config", "--unset", "remote.origin.uploadpack"], at: path)
         _ = try await fixture.service.git.run(["push", "--force", fixture.remoteURL, "\(base):refs/heads/main"], at: source)
         _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
@@ -439,7 +439,7 @@ import Testing
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.hasRemotes == false && model.workspace.detail.summary?.baseError == nil)
-        #expect(model.workspace.details.detailIsStale && model.workspace.details.detailRefreshError?.code == "base-unavailable")
+        #expect(model.workspace.details.pendingFailure?.error.code == "base-unavailable" && model.workspace.details.pendingFailure?.keepsPreviousResult == true)
         #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
 
         _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: path)
@@ -474,17 +474,57 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.changesError == nil)
         #expect(model.workspace.detail.commitsError != nil)
-        #expect(model.presentation.messageTitle == model.text.string(.uiCanTReadCommits))
+        model.presentDetailFailureIfPossible()
+        #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
         #expect(model.presentation.message?.contains("invalid-date-format") == true)
         #expect(model.presentation.messageHost == .main)
 
-        model.presentation.message = nil
+        model.dismissMessage()
         model.workspace.refreshDetail()
         let cancelled = try #require(model.workspace.details.detailTask)
         model.workspace.selection = nil
         await cancelled.value
         await model.workspace.detailPreloadTask?.value
         #expect(cancelled.isCancelled && model.presentation.message == nil)
+    }
+
+    @Test func recoveryDiscardsDelayedFailureAndLaterFailureReportsPreservedResults() async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        let model = try await makeModel(fixture)
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let path = try #require(model.workspace.record?.repositoryURL("repo"))
+        model.workspace.selection = .repository("repo")
+        do {
+            try await waitForDetail(model)
+            let head = model.workspace.detail.summary?.headOID
+            model.presentation.presentMessage("Existing message", title: "Existing title")
+            _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
+            model.workspace.refreshDetail()
+            try await waitForDetail(model)
+            #expect(model.workspace.details.pendingFailure?.keepsPreviousResult == true)
+            model.presentDetailFailureIfPossible()
+            #expect(model.presentation.message == "Existing message")
+            #expect(model.workspace.detail.summary?.headOID == head)
+
+            _ = try await fixture.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], at: path)
+            model.workspace.refreshDetail()
+            try await waitForDetail(model)
+            model.dismissMessage()
+            model.presentDetailFailureIfPossible()
+            #expect(model.workspace.details.pendingFailure == nil && model.presentation.message == nil)
+
+            _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
+            model.workspace.refreshDetail()
+            try await waitForDetail(model)
+            model.presentDetailFailureIfPossible()
+            #expect(model.presentation.message?.contains(model.text.string(.uiShowingPreviousResults)) == true)
+            #expect(model.presentation.message?.hasPrefix("repo: ") == true)
+            #expect(model.workspace.detail.summary?.headOID == head)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
     }
 
     @Test func allAheadCommitsAreCachedAcrossSelectionButNotNewHeadsOrWorkspaces() async throws {

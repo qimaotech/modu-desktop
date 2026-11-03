@@ -71,7 +71,10 @@ struct ContentView: View {
         .onChange(of: model.canPresentMaintenanceFailure, initial: true) { _, canPresent in
             if canPresent { model.presentMaintenanceFailureIfPossible() }
         }
-        .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.presentation.message = nil } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
+        .onChange(of: model.detailFailurePresentationID, initial: true) { _, id in
+            if id != nil { model.presentDetailFailureIfPossible() }
+        }
+        .alert(model.presentation.messageTitle ?? model.text.string(.uiOperationFailed), isPresented: Binding(get: { model.presentation.message != nil && model.presentation.messageHost == .main }, set: { if !$0 && model.presentation.messageHost == .main { model.dismissMessage() } })) { Button(model.text.string(.uiOk)) {} } message: { Text(model.presentation.message ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if startupCompleted { Task { await model.activate() } }
             else { model.workspace.setActive(true) }

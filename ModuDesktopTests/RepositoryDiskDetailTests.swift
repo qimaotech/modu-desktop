@@ -31,12 +31,12 @@ import Testing
         do {
             try await eventually { reader.calls == 2 }
             #expect(reopened.detail.summary?.headOID == original && reopened.detail.changes?.isEmpty == true)
-            #expect(reopened.detailIsStale && reopened.detailObservedAt != nil && reopened.detailRefreshError == nil)
+            #expect(reopened.detailLoading && reopened.pendingFailure == nil)
             #expect(reopened.state(for: .repository("repo")) == nil && !waiterFinished)
             reader.blocked = false
             await reopened.detailTask?.value
             await waiter.value
-            #expect(waiterFinished && !reopened.detailIsStale)
+            #expect(waiterFinished && !reopened.detailLoading)
             #expect(reopened.detail.summary?.headOID == updated && reopened.detail.commits?.map(\.subject) == ["new head"])
             #expect(reopened.detail.changes?.map(\.path) == ["pending.txt"])
             reopened.stop(); await reopened.waitForReads()
@@ -70,7 +70,7 @@ import Testing
         }, cache: reopenedCache)
         reopened.refresh(.repository("repo"), in: record)
         await reopened.detailTask?.value
-        #expect(reader.calls == 0 && reopened.detailRefreshError == nil && !reopened.detailIsStale)
+        #expect(reader.calls == 0 && reopened.pendingFailure == nil)
         #expect(await reopenedCache.historyWrites == 0)
         #expect(reopened.detail.changes?.map(\.path) == ["fresh.txt"])
         reopened.stop(); await reopened.waitForReads()
@@ -95,13 +95,12 @@ import Testing
         let updated = try #require(await fixture.service.git.oid("HEAD", at: path))
         try Data("new".utf8).write(to: path.appending(path: "new.txt"))
         reader.failure = ModuError("history-failed", "History temporarily unavailable.")
-        var alerts = 0
-        details.onCommitsError = { _ in alerts += 1 }
         details.request(.structure)
         await details.detailTask?.value
         #expect(details.detail.summary?.headOID == original && details.detail.commits?.map(\.subject) == ["old head"])
-        #expect(details.detail.changes?.isEmpty == true && details.detailIsStale)
-        #expect(details.detailRefreshError?.code == "history-failed" && alerts == 0)
+        #expect(details.detail.changes?.isEmpty == true)
+        #expect(details.failureForPresentation?.keepsPreviousResult == true)
+        #expect(details.failureForPresentation?.error.code == "history-failed")
         #expect(details.state(for: .repository("repo"))?.dirty == true)
         let context = try await fixture.service.prepareResourceRead(.repository("repo"), in: record)
         await details.flushCache()
@@ -112,8 +111,96 @@ import Testing
         details.request(.structure)
         await details.detailTask?.value
         #expect(details.detail.summary?.headOID == updated && details.detail.changes?.map(\.path) == ["new.txt"])
-        #expect(!details.detailIsStale && details.detailRefreshError == nil)
+        #expect(details.pendingFailure == nil)
         details.stop(); await details.waitForReads()
+    }
+
+    @Test func detailFailuresDeduplicateUntilRecoveryButAllowManualRetries() async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        let record = try await prepare(fixture)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let reader = DiskDetailHistoryReader(git: fixture.service.git)
+        reader.failure = ModuError("history-failed", "History temporarily unavailable.")
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
+            try await reader.read(at: path, head: head, base: base)
+        })
+        let resource = Resource.repository("repo")
+        details.refresh(resource, in: record)
+        #expect(details.detailLoading && details.failureForPresentation == nil)
+        await details.detailTask?.value
+        #expect(!details.detailLoading && details.failureForPresentation?.keepsPreviousResult == false)
+        #expect(details.takeFailureForPresentation()?.error.code == "history-failed")
+        details.refresh(resource, in: record, userInitiated: true)
+        await details.detailTask?.value
+        #expect(details.pendingFailure == nil)
+        details.dismissFailure()
+
+        details.request(.structure)
+        await details.detailTask?.value
+        #expect(details.pendingFailure == nil)
+        details.refresh(resource, in: record, userInitiated: true)
+        await details.detailTask?.value
+        #expect(details.pendingFailure?.userInitiated == true)
+        details.request(.structure)
+        await details.detailTask?.value
+        #expect(details.takeFailureForPresentation()?.error.code == "history-failed")
+        details.dismissFailure()
+
+        reader.failure = ModuError("other-failure", "Another error.")
+        details.request(.structure)
+        await details.detailTask?.value
+        #expect(details.takeFailureForPresentation()?.error.code == "other-failure")
+        details.dismissFailure()
+        reader.failure = nil
+        details.request(.structure)
+        await details.detailTask?.value
+        #expect(details.pendingFailure == nil && details.detail.commitsError == nil)
+
+        let path = record.repositoryURL("repo")
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "invalidate history"], at: path)
+        reader.failure = ModuError("other-failure", "Another error.")
+        details.request(.structure)
+        await details.detailTask?.value
+        #expect(details.takeFailureForPresentation()?.error.code == "other-failure")
+        details.stop(); await details.waitForReads()
+    }
+
+    @Test(arguments: [false, true])
+    func followUpRefreshSuppressesIntermediateFailureAndKeepsManualIntent(_ manualRetry: Bool) async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        let record = try await prepare(fixture)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let reader = DiskDetailHistoryReader(git: fixture.service.git)
+        reader.failure = ModuError("history-failed", "History temporarily unavailable.")
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
+            try await reader.read(at: path, head: head, base: base)
+        })
+        let resource = Resource.repository("repo")
+        details.refresh(resource, in: record)
+        await details.detailTask?.value
+        #expect(details.takeFailureForPresentation() != nil)
+        details.dismissFailure()
+        reader.blocked = true
+        if !manualRetry { reader.failuresRemaining = 2 }
+        let calls = reader.calls
+        details.refresh(resource, in: record, userInitiated: manualRetry)
+        do {
+            try await eventually { reader.calls == calls + 2 }
+            #expect(details.detailLoading && details.pendingFailure == nil)
+            details.request(.structure)
+            reader.blocked = false
+            await details.detailTask?.value
+            #expect(reader.calls == calls + 4 && !details.detailLoading)
+            if manualRetry { #expect(details.failureForPresentation?.error.code == "history-failed") }
+            else { #expect(details.pendingFailure == nil && details.detail.summary != nil && details.detail.commitsError == nil) }
+            details.stop(); await details.waitForReads()
+        } catch {
+            reader.blocked = false
+            details.stop(); await details.waitForReads()
+            throw error
+        }
     }
 
     @Test func cancelledHydrationCannotPublishOrWriteAndIsDrained() async throws {
@@ -137,7 +224,7 @@ import Testing
             #expect(!drained && details.detail.summary == nil)
             await cache.release()
             await drain.value
-            #expect(drained && details.detail.summary == nil && details.detailObservedAt == nil)
+            #expect(drained && details.detail.summary == nil && details.pendingFailure == nil)
             #expect(await cache.writes == 0)
             details.stop(); await details.waitForReads()
         } catch {
@@ -162,7 +249,7 @@ import Testing
         details.request(.structure)
         await details.detailTask?.value
         #expect(details.detail.summary == nil && details.detail.summaryError != nil)
-        #expect(details.detailObservedAt == nil && !details.detailIsStale)
+        #expect(details.failureForPresentation?.keepsPreviousResult == false)
         details.stop(); await details.waitForReads()
     }
 
@@ -257,6 +344,7 @@ import Testing
     let git: Git
     var blocked = false
     var failure: ModuError?
+    var failuresRemaining: Int?
     private(set) var calls = 0
 
     init(git: Git) { self.git = git }
@@ -264,7 +352,10 @@ import Testing
     func read(at path: URL, head: String, base: String) async throws -> [GitCommit] {
         calls += 1
         while blocked { try await Task.sleep(for: .milliseconds(10)) }
-        if let failure { throw failure }
+        if let failure, failuresRemaining.map({ $0 > 0 }) ?? true {
+            if let remaining = failuresRemaining { failuresRemaining = remaining - 1 }
+            throw failure
+        }
         return try await git.commits(at: path, head: head, base: base, limit: nil)
     }
 }

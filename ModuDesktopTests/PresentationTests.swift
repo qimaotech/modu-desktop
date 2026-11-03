@@ -135,6 +135,93 @@ import Testing
         }
     }
 
+    @Test(arguments: ["message", "sheet", "result", "sheet-dismissal", "background"])
+    func detailFailuresWaitForPresentationWithoutOverwritingOtherUI(_ blocker: String) async throws {
+        try await withModel { model in
+            try await failMissingRepository(model)
+            let failure = try #require(model.workspace.details.pendingFailure)
+            switch blocker {
+            case "message": model.presentation.presentMessage("Existing message", title: "Existing title")
+            case "sheet": model.management.sheet = .add
+            case "result": model.presentation.result = .init(command: "repo.update", workspace: failure.workspace)
+            case "sheet-dismissal": model.presentation.mainSheetVisible = true
+            default: model.workspace.setActive(false)
+            }
+            #expect(model.detailFailurePresentationID == nil)
+            model.presentDetailFailureIfPossible()
+            #expect(model.workspace.details.pendingFailure?.id == failure.id)
+            #expect(model.presentation.message == (blocker == "message" ? "Existing message" : nil))
+            switch blocker {
+            case "message": model.dismissMessage()
+            case "sheet": model.management.sheet = nil
+            case "result": model.presentation.dismissResult()
+            case "sheet-dismissal": model.presentation.mainSheetVisible = false
+            default: model.workspace.setActive(true, refresh: false)
+            }
+            #expect(model.detailFailurePresentationID == failure.id)
+            model.presentDetailFailureIfPossible()
+            #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
+            let message = try #require(model.presentation.message)
+            #expect(message.hasPrefix("repo: "))
+            #expect(message.components(separatedBy: failure.signature.diagnostic).count == 2)
+            #expect(model.presentation.messageHost == .main && model.workspace.details.pendingFailure == nil)
+        }
+    }
+
+    @Test(arguments: ["selection", "workspace", "cancellation"])
+    func delayedDetailFailureIsDiscardedWhenContextEnds(_ change: String) async throws {
+        try await withModel { model in
+            try await failMissingRepository(model)
+            let failure = try #require(model.workspace.details.pendingFailure)
+            model.presentation.presentMessage("Existing message", title: "Existing title")
+            switch change {
+            case "selection":
+                model.workspace.selection = nil
+                model.workspace.selection = failure.resource
+            case "workspace":
+                var record = try #require(model.workspace.record)
+                record.root += "/other-workspace"
+                model.workspace.record = record
+                model.workspace.selection = failure.resource
+            default: model.workspace.details.pause()
+            }
+            model.dismissMessage()
+            model.presentDetailFailureIfPossible()
+            #expect(model.workspace.details.pendingFailure == nil && model.presentation.message == nil)
+            if change != "cancellation" {
+                await model.workspace.details.detailTask?.value
+                let next = try #require(model.workspace.details.pendingFailure)
+                #expect(next.id != failure.id && next.generation != failure.generation)
+                model.presentDetailFailureIfPossible()
+                #expect(model.presentation.message != nil)
+            }
+        }
+    }
+
+    @Test func dismissingSettingsMessageAllowsAnotherManualDetailFailure() async throws {
+        try await withModel { model in
+            try await failMissingRepository(model)
+            model.presentDetailFailureIfPossible()
+            #expect(model.presentation.message != nil)
+            model.presentation.presentMessage("Settings error", title: "Settings", host: .settings)
+            model.dismissMessage()
+            model.workspace.refreshDetail(userInitiated: true)
+            await model.workspace.details.detailTask?.value
+            model.presentDetailFailureIfPossible()
+            #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
+            #expect(model.presentation.message != nil && model.presentation.messageHost == .main)
+        }
+    }
+
+    private func failMissingRepository(_ model: AppModel) async throws {
+        var record = try #require(model.workspace.record)
+        record.repositories = [Repository(url: "https://modu-test.invalid/repo.git")]
+        model.workspace.record = record
+        model.workspace.selection = .repository("repo")
+        await model.workspace.details.detailTask?.value
+        #expect(model.workspace.details.failureForPresentation != nil)
+    }
+
     private func withModel(_ body: (AppModel) async throws -> Void) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "modu-presentation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -148,6 +235,12 @@ import Testing
         let model = AppModel(defaults: defaults, service: service)
         model.workspace.record = record
         // Result handling needs no saved launch preference or Git reload; real operations are tested separately.
-        try await body(model)
+        do {
+            try await body(model)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
     }
 }
