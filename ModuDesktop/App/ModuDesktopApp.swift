@@ -18,12 +18,16 @@ struct ModuDesktopApp: App {
         Window("Modu", id: "main") {
             ContentView(model: model, startupCompleted: startupCompleted)
                 .onAppear { delegate.model = model }
-                .frame(minWidth: 900, minHeight: 600 - chromeHeight)
+                .frame(minWidth: MainWindowPlacement.minimumSize.width, minHeight: MainWindowPlacement.minimumSize.height - chromeHeight)
                 .background(WindowChromeHeight(height: $chromeHeight, onWindow: configureMainWindow))
                 .environment(\.locale, model.preferences.activeLocale.locale)
         }
         .defaultSize(width: 1200, height: 800)
+        .defaultWindowPlacement { _, context in
+            MainWindowPlacement.initial(defaults: model.defaults, defaultVisibleRect: context.defaultDisplay.visibleRect)
+        }
         .defaultLaunchBehavior(.suppressed)
+        // Startup controls presentation; the saved geometry is applied during initial placement.
         .restorationBehavior(.disabled)
         .onChange(of: scenePhase, initial: true) { _, _ in
             delegate.model = model

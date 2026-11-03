@@ -69,6 +69,7 @@
 
 - Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，与正式版隔离且不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
 - 正式版与开发版使用相同的[页面恢复规则](README.md#开始使用)。页面选择和侧栏展开状态按工作区保存，文件树折叠状态再按资源区分；侧栏宽度和 Git 面板比例在同一偏好域内共用。临时加载失败不覆盖已保存的页面选择。
+- 主窗口通过 `AppDelegate` 在当前偏好域保存窗口几何信息，并由 `defaultWindowPlacement` 在首次显示前恢复尺寸与位置，避免显示默认尺寸后再跳变；恢复时按可用屏幕区域约束窗口，兼容原有 AppKit frame 描述。标题栏配置在 `WindowChromeHeight` 的 `viewWillAppear` 中提前应用，尺寸测量仍异步发布。拖动调整尺寸结束、关闭窗口、退出 App 和进入全屏前保存，全屏期间不覆盖普通窗口的记录。窗口仍由启动流程按需打开，不依赖系统的窗口恢复开关。
 - 带 `--mock` 的启动任务每次创建新场景并预选示例成员；同一场景因切换语言重启时恢复已保存的页面与展开状态。场景与偏好的退出清理见[临时实例收尾](#临时实例收尾)。
 - 工作区记录和锁位于 `~/Library/Application Support/Modu/`；`~/.local/bin/modu-cli` 直接链接当前 App 的 `Contents/Resources/modu-cli`，更新 App 无需重新安装 CLI。旧版 CLI 链接在重新安装时迁移，保留原版本目录；不带 mock 的 verify 使用当前开发偏好所选的工作区。
 - `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留各工作区的浏览状态、其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的工作区选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复工作区选择。

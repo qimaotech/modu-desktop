@@ -38,6 +38,8 @@ import Observation
         return false
     }
     func applicationWillTerminate(_ notification: Notification) {
+        saveMainWindowFrame()
+        if let mainWindow { NotificationCenter.default.removeObserver(self, name: nil, object: mainWindow) }
         model?.updates.cancel()
         model?.globalShortcut.stop()
         #if DEBUG
@@ -85,12 +87,18 @@ import Observation
     }
 
     func observeMainWindow(_ window: NSWindow) {
-        guard mainWindow !== window else { return }
+        guard mainWindow !== window else {
+            mainWindowVisibilityChanged()
+            return
+        }
         if let mainWindow { NotificationCenter.default.removeObserver(self, name: nil, object: mainWindow) }
         mainWindow = window
         mainWindowIsOpen = window.isVisible || window.isMiniaturized
         NotificationCenter.default.addObserver(self, selector: #selector(mainWindowDidBecomeKey), name: NSWindow.didBecomeKeyNotification, object: window)
         NotificationCenter.default.addObserver(self, selector: #selector(mainWindowWillClose), name: NSWindow.willCloseNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(mainWindowVisibilityChanged), name: NSWindow.didChangeOcclusionStateNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(saveMainWindowFrame), name: NSWindow.didEndLiveResizeNotification, object: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(saveMainWindowFrame), name: NSWindow.willEnterFullScreenNotification, object: window)
     }
 
     func returnToMainWindow() {
@@ -102,7 +110,18 @@ import Observation
     }
 
     @objc private func mainWindowDidBecomeKey() { mainWindowIsOpen = true }
-    @objc private func mainWindowWillClose() { mainWindowIsOpen = false }
+    @objc private func mainWindowVisibilityChanged() {
+        if mainWindow?.isVisible == true || mainWindow?.isMiniaturized == true { mainWindowIsOpen = true }
+    }
+    @objc private func mainWindowWillClose() {
+        saveMainWindowFrame()
+        mainWindowIsOpen = false
+    }
+
+    @objc private func saveMainWindowFrame() {
+        guard let mainWindow, let model, !mainWindow.styleMask.contains(.fullScreen) else { return }
+        MainWindowPlacement.save(mainWindow, defaults: model.defaults)
+    }
 
     private func toggleVisibility() {
         if NSApp.isActive, !NSApp.isHidden, NSApp.orderedWindows.contains(where: { $0.isVisible && !$0.isMiniaturized && $0.canBecomeMain }) {
