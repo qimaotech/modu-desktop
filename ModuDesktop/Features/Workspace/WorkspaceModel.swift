@@ -10,7 +10,9 @@ final class WorkspaceModel {
     private let operations: OperationLifecycle
     private let presentation: OperationPresentation
     private let recordMonitor: any WorkspaceRecordChangeMonitoring
+    private let now: @MainActor () -> ContinuousClock.Instant
     private let waitForRecordDebounce: @MainActor (ContinuousClock.Instant) async throws -> Void
+    private var lastRecordActivation: (path: String, completedAt: ContinuousClock.Instant)?
     private var active = true
     private var recordWatchRoot: String?
     private var recordWatchID = UUID()
@@ -69,12 +71,14 @@ final class WorkspaceModel {
         var operationID: Int?
         var result: OperationResult?
         var intent: RefreshIntent
+        var recordActivation = false
 
         init(path: String, maintenance: MaintenanceOptions?, intent: RefreshIntent, completion: ReloadCompletion) {
             self.path = path; self.maintenance = maintenance; self.intent = intent; completions = [completion]
         }
         func merge(_ request: ReloadBatch) {
             intent.formUnion(request.intent)
+            recordActivation = recordActivation || request.recordActivation
             if let options = request.maintenance {
                 if let current = maintenance {
                     maintenance = .init(showProgress: current.showProgress || options.showProgress, cancellable: current.cancellable && options.cancellable)
@@ -147,6 +151,7 @@ final class WorkspaceModel {
         self.operations = operations
         self.presentation = presentation
         self.recordMonitor = recordMonitor
+        self.now = now
         self.waitForRecordDebounce = waitForRecordDebounce ?? { deadline in
             try await Task.sleep(until: deadline, clock: .continuous)
         }
@@ -205,10 +210,12 @@ final class WorkspaceModel {
         presentation.presentMaintenanceFailure(maintenanceFailure)
     }
 
-    private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent, afterLoad: (() -> Void)? = nil, wait: Bool = true) async {
+    private func requestReload(maintenance: MaintenanceOptions?, intent: RefreshIntent, afterLoad: (() -> Void)? = nil, wait: Bool = true,
+                               recordActivation: Bool = false) async {
         guard !Task.isCancelled, !presentation.quitPending, let path = defaults.string(forKey: "workspace") else { return }
         let completion = ReloadCompletion(afterLoad)
         let request = ReloadBatch(path: path, maintenance: maintenance, intent: intent, completion: completion)
+        request.recordActivation = recordActivation
         let waitsForBatch = wait && (active || maintenance != nil) && (!busy || activeReload?.operationID.map(operations.isCurrent) == true)
         if waitsForBatch {
             await withTaskCancellationHandler {
@@ -228,6 +235,12 @@ final class WorkspaceModel {
     }
 
     private func enqueueReload(_ request: ReloadBatch) {
+        if request.recordActivation, let active = activeReload, active.recordActivation, active.maintenance == nil,
+           active.path == request.path, reloadTask?.generation == refreshGeneration,
+           reloadTask?.task.isCancelled == false {
+            active.completions += request.completions
+            return
+        }
         if request.maintenance != nil, let active = activeReload, active.maintenance != nil,
            active.path == request.path, reloadTask?.generation == refreshGeneration,
            reloadTask?.task.isCancelled == false {
@@ -320,6 +333,12 @@ final class WorkspaceModel {
     private func loadWorkspace(_ batch: ReloadBatch, generation: Int) async {
         let path = batch.path
         let maintainingWorkspace = batch.maintenance != nil
+        defer {
+            if batch.recordActivation, isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
+               batch.result?.status != .cancelled, !busy || batch.operationID.map(operations.isCurrent) == true {
+                lastRecordActivation = (path, now())
+            }
+        }
         do {
             let root = URL(fileURLWithPath: path)
             guard let record = try await recordForReload(root, batch: batch, generation: generation) else { return }
@@ -424,6 +443,7 @@ final class WorkspaceModel {
         pendingReload?.finish()
         pendingReload = nil
         defaults.set(record.root, forKey: "workspace")
+        lastRecordActivation = nil
         let previousSelection = selection
         self.record = record; blocked = nil; notice = nil
         maintenanceFailure = nil; maintenanceFailurePending = false
@@ -443,10 +463,15 @@ final class WorkspaceModel {
     func activate() async {
         setActive(true, refresh: false)
         details.activate(selection, in: record)
+        if let lastRecordActivation, lastRecordActivation.path == defaults.string(forKey: "workspace"),
+           lastRecordActivation.completedAt.duration(to: now()) < .seconds(10) {
+            if let record { details.activatePreload(in: record, including: sidebarResources) }
+            return
+        }
         await requestReload(maintenance: nil, intent: .record, afterLoad: { [weak self] in
             guard let self, let record = self.record else { return }
             self.details.activatePreload(in: record, including: self.sidebarResources)
-        }, wait: !busy)
+        }, wait: !busy, recordActivation: true)
     }
 
     func operationsChanged(_ busy: Bool) {

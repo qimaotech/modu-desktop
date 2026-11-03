@@ -140,6 +140,118 @@ import Testing
         }
     }
 
+    @Test(arguments: [false, true])
+    func activationRecordReadsCoolDownWhileExplicitAndEventRefreshesBypassIt(_ fails: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let clock = WorkspaceSyncClock()
+        let monitor = WorkspaceRecordMonitorStub()
+        let model = try makeModel(fixture, monitor: monitor, now: { clock.now })
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        var changed = try #require(model.workspace.record)
+        do {
+            if fails { try Data("invalid".utf8).write(to: fixture.service.store.recordURL(fixture.root)) }
+            await model.activate()
+            let previous = model.workspace.record
+            #expect((model.workspace.blocked != nil) == fails)
+            changed.groups["external"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+
+            clock.now = clock.now.advanced(by: .milliseconds(9_999))
+            await model.activate()
+            #expect(model.workspace.record == previous)
+            clock.now = clock.now.advanced(by: .milliseconds(1))
+            await model.activate()
+            #expect(model.workspace.record == changed && model.workspace.blocked == nil)
+
+            changed.groups["manual"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+            await model.workspace.refreshRecord(refreshingSidebar: false)
+            #expect(model.workspace.record == changed)
+
+            changed.groups["event"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+            monitor.emit()
+            try await eventually { model.workspace.record == changed }
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func activationRecordReadsJoinInFlightAndCancellationDoesNotStartCooldown(_ cancels: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let clock = WorkspaceSyncClock()
+        let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        var changed = try #require(model.workspace.record)
+        changed.groups["first"] = WorktreeGroup()
+        try fixture.service.store.save(changed)
+        let first = changed
+        var gate = try ReloadValidationGate(fixture.root)
+        defer { try? gate.resume() }
+        let activation = Task { await model.workspace.activate() }
+        var joining: Task<Void, Never>?
+        do {
+            try await gate.waitUntilStarted()
+            var requested = false
+            joining = Task {
+                requested = true
+                await model.workspace.activate()
+            }
+            try await eventually { requested }
+            changed.groups["latest"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+            if cancels { model.workspace.invalidateReads(cancelReload: true) }
+            try gate.resume()
+            await activation.value
+            await joining?.value
+            try await eventually { !model.workspace.hasActiveReads }
+
+            await model.activate()
+            #expect(model.workspace.record == (cancels ? changed : first))
+            clock.now = clock.now.advanced(by: .seconds(10))
+            await model.activate()
+            #expect(model.workspace.record == changed)
+            await model.workspace.stopReads()
+        } catch {
+            try? gate.resume()
+            await model.workspace.stopReads()
+            await activation.value
+            await joining?.value
+            throw error
+        }
+    }
+
+    @Test func activationRecordCooldownResetsAfterSwitchingWorkspaces() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let next = fixture.directory.appending(path: "next-workspace")
+        try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
+        #expect(await fixture.service.openWorkspace(next).status == .success)
+        let clock = WorkspaceSyncClock()
+        let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let original = try #require(model.workspace.record)
+        do {
+            await model.activate()
+            try await model.switchTo(next, loaded: fixture.service.store.load(next))
+            try await model.switchTo(fixture.root, loaded: original)
+            var changed = original
+            changed.groups["external"] = WorktreeGroup()
+            try fixture.service.store.save(changed)
+            await model.activate()
+            #expect(model.workspace.record == changed)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
+    }
+
     @Test func activationDoesNotReadDetailsAgainAfterUnchangedRecordLoads() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)

@@ -518,7 +518,8 @@ import SwiftUI
     @Test func activationReadsWithoutMaintenanceAndExplicitReloadStillRepairs() async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        var now = ContinuousClock.now
+        let model = try await makeModel(fixture, now: { now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         try FileManager.default.removeItem(at: fixture.root)
         try FileManager.default.createDirectory(at: fixture.root, withIntermediateDirectories: false)
@@ -535,6 +536,7 @@ import SwiftUI
         record.groups["missing"] = WorktreeGroup()
         try fixture.service.store.save(record)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
+        now = now.advanced(by: .seconds(10))
         await model.activate()
         #expect(model.workspace.record == record)
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
@@ -1295,7 +1297,8 @@ import SwiftUI
     @Test func temporaryReadFailurePreservesTheSavedPageAndFileTreeState() async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        var now = ContinuousClock.now
+        let model = try await makeModel(fixture, now: { now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         try await fixture.prepareEmptyGroup("feature")
         model.workspace.record = try fixture.service.store.load(fixture.root)
@@ -1313,6 +1316,7 @@ import SwiftUI
         #expect(try JSONDecoder().decode(Resource.self, from: saved) == .group("feature"))
 
         try original.write(to: recordURL)
+        now = now.advanced(by: .seconds(10))
         await model.activate()
         #expect(model.workspace.blocked == nil && model.workspace.selection == .group("feature"))
         #expect(model.workspace.details.collapsedPaths == ["Sources"])
@@ -1563,13 +1567,14 @@ import SwiftUI
         try #require(model.busy && model.openingWorkspace)
     }
 
-    private func makeModel(_ fixture: Fixture, trace: URL? = nil) async throws -> AppModel {
+    private func makeModel(_ fixture: Fixture, trace: URL? = nil,
+                           now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }) async throws -> AppModel {
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         var git = fixture.service.git
         if let trace { git.runner.environment["GIT_TRACE"] = trace.path }
         let service = WorkspaceService(store: fixture.service.store, git: git, trash: fixture.service.trashDirectory)
-        let model = AppModel(defaults: defaults, service: service)
+        let model = AppModel(defaults: defaults, service: service, now: now)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         defaults.set(model.workspace.record?.root, forKey: "workspace")
         return model

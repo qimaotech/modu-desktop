@@ -49,6 +49,7 @@
 
 ## 验证与交付
 
+- After each code change, check whether related code and documentation need corresponding updates.
 - 交付前 review 最终 diff，检查业务正确性、边界条件、错误与取消处理、异步上下文；一般功能改动不自动要求新增测试或运行全量测试。
 - 测试仅保护核心业务、用户数据、关键失败与取消路径、对外契约及难以 review 的并发；仅在明确回归风险且现有覆盖不足时补充用例。
 - 优先复用或调整现有用例，从最小相关范围运行；跨流程改动、失败或未解决风险时再扩大。
