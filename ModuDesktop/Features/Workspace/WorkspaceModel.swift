@@ -357,7 +357,7 @@ final class WorkspaceModel {
                 details.activatePreload(in: current, including: sidebarResources)
             }
             if selection == previousSelection, contextChanged || batch.intent.contains(.current) { refreshDetail() }
-            if batch.intent.contains(.sidebar) { details.invalidate(resources: sidebarResources.subtracting(selection.map { [$0] } ?? [])) }
+            if batch.intent.contains(.sidebar) { details.invalidateStates(resources: sidebarResources.subtracting(selection.map { [$0] } ?? [])) }
         } catch {
             guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
                   !busy || batch.operationID.map(operations.isCurrent) == true else { return }

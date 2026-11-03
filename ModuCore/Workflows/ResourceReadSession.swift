@@ -29,12 +29,11 @@ public actor ResourceReadSession {
         let token = generation
         let family = FamilyKey(resource: resource, record: record)
         let key = ContextKey(family: family, resource: resource, application: Self.isApplication(visibility))
+        var configurationReads: [ConfigurationScope: ConfigurationRead] = [:]
         var prepared = repositories[family]
         if let current = prepared, !current.isCurrent() { prepared = nil }
         if var current = prepared, revalidateConfiguration {
-            let updated = try await captureConfiguration(at: current.inspection.path,
-                                                        gitDirectory: current.inspection.path.appending(path: ".git"),
-                                                        commonDirectory: URL(fileURLWithPath: current.inspection.commonDirectory))
+            let updated = try await readConfiguration(for: current.inspection, reads: &configurationReads)
             try checkGeneration(token)
             if let updated, updated.output == current.configuration.output {
                 current.configuration = updated
@@ -46,11 +45,14 @@ public actor ResourceReadSession {
            let rebound = entry.context.rebinding(to: record), entry.configuration.isCurrent() {
             var configuration = entry.configuration
             if revalidateConfiguration {
-                let updated = try await captureConfiguration(at: rebound.path, gitDirectory: rebound.gitDirectory,
-                                                            commonDirectory: rebound.commonDirectory)
+                let updated = try await readConfiguration(at: rebound.path, gitDirectory: rebound.gitDirectory,
+                                                         commonDirectory: rebound.commonDirectory, reads: &configurationReads)
                 try checkGeneration(token)
                 if let updated, updated.output == configuration.output { configuration = updated }
-                else { return try await rebuild(resource, record: record, visibility: visibility, family: family, key: key, prepared: prepared, token: token, repositoryProvider: repositoryProvider) }
+                else {
+                    return try await rebuild(resource, record: record, visibility: visibility, family: family, key: key, prepared: prepared,
+                                             token: token, configurationReads: &configurationReads, repositoryProvider: repositoryProvider)
+                }
             }
             let context: ResourceReadContext
             if rebound.indexIsCurrent { context = rebound }
@@ -63,7 +65,8 @@ public actor ResourceReadSession {
             diagnostics?.record("prepare.hit")
             return context
         }
-        return try await rebuild(resource, record: record, visibility: visibility, family: family, key: key, prepared: prepared, token: token, repositoryProvider: repositoryProvider)
+        return try await rebuild(resource, record: record, visibility: visibility, family: family, key: key, prepared: prepared,
+                                 token: token, configurationReads: &configurationReads, repositoryProvider: repositoryProvider)
     }
 
     public func invalidate(resources: Set<Resource>) {
@@ -85,6 +88,7 @@ public actor ResourceReadSession {
 
     private func rebuild(_ resource: Resource, record: WorkspaceRecord, visibility: GitChangeVisibility, family: FamilyKey,
                          key: ContextKey, prepared: FamilyEntry?, token: Int,
+                         configurationReads: inout [ConfigurationScope: ConfigurationRead],
                          repositoryProvider: (@Sendable () async throws -> RepositoryInspection)?) async throws -> ResourceReadContext {
         let start = ContinuousClock.now
         let inspection: RepositoryInspection
@@ -94,8 +98,7 @@ public actor ResourceReadSession {
             if let repositoryProvider { inspection = try await repositoryProvider() }
             else { inspection = try await service.checkedRepository(for: resource, in: record) }
             try checkGeneration(token)
-            let configuration = try await captureConfiguration(at: inspection.path, gitDirectory: inspection.path.appending(path: ".git"),
-                                                              commonDirectory: URL(fileURLWithPath: inspection.commonDirectory))
+            let configuration = try await readConfiguration(for: inspection, reads: &configurationReads)
             try checkGeneration(token)
             if let configuration {
                 guard configuration.matches(origin: inspection.origin) else {
@@ -112,8 +115,8 @@ public actor ResourceReadSession {
         let context = try await service.prepareResourceRead(resource, in: record, repository: inspection, visibility: visibility)
         try checkGeneration(token)
         if let entry, entry.isCurrent(),
-           let configuration = try await captureConfiguration(at: context.path, gitDirectory: context.gitDirectory,
-                                                              commonDirectory: context.commonDirectory) {
+           let configuration = try await readConfiguration(at: context.path, gitDirectory: context.gitDirectory,
+                                                           commonDirectory: context.commonDirectory, reads: &configurationReads) {
             try checkGeneration(token)
             guard configuration.matches(origin: inspection.origin) else {
                 throw ModuError("origin-mismatch", .repositoryOriginDoesNotMatchWorkspaceRecord(context.path.path))
@@ -123,6 +126,31 @@ public actor ResourceReadSession {
         } else { contexts.removeValue(forKey: key) }
         diagnostics?.record("prepare.miss", duration: start.duration(to: .now))
         return context
+    }
+
+    private func readConfiguration(for inspection: RepositoryInspection,
+                                   reads: inout [ConfigurationScope: ConfigurationRead]) async throws -> ConfigurationSnapshot? {
+        let directory = inspection.path.appending(path: ".git")
+        let commonDirectory = URL(fileURLWithPath: inspection.commonDirectory)
+        // Use Git's spelling across volume aliases, keeping a separate HEAD directory when commondir exists.
+        let gitDirectory = PathSafety.exists(directory.appending(path: "commondir")) ? directory : commonDirectory
+        return try await readConfiguration(at: inspection.path, gitDirectory: gitDirectory,
+                                           commonDirectory: commonDirectory, reads: &reads)
+    }
+
+    private func readConfiguration(at path: URL, gitDirectory: URL, commonDirectory: URL,
+                                   reads: inout [ConfigurationScope: ConfigurationRead]) async throws -> ConfigurationSnapshot? {
+        let scope = ConfigurationScope(path: path, gitDirectory: gitDirectory, commonDirectory: commonDirectory)
+        if let remembered = reads[scope] {
+            switch remembered {
+            case .snapshot(let snapshot) where snapshot.isCurrent(): return snapshot
+            case .unavailable: return nil
+            case .snapshot: break
+            }
+        }
+        let snapshot = try await captureConfiguration(at: path, gitDirectory: gitDirectory, commonDirectory: commonDirectory)
+        reads[scope] = snapshot.map(ConfigurationRead.snapshot) ?? .unavailable
+        return snapshot
     }
 
     private func captureConfiguration(at path: URL, gitDirectory: URL, commonDirectory: URL) async throws -> ConfigurationSnapshot? {
@@ -158,6 +186,23 @@ public actor ResourceReadSession {
         let family: FamilyKey
         let resource: Resource
         let application: Bool
+    }
+
+    private struct ConfigurationScope: Hashable {
+        let path: String
+        let gitDirectory: String
+        let commonDirectory: String
+
+        init(path: URL, gitDirectory: URL, commonDirectory: URL) {
+            self.path = path.absoluteURL.path
+            self.gitDirectory = gitDirectory.absoluteURL.path
+            self.commonDirectory = commonDirectory.absoluteURL.path
+        }
+    }
+
+    private enum ConfigurationRead {
+        case snapshot(ConfigurationSnapshot)
+        case unavailable
     }
 
     private struct ContextEntry {

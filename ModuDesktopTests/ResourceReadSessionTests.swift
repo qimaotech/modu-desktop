@@ -45,6 +45,9 @@ struct ResourceReadSessionTests {
         let service = tracedService(f, trace: trace)
         let session = ResourceReadSession(service: service)
         _ = try await session.prepare(.repository("repo"), in: record)
+        let initialCommands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
+        #expect(initialCommands.filter { $0.contains("config --null --show-origin --includes --list") }.count == 1)
+        #expect(initialCommands.filter { $0.contains("config --null --show-origin --includes --type=path --get-regexp") }.count == 1)
         try Data().write(to: trace)
         _ = try await session.prepare(.repository("repo"), in: record)
         #expect(try String(contentsOf: trace, encoding: .utf8).isEmpty)
@@ -55,7 +58,8 @@ struct ResourceReadSessionTests {
         try Data().write(to: trace)
         _ = try await session.prepare(.repository("repo"), in: record, revalidateConfiguration: true)
         let commands = try String(contentsOf: trace, encoding: .utf8)
-        #expect(commands.contains("config --null --show-origin --includes --list"))
+        #expect(commands.split(separator: "\n").filter { $0.contains("config --null --show-origin --includes --list") }.count == 1)
+        #expect(commands.split(separator: "\n").filter { $0.contains("config --null --show-origin --includes --type=path --get-regexp") }.count == 1)
         #expect(!commands.contains("worktree list") && !commands.contains("rev-parse --absolute-git-dir"))
     }
 

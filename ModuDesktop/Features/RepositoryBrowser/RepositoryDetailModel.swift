@@ -297,14 +297,21 @@ final class RepositoryDetailModel {
     }
 
     func invalidate(resources affected: Set<Resource>) {
+        pendingSessionInvalidations.formUnion(affected)
+        invalidateStates(resources: affected)
+    }
+
+    func invalidateStates(resources affected: Set<Resource>) {
         diagnostics?.record("reads.invalidated", count: affected.count)
         for resource in affected { resources[resource, default: .init()].invalidated = true }
-        pendingSessionInvalidations.formUnion(affected)
-        pendingPreload.formUnion(affected.intersection(preloadScope))
+        let visible = affected.intersection(preloadScope)
+        pendingPreload.formUnion(visible)
+        configurationPreload.formUnion(visible)
         if !runningPreload.isDisjoint(with: affected) { cancelPreload() }
         if let selection, affected.contains(selection) {
             cancelCurrent()
             pendingChange = .structure
+            revalidateConfiguration = true
         }
     }
 
