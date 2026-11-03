@@ -260,6 +260,17 @@ struct Fixture {
         _ = try await git.run(["commit", "-m", "fixture"], at: source)
         _ = try await git.run(["clone", "--bare", source.path, remote.path], at: directory)
     }
+    func prepareGroup(_ name: String, repositories: [String]) async throws {
+        // Deletion tests need real worktrees without repeating the group creation workflow.
+        try await prepareEmptyGroup(name)
+        var record = try service.store.load(root)
+        for repository in repositories {
+            _ = try await service.git.run(["worktree", "add", "--no-track", "-b", name,
+                                           record.memberURL(name, repository).path, "origin/main"], at: record.repositoryURL(repository))
+        }
+        record.groups[name]?.repositories = repositories
+        try service.store.save(record)
+    }
     func prepareEmptyGroup(_ name: String) async throws {
         var record = try service.store.load(root)
         // Empty groups are valid after member removal; prepare that state without creating and deleting a member.

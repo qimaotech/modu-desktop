@@ -126,7 +126,7 @@ struct PreviewConcurrencyTests {
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         return try fixture.service.store.load(fixture.root)
     }
 

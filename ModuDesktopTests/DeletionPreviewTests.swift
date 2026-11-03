@@ -398,6 +398,6 @@ import Testing
     private func prepare(_ fixture: Fixture, group: Bool = true) async throws {
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        if group { #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success) }
+        if group { try await fixture.prepareGroup("feature", repositories: ["repo"]) }
     }
 }

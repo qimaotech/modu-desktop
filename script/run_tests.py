@@ -23,9 +23,11 @@ FAILURE_PATTERN = re.compile(r": (?:fatal )?error:|^error:|^ld:|^Undefined symbo
                              r"Test .+ failed(?: after| with)|^Test (?:run|cleanup) failed:|^Test run interrupted")
 # Balance the slow Git suites; the final shard includes all remaining and future suites.
 TEST_SHARDS = (
-    ("WorkflowTests", "DeletionPreviewTests", "MockWorkspaceTests", "GitSSHTests"),
-    ("DeletionCancellationTests", "WorktreeCreationTests", "ImportCancellationTests", "ModuCoreTests"),
-    ("WorkspaceLoadingTests", "DetailCacheTests", "FailureTests", "AppUpdateInstallerTests"),
+    ("WorkflowTests", "DeletionPreviewTests", "MockWorkspaceTests", "GitSSHTests",
+     "RepositoryRefreshTests", "WorkspaceTreeTests"),
+    ("DeletionCancellationTests", "WorktreeCreationTests", "ImportCancellationTests", "ModuCoreTests",
+     "DetailCacheTests", "WorkspaceCommitTests", "MockWorkspacePreparationTests"),
+    ("WorkspaceLoadingTests", "FailureTests", "AppUpdateInstallerTests", "RepositoryUpdateTests"),
 )
 
 

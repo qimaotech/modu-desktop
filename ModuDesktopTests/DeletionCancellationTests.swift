@@ -103,7 +103,7 @@ import Testing
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         #expect(await fixture.service.addRepository(.init(url: other), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo", "other"], at: fixture.root).status == .success)
+        try await fixture.prepareGroup("feature", repositories: ["repo", "other"])
         return try fixture.service.store.load(fixture.root)
     }
 

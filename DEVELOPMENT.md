@@ -96,7 +96,7 @@
 - 交互终端使用系统 ANSI 配色：运行阶段蓝色、成功绿色、失败红色、跳过或中断黄色，时间、路径和分隔符弱化。颜色只用于终端显示，不写入日志；非终端、`NO_COLOR` 或 `TERM=dumb` 环境禁用颜色，`TERM=dumb` 同时禁用单行覆盖。
 - 完整日志保存在系统临时目录独立的 `modu-tests-*.log`，清理测试环境时保留，按输出的精确路径查看或删除。日志定位优先读取进度、结果汇总和具体失败，避免反复输出日志尾部。
 - 测试环境隔离，默认删除结果包；退出或清理无法确认时保留环境并返回失败。Xcode 耗时包含构建与测试，另报告清理及总耗时。
-- 发布测试按 suite 分成四组，组内串行，在独立 runner 上并行；分组配置位于 `run_tests.py`，第四组包含前三组之外的全部测试，新增 suite 自动纳入。调整分组时参考 CI 日志中的 suite 耗时。
+- 发布测试按 suite 分成四组，组内串行，在独立 runner 上并行；分组配置位于 `run_tests.py`，第四组包含前三组之外的全部测试，新增 suite 自动纳入。调整分组时参考同机串行采样或 CI 日志中的 suite 耗时；本地复用构建产物的耗时不能直接代表 CI 构建耗时。
 - 零用例或全跳过不算通过，`-enumerate-tests` 除外；筛选失败时先核对方法标识与 `TEST_FILTER`。
 - Mock 测试聚焦场景加载、外部工具目标及安装、删除、目录和网络隔离；完整刷新、分组管理与 YAML 流程复用 [业务测试](ModuDesktopTests/)，避免重复覆盖。
 - 可重复的读取/缓存比较使用 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`，默认不执行。场景在本次临时目录准备多仓库、分组、2,000 个未跟踪文件和 250 条历史缓存，`BENCHMARK` JSON 写入完整日志，追加 `-- --verbose` 可实时查看；比较冷/热轻量查询与完整查询，以及重复保存和目标读取的调用次数。激活切换与忽略事件降噪分别复用 `ActivationReadSchedulingTests`、`WorkspaceSyncTests` 的可控时钟和事件替身；确定性断言使用次数，耗时只用于比较。
