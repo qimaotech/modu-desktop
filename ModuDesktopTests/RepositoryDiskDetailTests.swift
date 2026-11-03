@@ -4,6 +4,108 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct RepositoryDiskDetailTests {
+    @Test func failedCompletePreloadKeepsThePreviousSuccessAndConsumesItsRequest() async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        let record = try await prepare(fixture)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let resource = Resource.repository("repo"), path = record.repositoryURL("repo")
+        let reader = DiskDetailHistoryReader(git: fixture.service.git)
+        let cache = RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache"))
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
+            try await reader.read(at: path, head: head, base: base)
+        }, cache: cache)
+        do {
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            await details.snapshotPreloadTask?.value
+            await details.flushCache()
+            let context = try await fixture.service.prepareResourceRead(resource, in: record)
+            let identity = try RepositoryCacheIdentity(context: context)
+            let original = try #require(await cache.loadDetail(for: identity)?.summary.headOID)
+            _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "invalidate background history"], at: path)
+            try Data("new".utf8).write(to: path.appending(path: "new.txt"))
+            reader.failure = ModuError("background-history-failed", "Background history is unavailable.")
+            details.invalidateStates(resources: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            await details.snapshotPreloadTask?.value
+            #expect(reader.calls == 4)
+            #expect(details.detail.summary == nil && !details.detailLoading && details.pendingFailure == nil)
+            #expect(details.state(for: resource)?.dirty == true)
+            details.drainPreload()
+            #expect(details.snapshotPreloadTask == nil)
+            await details.flushCache()
+            #expect(await cache.loadDetail(for: identity)?.summary.headOID == original)
+            details.refresh(resource, in: record)
+            #expect(details.detail.summary?.headOID == original && details.detail.changes?.isEmpty == true)
+            details.stop(); await details.waitForReads()
+        } catch {
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
+    @Test(arguments: CompletePreloadCancellation.allCases)
+    func cancelledCompletePreloadsCannotPublishOrPersist(_ cancellation: CompletePreloadCancellation) async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        _ = try await prepare(fixture)
+        try await fixture.prepareEmptyGroup("foreground")
+        let record = try fixture.service.store.load(fixture.root)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let resource = Resource.repository("repo")
+        let reader = DiskDetailHistoryReader(git: fixture.service.git)
+        reader.blocked = true
+        let cache = RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache"))
+        let now = ContinuousClock.now
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
+            try await reader.read(at: path, head: head, base: base)
+        }, cache: cache, now: { now })
+        do {
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            let reading = try #require(details.snapshotPreloadTask)
+            try await eventually { reader.calls == 2 }
+            switch cancellation {
+            case .collapse: details.setPreloadScope(in: record, including: [])
+            case .selection: details.refresh(.group("foreground"), in: record)
+            case .invalidation: details.invalidateStates(resources: [resource])
+            }
+            #expect(reading.isCancelled && details.snapshotPreloadTask == nil)
+            reader.blocked = false
+            await reading.value
+            await details.waitForReads()
+            await details.detailTask?.value
+            await details.flushCache()
+            let context = try await fixture.service.prepareResourceRead(resource, in: record)
+            #expect(await cache.loadDetail(for: try RepositoryCacheIdentity(context: context)) == nil)
+            #expect(details.pendingFailure == nil)
+            if case .collapse = cancellation {
+                details.setPreloadScope(in: record, including: [resource])
+                details.drainPreload()
+                let retry = try #require(details.snapshotPreloadTask)
+                await retry.value
+            }
+            details.refresh(resource, in: record)
+            if case .collapse = cancellation {
+                #expect(details.detail.summary != nil && details.detail.commits != nil)
+            } else {
+                #expect(details.detail.summary == nil && details.detail.changes == nil)
+            }
+            details.stop(); await details.waitForReads(); await details.flushCache()
+        } catch {
+            reader.blocked = false
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
     @Test func diskSnapshotAppearsBeforeLiveReadAndDoesNotReleaseTheDetailWaiter() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         let record = try await prepare(fixture)
@@ -47,21 +149,31 @@ import Testing
         }
     }
 
-    @Test func anotherModelReusesDiskHistoryWhileReadingFreshChanges() async throws {
+    @Test func preloadedDetailsReuseDiskHistoryWhileReadingFreshChanges() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let directory = fixture.directory.appending(path: "detail-cache")
         let initialCache = RepositoryDiskCache(directory: directory)
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "preloaded head"], at: record.repositoryURL("repo"))
         let first = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), cache: initialCache)
+        first.setPreloadScope(in: record, including: [.repository("repo")])
+        first.drainPreload()
+        await first.detailPreloadTask?.value
+        first.drainPreload()
+        await first.snapshotPreloadTask?.value
+        #expect(first.detail.summary == nil && first.detail.changes == nil && !first.detailLoading)
         first.refresh(.repository("repo"), in: record)
-        await first.detailTask?.value
+        #expect(first.detail.commits?.map(\.subject) == ["preloaded head"])
         first.stop(); await first.waitForReads(); await first.flushCache()
         try Data("fresh".utf8).write(to: record.repositoryURL("repo").appending(path: "fresh.txt"))
         let reader = DiskDetailHistoryReader(git: fixture.service.git)
         reader.failure = ModuError("unexpected-history-read", "History should come from disk.")
         let reopenedCache = RepositoryDiskCache(directory: directory)
+        let context = try await fixture.service.prepareResourceRead(.repository("repo"), in: record)
+        let saved = await reopenedCache.loadDetail(for: try RepositoryCacheIdentity(context: context))
+        #expect(saved?.commits?.map(\.subject) == ["preloaded head"] && saved?.changes.isEmpty == true)
         let reopened = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
             try await reader.read(at: path, head: head, base: base)
         }, cache: reopenedCache)
@@ -310,6 +422,10 @@ import Testing
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         try #require(condition())
     }
+}
+
+enum CompletePreloadCancellation: CaseIterable {
+    case collapse, selection, invalidation
 }
 
 @MainActor private final class DiskDetailHistoryReader {

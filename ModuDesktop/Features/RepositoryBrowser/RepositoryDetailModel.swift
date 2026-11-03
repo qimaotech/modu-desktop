@@ -27,7 +27,7 @@ final class RepositoryDetailModel {
     private(set) var pendingFailure: RepositoryDetailFailure?
     private(set) var changesLoading = false
     private(set) var summaryLoading = false
-    var hasActiveReads: Bool { detailTask != nil || detailPreloadTask != nil || eventFilterTask != nil || cancellationDrain != nil || monitoring || fallbackTask != nil }
+    var hasActiveReads: Bool { detailTask != nil || detailPreloadTask != nil || snapshotPreloadTask != nil || eventFilterTask != nil || cancellationDrain != nil || monitoring || fallbackTask != nil }
     var needsCacheTermination: Bool { diskCache != nil }
     var snapshotLoading: Bool { changesLoading || summaryLoading }
     var detailLoading: Bool { detailTask != nil }
@@ -35,6 +35,7 @@ final class RepositoryDetailModel {
 
     private(set) var detailTask: Task<Void, Never>?
     private(set) var detailPreloadTask: Task<Void, Never>?
+    private(set) var snapshotPreloadTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var fallbackTask: Task<Void, Never>?
     private var changeBurstStart: ContinuousClock.Instant?
@@ -53,6 +54,9 @@ final class RepositoryDetailModel {
     private var runningPreload = Set<Resource>()
     private var visiblePreloadResources = Set<Resource>()
     private var configurationPreload = Set<Resource>()
+    private var pendingSnapshots = Set<Resource>()
+    private var runningSnapshot: Resource?
+    private var snapshotPreloadGeneration = 0
     private var readContext: ResourceReadContext?
     private var monitoring = false
     private var suspended = false
@@ -97,16 +101,18 @@ final class RepositoryDetailModel {
             pendingSessionInvalidations.formUnion(resources.keys)
             resources = [:]; histories = [:]; clearedHistoryStates = [:]
             pendingPreload = []; preloadScope = []; visiblePreloadResources = []; configurationPreload = []
+            pendingSnapshots = []
             clearDetail()
         } else {
             let configured = Set(currentIdentities.keys)
             for (resource, entry) in resources where !configured.contains(resource) || previousIdentities[resource] != currentIdentities[resource] {
                 if let identity = entry.identity { pendingDetailInvalidations.insert(identity) }
                 pendingSessionInvalidations.insert(resource)
-                if preloadScope.contains(resource) { pendingPreload.insert(resource) }
+                if preloadScope.contains(resource) { pendingPreload.insert(resource); pendingSnapshots.insert(resource) }
             }
             resources = resources.filter { configured.contains($0.key) && previousIdentities[$0.key] == currentIdentities[$0.key] }
             pendingPreload.formIntersection(configured)
+            pendingSnapshots.formIntersection(configured)
             preloadScope.formIntersection(configured)
             if let selection, let current = currentIdentities[selection], current != previousIdentities[selection] { clearDetail() }
         }
@@ -139,8 +145,8 @@ final class RepositoryDetailModel {
         if !pendingCandidates.isEmpty { scheduleEventFilter() }
         guard detailTask == nil else { diagnostics?.record("detail.activation.join"); return }
         let entry = resources[selection]
-        let identityChanged = entry?.identity?.isCurrent() == false || entry?.statusIdentity != statusIdentity(for: selection)
-        if pendingChange == nil, entry?.invalidated == false, !identityChanged,
+        let identityChanged = entry?.identity?.isCurrent() == false || entry?.detailStatusIdentity != statusIdentity(for: selection)
+        if pendingChange == nil, entry?.detailInvalidated == false, !identityChanged,
            let attempted = entry?.lastDetailAttempt, attempted.duration(to: now()) < .seconds(10) {
             diagnostics?.record("detail.activation.hit")
             return
@@ -153,7 +159,7 @@ final class RepositoryDetailModel {
         guard selection != nil, workspace != nil else { return }
         pendingChange = (pendingChange ?? []).union(change)
         revalidateConfiguration = revalidateConfiguration || revalidatingConfiguration
-        if let selection { resources[selection, default: .init()].invalidated = true }
+        if let selection { markInvalidated(selection) }
         cancelPreload()
         startRefresh()
     }
@@ -220,6 +226,11 @@ final class RepositoryDetailModel {
 
     func cache(_ state: ResourceState) {
         guard selection != state.resource else { return }
+        if let previous = resources[state.resource]?.state,
+           previous.available != state.available || previous.dirty != state.dirty {
+            markDetailInvalidated(state.resource)
+            if preloadScope.contains(state.resource) { pendingSnapshots.insert(state.resource) }
+        }
         updateState(state)
     }
 
@@ -241,9 +252,17 @@ final class RepositoryDetailModel {
         preloadScope = Set(service.resources(workspace)).intersection(included)
         if let selection { preloadScope.remove(selection) }
         pendingPreload.formIntersection(preloadScope)
+        pendingSnapshots.formIntersection(preloadScope)
         configurationPreload.formIntersection(preloadScope)
-        if detailPreloadTask != nil, previous != preloadScope { cancelPreload() }
-        enqueuePreload(preloadScope.subtracting(previous), maximumAge: .seconds(30), revalidatingConfiguration: false)
+        if detailPreloadTask != nil, previous != preloadScope { cancelStatePreload() }
+        if let runningSnapshot, !preloadScope.contains(runningSnapshot) { cancelSnapshotPreload() }
+        let added = preloadScope.subtracting(previous)
+        enqueuePreload(added, maximumAge: .seconds(30), revalidatingConfiguration: false)
+        pendingSnapshots.formUnion(added.filter { resource in
+            guard let entry = resources[resource], !entry.detailInvalidated, entry.identity?.isCurrent() != false,
+                  entry.detailStatusIdentity == statusIdentity(for: resource), let attempted = entry.lastDetailAttempt else { return true }
+            return attempted.duration(to: now()) >= .seconds(30)
+        })
     }
 
     private func enqueuePreload(_ included: Set<Resource>, maximumAge: Duration, revalidatingConfiguration: Bool) {
@@ -258,10 +277,12 @@ final class RepositoryDetailModel {
     }
 
     func drainPreload() {
-        guard let workspace, detailPreloadTask == nil, !snapshotLoading, !suspended, active,
-              !pendingPreload.isEmpty, cancellationDrain == nil else { return }
+        guard let workspace, detailTask == nil, selection == nil || pendingChange == nil,
+              detailPreloadTask == nil, !suspended, active else { return }
         let requested = pendingPreload.intersection(preloadScope)
-        guard !requested.isEmpty else { return }
+        if !requested.isEmpty, snapshotPreloadTask != nil { cancelSnapshotPreload() }
+        guard cancellationDrain == nil else { return }
+        guard !requested.isEmpty else { startSnapshotPreload(in: workspace); return }
         let revalidate = !configurationPreload.isDisjoint(with: requested)
         diagnostics?.record("sidebar.read", count: requested.count)
         let token = preloadGeneration
@@ -269,7 +290,7 @@ final class RepositoryDetailModel {
         detailPreloadTask = Task(priority: .utility) {
             await invalidateSessionReads()
             guard !Task.isCancelled, preloadGeneration == token else { return }
-            let result = await service.inspectStates(workspace, including: requested, concurrency: 2, session: readSession,
+            let result = await service.inspectStates(workspace, including: requested, concurrency: 4, session: readSession,
                                                      revalidateConfiguration: revalidate) { @MainActor [weak self] state in
                 guard let self, !Task.isCancelled, self.preloadGeneration == token,
                       self.workspace?.root == workspace.root, self.preloadScope.contains(state.resource) else { return }
@@ -291,9 +312,81 @@ final class RepositoryDetailModel {
     }
 
     func cancelPreload() {
+        cancelStatePreload()
+        cancelSnapshotPreload()
+    }
+
+    private func cancelStatePreload() {
         let task = detailPreloadTask
         task?.cancel(); detailPreloadTask = nil; runningPreload = []; preloadGeneration += 1
         if let task { drainCancelledTask(task) }
+    }
+
+    private func cancelSnapshotPreload() {
+        let task = snapshotPreloadTask
+        task?.cancel(); snapshotPreloadTask = nil; runningSnapshot = nil; snapshotPreloadGeneration += 1
+        if let task { drainCancelledTask(task) }
+    }
+
+    private func startSnapshotPreload(in workspace: WorkspaceRecord) {
+        guard snapshotPreloadTask == nil, !pendingSnapshots.isDisjoint(with: preloadScope) else { return }
+        let token = snapshotPreloadGeneration
+        snapshotPreloadTask = Task(priority: .utility) {
+            defer {
+                if snapshotPreloadGeneration == token {
+                    snapshotPreloadTask = nil; runningSnapshot = nil
+                    onIdle?()
+                }
+            }
+            await invalidateDiskDetails()
+            await invalidateSessionReads()
+            guard !Task.isCancelled, snapshotPreloadGeneration == token else { return }
+            while let resource = pendingSnapshots.intersection(preloadScope).sorted(by: {
+                let firstMissing = resources[$0]?.lastSuccessfulDetail == nil
+                let secondMissing = resources[$1]?.lastSuccessfulDetail == nil
+                return firstMissing == secondMissing ? $0.id < $1.id : firstMissing
+            }).first {
+                runningSnapshot = resource
+                let revision = resources[resource]?.detailRevision ?? 0
+                let valid = { self.isPreloading(token, resource: resource, root: workspace.root, revision: revision) }
+                diagnostics?.record("detail.preload.read")
+                guard var result = await readResourceDetail(resource, in: workspace, initial: .init(), change: .structure,
+                                                           revalidatingConfiguration: true, isValid: valid), valid() else { return }
+                if result.needsRefresh {
+                    markDetailInvalidated(resource)
+                    continue
+                }
+                if let saved = result.detail.successfulSnapshot(observedAt: date()), let identity = result.identity, identity.isCurrent() {
+                    await diskCache?.saveDetail(saved, for: identity)
+                    guard valid() else { return }
+                    if identity.isCurrent() {
+                        resources[resource, default: .init()].lastSuccessfulDetail = saved
+                        resources[resource]?.lastPresentedError = nil
+                    } else {
+                        pendingDetailInvalidations.insert(identity)
+                        resources[resource]?.lastSuccessfulDetail = nil
+                        resources[resource]?.identity = nil
+                        result.detail.changes = nil
+                        result.detail.changesError = ModuError("repository-changed", "Repository identity changed while reading.")
+                        await invalidateDiskDetails()
+                        guard valid() else { return }
+                    }
+                }
+                guard valid() else { return }
+                await invalidateDiskDetails()
+                guard valid() else { return }
+                recordDetailAttempt(resource)
+                updateState(resource, changes: result.detail.changes, error: result.detail.changesError)
+                pendingSnapshots.remove(resource)
+                diagnostics?.record("detail.preload.completed")
+                runningSnapshot = nil
+            }
+        }
+    }
+
+    private func isPreloading(_ token: Int, resource: Resource, root: String, revision: Int) -> Bool {
+        !Task.isCancelled && snapshotPreloadGeneration == token && workspace?.root == root && active && !suspended
+            && selection != resource && preloadScope.contains(resource) && (resources[resource]?.detailRevision ?? 0) == revision
     }
 
     func invalidate(resources affected: Set<Resource>) {
@@ -303,11 +396,12 @@ final class RepositoryDetailModel {
 
     func invalidateStates(resources affected: Set<Resource>) {
         diagnostics?.record("reads.invalidated", count: affected.count)
-        for resource in affected { resources[resource, default: .init()].invalidated = true }
+        for resource in affected { markInvalidated(resource) }
         let visible = affected.intersection(preloadScope)
         pendingPreload.formUnion(visible)
+        pendingSnapshots.formUnion(visible)
         configurationPreload.formUnion(visible)
-        if !runningPreload.isDisjoint(with: affected) { cancelPreload() }
+        if !runningPreload.isDisjoint(with: affected) || runningSnapshot.map(affected.contains) == true { cancelPreload() }
         if let selection, affected.contains(selection) {
             cancelCurrent()
             pendingChange = .structure
@@ -343,62 +437,118 @@ final class RepositoryDetailModel {
     }
 
     private func readSnapshot(_ resource: Resource, in workspace: WorkspaceRecord, change: ResourceChange, revalidatingConfiguration: Bool, token: Int) async {
-        guard isCurrent(token, resource: resource, root: workspace.root) else { return }
         let readStarted = ContinuousClock.now
-        var next = detail
-        var identity: RepositoryCacheIdentity?
+        let revision = resources[resource]?.detailRevision ?? 0
+        let valid = { self.isCurrent(token, resource: resource, root: workspace.root) }
+        guard let result = await readResourceDetail(resource, in: workspace, initial: detail, change: change,
+                                                   revalidatingConfiguration: revalidatingConfiguration, isValid: valid,
+                                                   progress: { progress in
+            switch progress {
+            case .prepared(let context, let saved):
+                if self.readContext == nil || !change.intersection([.structure, .index, .configuration]).isEmpty || revalidatingConfiguration {
+                    self.stopMonitoring()
+                }
+                self.readContext = context
+                self.detail = saved
+                if !self.monitoring { self.startMonitoring(context, token: token) }
+            case .statusRead: self.changesLoading = false
+            case .readingSummary: self.summaryLoading = true
+            case .summaryRead: self.summaryLoading = false
+            }
+        }), valid() else { return }
+        let next = result.detail
+        if result.context == nil {
+            if result.discardsSavedDetail { clearDetail() }
+            readContext = nil; stopMonitoring(); startFallback(token: token)
+        }
+        if result.needsRefresh {
+            pendingChange = (pendingChange ?? []).union(.summary)
+            markInvalidated(resource)
+        }
+        if revision == resources[resource]?.detailRevision {
+            if let saved = next.successfulSnapshot(observedAt: date()), let identity = result.identity, identity.isCurrent() {
+                resources[resource, default: .init()].lastSuccessfulDetail = saved
+                detail = next
+                pendingFailure = nil
+                resources[resource]?.lastPresentedError = nil
+                await diskCache?.saveDetail(saved, for: identity)
+                guard valid() else { return }
+            } else if let saved = resources[resource]?.lastSuccessfulDetail {
+                detail = RepositoryDetailState(saved)
+            } else {
+                detail = next
+            }
+            if revision == resources[resource]?.detailRevision { recordDetailAttempt(resource) }
+        }
+        changesLoading = false; summaryLoading = false
+        await invalidateDiskDetails()
+        guard valid() else { return }
+        updateState(resource, changes: next.changes, error: next.changesError, invalidated: pendingChange != nil)
+        diagnostics?.record("detail.completed", duration: readStarted.duration(to: .now))
+        if pendingChange == nil, let error = next.readError { enqueueFailure(error, resource: resource, root: workspace.root, token: token) }
+        finishDetail()
+    }
+
+    private func readResourceDetail(_ resource: Resource, in workspace: WorkspaceRecord, initial: RepositoryDetailState,
+                                    change: ResourceChange, revalidatingConfiguration: Bool, isValid: () -> Bool,
+                                    progress: (DetailReadProgress) -> Void = { _ in }) async -> DetailReadResult? {
+        guard isValid() else { return nil }
+        var result = DetailReadResult(detail: initial)
+        var statusRead = false
         do {
             let started = ContinuousClock.now
             let context = try await readSession.prepare(resource, in: workspace, visibility: .application,
                                                         revalidateConfiguration: revalidatingConfiguration || change.contains(.configuration))
-            guard isCurrent(token, resource: resource, root: workspace.root) else { return }
+            guard isValid() else { return nil }
             diagnostics?.record("detail.prepare", duration: started.duration(to: .now))
-            if readContext == nil || !change.intersection([.structure, .index, .configuration]).isEmpty || revalidatingConfiguration {
-                stopMonitoring()
-            }
-            readContext = context
-            let currentIdentity = try RepositoryCacheIdentity(context: context)
-            identity = currentIdentity
-            if resources[resource]?.identity != currentIdentity { resources[resource]?.lastPresentedError = nil }
-            if let previous = resources[resource]?.identity, previous != currentIdentity {
+            let identity = try RepositoryCacheIdentity(context: context)
+            result.identity = identity
+            if resources[resource]?.identity != identity { resources[resource]?.lastPresentedError = nil }
+            if let previous = resources[resource]?.identity, previous != identity {
                 pendingDetailInvalidations.insert(previous)
                 resources[resource]?.lastSuccessfulDetail = nil
-                clearDetail()
-                next = .init()
+                result.detail = .init()
+                result.discardsSavedDetail = true
                 await invalidateDiskDetails()
-                guard isCurrent(token, resource: resource, root: workspace.root) else { return }
+                guard isValid() else { return nil }
             }
-            resources[resource, default: .init()].identity = currentIdentity
-            if resources[resource]?.lastSuccessfulDetail == nil, let diskCache {
-                let saved = await diskCache.loadDetail(for: currentIdentity)
-                guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-                if let saved {
+            resources[resource, default: .init()].identity = identity
+            if let saved = resources[resource]?.lastSuccessfulDetail {
+                result.detail = RepositoryDetailState(saved)
+            } else if let diskCache {
+                let saved = await diskCache.loadDetail(for: identity)
+                guard isValid() else { return nil }
+                if let saved, identity.isCurrent() {
                     resources[resource, default: .init()].lastSuccessfulDetail = saved
-                    detail = RepositoryDetailState(saved)
-                    next = detail
+                    result.detail = RepositoryDetailState(saved)
                 }
             }
-            if !monitoring { startMonitoring(context, token: token) }
+            progress(.prepared(context, result.detail))
             let statusStarted = ContinuousClock.now
             let state = try await service.workingState(context, visibility: .application)
             diagnostics?.record("detail.status", duration: statusStarted.duration(to: .now))
-            guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-            let headChanged = next.summary?.headOID != state.headOID || next.summary?.head != state.head
-            next.changes = state.changes; next.changesError = nil
-            changesLoading = false
-            if !change.intersection([.summary, .configuration, .structure]).isEmpty || headChanged || next.summary == nil {
-                summaryLoading = true
+            guard isValid() else { return nil }
+            let headChanged = result.detail.summary?.headOID != state.headOID || result.detail.summary?.head != state.head
+            result.detail.changes = state.changes; result.detail.changesError = nil
+            statusRead = true
+            progress(.statusRead)
+            if !change.intersection([.summary, .configuration, .structure]).isEmpty || headChanged || result.detail.summary == nil {
+                progress(.readingSummary)
                 let summaryStarted = ContinuousClock.now
-                next.summary = try await service.summary(context, workingState: state)
+                result.detail.summary = try await service.summary(context, workingState: state)
                 diagnostics?.record("detail.summary", duration: summaryStarted.duration(to: .now))
-                guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-                next.summaryError = nil
+                guard isValid() else { return nil }
+                result.detail.summaryError = nil
             }
-            summaryLoading = false
-            if pendingChange == nil { onIdle?() }
-            next = await readHistory(next, context: context, identity: currentIdentity, token: token)
+            progress(.summaryRead)
+            let history = await readHistory(result.detail, context: context, identity: identity, isValid: isValid)
+            guard isValid() else { return nil }
+            guard identity.isCurrent() else { throw ModuError("repository-changed", "Repository identity changed while reading.") }
+            result.detail = history.detail
+            result.needsRefresh = history.needsRefresh
+            result.context = context
         } catch {
-            guard isCurrent(token, resource: resource, root: workspace.root) else { return }
+            guard isValid() else { return nil }
             let error = ModuError.wrap(error)
             let path = workspace.rootURL.appending(path: resource.path)
             if error.code == "origin-mismatch" || resources[resource]?.identity?.isCurrent() == false
@@ -406,37 +556,16 @@ final class RepositoryDetailModel {
                 if let previous = resources[resource]?.identity { pendingDetailInvalidations.insert(previous) }
                 resources[resource]?.lastSuccessfulDetail = nil
                 resources[resource]?.identity = nil
-                clearDetail()
+                result.discardsSavedDetail = true
+                result.detail.changes = nil; result.detail.changesError = error
             }
-            if changesLoading { next.changes = nil; next.changesError = error }
-            next.summary = nil; next.summaryError = error
-            next.commits = nil; next.behindCommits = nil; next.commitsError = error; next.comparisonError = nil
-            readContext = nil; stopMonitoring(); startFallback(token: token)
+            if !statusRead { result.detail.changes = nil; result.detail.changesError = error }
+            result.detail.summary = nil; result.detail.summaryError = error
+            result.detail.commits = nil; result.detail.behindCommits = nil
+            result.detail.commitsError = error; result.detail.comparisonError = nil
         }
-        guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-        let error = next.readError
-        if let saved = next.successfulSnapshot(observedAt: date()) {
-            resources[resource, default: .init()].lastSuccessfulDetail = saved
-            detail = next
-            pendingFailure = nil
-            resources[resource]?.lastPresentedError = nil
-            if let diskCache, let identity {
-                await diskCache.saveDetail(saved, for: identity)
-                guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-            }
-        } else if let saved = resources[resource]?.lastSuccessfulDetail {
-            detail = RepositoryDetailState(saved)
-        } else {
-            detail = next
-        }
-        changesLoading = false; summaryLoading = false
-        await invalidateDiskDetails()
-        guard isCurrent(token, resource: resource, root: workspace.root) else { return }
-        resources[resource, default: .init()].lastDetailAttempt = now()
-        updateState(resource, changes: next.changes, error: next.changesError, invalidated: pendingChange != nil)
-        diagnostics?.record("detail.completed", duration: readStarted.duration(to: .now))
-        if pendingChange == nil, let error { enqueueFailure(error, resource: resource, root: workspace.root, token: token) }
-        finishDetail()
+        guard isValid() else { return nil }
+        return result
     }
 
     private func enqueueFailure(_ error: ModuError, resource: Resource, root: String, token: Int) {
@@ -449,33 +578,33 @@ final class RepositoryDetailModel {
         pendingFailure = failure
     }
 
-    private func readHistory(_ initial: RepositoryDetailState, context: ResourceReadContext, identity: RepositoryCacheIdentity, token: Int) async -> RepositoryDetailState {
+    private func readHistory(_ initial: RepositoryDetailState, context: ResourceReadContext, identity: RepositoryCacheIdentity, isValid: () -> Bool) async -> (detail: RepositoryDetailState, needsRefresh: Bool) {
         let started = ContinuousClock.now
         defer { diagnostics?.record("detail.history", duration: started.duration(to: .now)) }
-        let resource = context.resource, root = context.workspace.root
-        guard isCurrent(token, resource: resource, root: root) else { return initial }
+        guard isValid() else { return (initial, false) }
         var next = initial
-        guard let summary = next.summary else { return next }
+        var needsRefresh = false
+        guard let summary = next.summary else { return (next, needsRefresh) }
         guard let base = summary.baseOID else {
             next.commits = summary.hasRemotes ? nil : []
             next.commitsError = summary.baseError.map { ModuError("base-unavailable", $0, userMessage: summary.baseMessage) }
             next.behindCommits = nil; next.comparisonError = nil
-            return next
+            return (next, needsRefresh)
         }
         let key = RepositoryHistoryCacheKey(repository: identity.repository, head: summary.headOID, base: base)
         do {
             let before = try await service.historyCacheState(context, session: readSession)
-            guard isCurrent(token, resource: resource, root: root) else { return next }
+            guard isValid() else { return (next, needsRefresh) }
             if !before.reusable, clearedHistoryStates[identity.repository] != before {
                 await invalidateHistory(for: identity.repository)
+                guard isValid() else { return (next, needsRefresh) }
                 clearedHistoryStates[identity.repository] = before
-                guard isCurrent(token, resource: resource, root: root) else { return next }
             }
             if before.reusable { clearedHistoryStates.removeValue(forKey: identity.repository) }
             var cached = before.reusable ? cachedHistory(key) : nil
             if cached == nil, before.reusable, let diskCache {
                 let stored = await diskCache.loadHistory(for: key)
-                guard isCurrent(token, resource: resource, root: root) else { return next }
+                guard isValid() else { return (next, needsRefresh) }
                 if let stored { cached = .init(ahead: stored.ahead, behind: stored.behind) }
             }
             let cachedAhead = cached?.ahead, cachedBehind = cached?.behind
@@ -483,13 +612,13 @@ final class RepositoryDetailModel {
             async let ahead = readHistoryRange(at: context.path, head: summary.headOID, base: base, cached: cachedAhead)
             async let behind = readHistoryRange(at: context.path, head: base, base: summary.headOID, cached: cachedBehind)
             let results = await (ahead, behind)
-            guard isCurrent(token, resource: resource, root: root) else { return next }
+            guard isValid() else { return (next, needsRefresh) }
             let after = try await service.historyCacheState(context, session: readSession)
-            guard isCurrent(token, resource: resource, root: root) else { return next }
+            guard isValid() else { return (next, needsRefresh) }
             guard before == after else {
                 await invalidateHistory(for: identity.repository)
-                guard isCurrent(token, resource: resource, root: root) else { return next }
-                pendingChange = (pendingChange ?? []).union(.summary)
+                guard isValid() else { return (next, needsRefresh) }
+                needsRefresh = true
                 throw ModuError("repository-changed", "Repository history changed while reading.")
             }
             var history = cached ?? .init()
@@ -503,20 +632,21 @@ final class RepositoryDetailModel {
                 history.behind = commits; next.behindCommits = commits; next.comparisonError = nil
             case .failure(let error): next.behindCommits = nil; next.comparisonError = error
             }
+            guard identity.isCurrent() else { throw ModuError("repository-changed", "Repository identity changed while reading.") }
             if after.reusable {
                 if history.ahead != nil || history.behind != nil { storeHistory(history, for: key) }
                 if readMissingHistory, let ahead = history.ahead, let behind = history.behind, let diskCache {
                     await diskCache.saveHistory(.init(ahead: ahead, behind: behind), for: key)
-                    guard isCurrent(token, resource: resource, root: root) else { return next }
+                    guard isValid() else { return (next, needsRefresh) }
                 }
             }
         } catch {
-            guard isCurrent(token, resource: resource, root: root) else { return next }
+            guard isValid() else { return (next, needsRefresh) }
             let error = ModuError.wrap(error)
             next.commits = nil; next.behindCommits = nil
             next.commitsError = error; next.comparisonError = error
         }
-        return next
+        return (next, needsRefresh)
     }
 
     private func invalidateHistory(for repository: RepositoryCacheRepositoryIdentity) async {
@@ -568,7 +698,7 @@ final class RepositoryDetailModel {
             pendingCandidates = []
             cancelEventFilter()
             pendingChange = (pendingChange ?? []).union(event.change)
-            if let selection { resources[selection, default: .init()].invalidated = true }
+            if let selection { markInvalidated(selection) }
             guard active, !suspended else { return }
             if !event.change.intersection([.summary, .index, .configuration, .structure]).isEmpty {
                 debounceTask?.cancel(); debounceTask = nil; changeBurstStart = nil
@@ -582,7 +712,7 @@ final class RepositoryDetailModel {
                 || pendingCandidates.reduce(0, { $0 + $1.utf8.count + 1 }) > ResourceChangeEvent.maximumCandidateBytes {
                 pendingCandidates = []
                 pendingChange = (pendingChange ?? []).union(.workingTree)
-                if let selection { resources[selection, default: .init()].invalidated = true }
+                if let selection { markInvalidated(selection) }
             }
             guard active, !suspended else { return }
         }
@@ -661,7 +791,7 @@ final class RepositoryDetailModel {
     private func cancelCurrent() {
         pendingFailure = nil; userInitiatedRefresh = false
         if (!pendingCandidates.isEmpty || eventFilterTask != nil), let selection {
-            resources[selection, default: .init()].invalidated = true
+            markInvalidated(selection)
         }
         let task = detailTask
         task?.cancel()
@@ -745,10 +875,42 @@ final class RepositoryDetailModel {
                                   reason: error?.message, reasonMessage: error?.userMessage), invalidated: invalidated)
     }
 
+    private func markInvalidated(_ resource: Resource) {
+        resources[resource, default: .init()].invalidated = true
+        markDetailInvalidated(resource)
+    }
+
+    private func markDetailInvalidated(_ resource: Resource) {
+        resources[resource, default: .init()].detailInvalidated = true
+        resources[resource, default: .init()].detailRevision += 1
+    }
+
+    private func recordDetailAttempt(_ resource: Resource) {
+        resources[resource, default: .init()].lastDetailAttempt = now()
+        resources[resource, default: .init()].detailInvalidated = false
+        resources[resource, default: .init()].detailStatusIdentity = statusIdentity(for: resource)
+    }
+
+    private struct DetailReadResult {
+        var detail: RepositoryDetailState
+        var context: ResourceReadContext?
+        var identity: RepositoryCacheIdentity?
+        var discardsSavedDetail = false
+        var needsRefresh = false
+    }
+
+    private enum DetailReadProgress {
+        case prepared(ResourceReadContext, RepositoryDetailState)
+        case statusRead, readingSummary, summaryRead
+    }
+
     private struct ResourceCacheEntry {
         var state: ResourceState?
         var lastAttempt: ContinuousClock.Instant?
         var lastDetailAttempt: ContinuousClock.Instant?
+        var detailStatusIdentity: [PathStamp]?
+        var detailInvalidated = true
+        var detailRevision = 0
         var statusIdentity: [PathStamp]?
         var lastSuccessfulDetail: RepositoryDetailSnapshot?
         var identity: RepositoryCacheIdentity?

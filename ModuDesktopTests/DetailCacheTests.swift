@@ -384,7 +384,6 @@ import Testing
         let model = AppModel(defaults: initial.defaults, service: WorkspaceService(store: fixture.service.store, git: Git(runner: runner)))
         model.workspace.record = try fixture.service.store.load(fixture.root)
         let record = try #require(model.workspace.record)
-        _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: record.repositoryURL("repo"))
         try Data("main".utf8).write(to: record.repositoryURL("repo").appending(path: "main.txt"))
         try Data("group".utf8).write(to: record.groupURL("feature").appending(path: "group.txt"))
         try Data("member".utf8).write(to: record.memberURL("feature", "repo").appending(path: "member.txt"))
@@ -398,21 +397,22 @@ import Testing
         }
         #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil && !model.workspace.detailLoading)
         #expect(visibleResources.allSatisfy { model.workspace.state(for: $0)?.dirty == true })
+        await model.workspace.detailPreloadTask?.value
+        await model.workspace.details.snapshotPreloadTask?.value
         for (resource, file, head) in [
             (Resource.repository("repo"), "main.txt", "main"),
             (.group("feature"), "group.txt", "feature"),
             (.member("feature", "repo"), "member.txt", "feature")
         ] {
             model.workspace.selection = resource
-            #expect(model.workspace.detail.changes == nil && model.workspace.detail.summary == nil && model.workspace.detail.commits == nil)
-            try await waitForDetail(model)
             #expect(model.workspace.detail.summary?.head == head)
             #expect(model.workspace.detail.changes?.map(\.path) == [file])
-            #expect(model.workspace.state(for: resource)?.dirty == true)
+            try await waitForDetail(model)
         }
         await model.workspace.detailPreloadTask?.value
         let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
         #expect(!commands.contains { $0.contains("built-in: git fetch ") })
+        await model.workspace.stopReads()
     }
 
     @Test func groupDetailsRefreshWhenRemotesAreAddedAndRemoved() async throws {

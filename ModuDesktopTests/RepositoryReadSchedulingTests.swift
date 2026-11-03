@@ -4,6 +4,100 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct RepositoryReadSchedulingTests {
+    @Test func completePreloadsHaveTheirOwnExpansionFreshnessAndActivationDoesNotEnqueueThem() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareEmptyGroup("cached")
+        let record = try fixture.service.store.load(fixture.root)
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let clock = RepositoryReadClock(), counts = SchedulingReadCounts()
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(),
+                                           now: { clock.now }, diagnostics: counts.diagnostics)
+        let resource = Resource.group("cached")
+        do {
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            await details.snapshotPreloadTask?.value
+            #expect(counts.count("detail.preload.read") == 1)
+            clock.now = clock.now.advanced(by: .seconds(29))
+            details.setPreloadScope(in: record, including: [])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            #expect(details.detailPreloadTask == nil && details.snapshotPreloadTask == nil)
+            clock.now = clock.now.advanced(by: .seconds(1))
+            details.activatePreload(in: record, including: [resource])
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            #expect(details.snapshotPreloadTask == nil && counts.count("detail.preload.read") == 1)
+            #expect(counts.count("sidebar.completed") == 2)
+            details.setPreloadScope(in: record, including: [])
+            details.setPreloadScope(in: record, including: [resource])
+            details.drainPreload()
+            #expect(details.detailPreloadTask == nil)
+            let expired = try #require(details.snapshotPreloadTask)
+            await expired.value
+            #expect(counts.count("detail.preload.read") == 2)
+            details.invalidateStates(resources: [resource])
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            await details.snapshotPreloadTask?.value
+            #expect(counts.count("detail.preload.read") == 3)
+            details.stop(); await details.waitForReads()
+        } catch {
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
+    @Test func completePreloadsWaitForForegroundHistoryAndReadOneResourceAtATime() async throws {
+        let fixture = try await Fixture(); defer { fixture.remove() }
+        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        for name in ["first", "second"] { try await fixture.prepareGroup(name, repositories: ["repo"]) }
+        let record = try fixture.service.store.load(fixture.root)
+        for resource in [Resource.repository("repo"), .member("first", "repo"), .member("second", "repo")] {
+            _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", resource.id], at: record.rootURL.appending(path: resource.path))
+        }
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let history = SchedulingHistoryReader(git: fixture.service.git, blocked: true)
+        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
+            try await history.read(at: path, head: head, base: base)
+        })
+        do {
+            details.refresh(.repository("repo"), in: record)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while await history.started < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            try #require(await history.started == 2)
+            let resources: Set<Resource> = [.repository("repo"), .member("first", "repo"), .member("second", "repo")]
+            details.setPreloadScope(in: record, including: resources)
+            details.drainPreload()
+            #expect(details.detailLoading && !details.snapshotLoading)
+            #expect(details.detailPreloadTask == nil && details.snapshotPreloadTask == nil)
+            await history.release()
+            await details.detailTask?.value
+            let selectedHead = try #require(details.detail.summary?.headOID)
+            details.drainPreload()
+            await details.detailPreloadTask?.value
+            details.drainPreload()
+            await details.snapshotPreloadTask?.value
+            #expect(await history.started == 6)
+            #expect(await history.maximumConcurrentResources == 1)
+            #expect(details.detail.summary?.headOID == selectedHead && details.pendingFailure == nil)
+            details.refresh(.member("second", "repo"), in: record)
+            #expect(details.detail.commits?.first?.subject == Resource.member("second", "repo").id)
+            details.stop(); await details.waitForReads()
+        } catch {
+            await history.release()
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
     @Test func failedStatusReadsWaitForExpiryUnlessPathIdentityChanges() async throws {
         let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
         #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
@@ -148,15 +242,30 @@ import Testing
     var now = ContinuousClock.now
 }
 
+private final class SchedulingReadCounts: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [String: Int] = [:]
+    var diagnostics: RepositoryReadDiagnostics { .init { [self] event in lock.withLock { counts[event.name, default: 0] += event.count } } }
+    func count(_ name: String) -> Int { lock.withLock { counts[name, default: 0] } }
+}
+
 private actor SchedulingHistoryReader {
     let git: Git
     var blocked: Bool
     private(set) var started = 0
+    private var activePaths: [String: Int] = [:]
+    private(set) var maximumConcurrentResources = 0
 
     init(git: Git, blocked: Bool = false) { self.git = git; self.blocked = blocked }
     func release() { blocked = false }
     func read(at path: URL, head: String, base: String) async throws -> [GitCommit] {
         started += 1
+        activePaths[path.path, default: 0] += 1
+        maximumConcurrentResources = max(maximumConcurrentResources, activePaths.count)
+        defer {
+            if activePaths[path.path] == 1 { activePaths.removeValue(forKey: path.path) }
+            else { activePaths[path.path, default: 0] -= 1 }
+        }
         while blocked { try await Task.sleep(for: .milliseconds(10)) }
         return try await git.commits(at: path, head: head, base: base, limit: nil)
     }

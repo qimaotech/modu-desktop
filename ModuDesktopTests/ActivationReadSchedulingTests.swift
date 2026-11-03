@@ -43,6 +43,8 @@ import Testing
         details.setPreloadScope(in: record, including: [resource])
         details.drainPreload()
         await details.detailPreloadTask?.value
+        details.drainPreload()
+        await details.snapshotPreloadTask?.value
         #expect(counts.count("sidebar.completed") == 1)
         clock.advance(9)
         details.activatePreload(in: record, including: [resource])
