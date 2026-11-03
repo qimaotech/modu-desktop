@@ -22,15 +22,22 @@ import Observation
         super.init()
     }
 
-    func start(model: AppModel, onReady: @escaping @MainActor () -> Void, onFinished: @escaping @MainActor (Bool) -> Void) {
+    func start(model: AppModel, onReady: @escaping @MainActor () -> Void, onFinished: @escaping @MainActor (Bool) async -> Void) {
         guard startupTask == nil, !model.started else { return }
         self.model = model
         model.globalShortcut.start { [weak self] in self?.toggleVisibility() }
-        startupTask = Task {
-            defer { startupTask = nil }
+        continueStartup {
             let needsCLISetup = await model.start(onReady: onReady)
             guard !Task.isCancelled else { return }
-            onFinished(needsCLISetup)
+            await onFinished(needsCLISetup)
+        }
+    }
+
+    func continueStartup(_ action: @escaping @MainActor () async -> Void) {
+        guard startupTask == nil else { return }
+        startupTask = Task {
+            defer { startupTask = nil }
+            await action()
         }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -5,6 +5,11 @@ import Observation
 @MainActor @Observable
 final class SetupModel {
     private let model: AppModel
+    private var initialCheckCompleted = false
+    private var checkedWorkspace: String?
+    var isPreparedForCurrentWorkspace: Bool {
+        initialCheckCompleted && checkedWorkspace == model.defaults.string(forKey: "workspace")
+    }
     private(set) var cliReady = false
     private(set) var cliPreviouslyInstalled = false
     private(set) var cliMessage = ""
@@ -18,21 +23,45 @@ final class SetupModel {
     private(set) var errorDetails: String?
     private(set) var skillConflict = false
 
-    init(model: AppModel) { self.model = model }
+    init(model: AppModel) {
+        self.model = model
+        cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
+        if let check = model.startupCLIInstallation {
+            applyCLIInstallation(check)
+            cliActivity = nil
+        }
+    }
 
     func check() async {
-        guard !working else { return }
-        candidate = nil; candidateRequiresExistingRecord = false
-        error = nil; skillConflict = false
-        working = true; cliActivity = .checking
+        guard !working, !isPreparedForCurrentWorkspace else { return }
+        initialCheckCompleted = false
         defer { cliActivity = nil; working = false }
-        let check = await model.installer.checkCLI()
-        guard !Task.isCancelled else { return }
-        cliReady = check.available; cliMessage = check.message; cliUserMessage = check.userMessage
-        cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
-        cliActivity = nil
-        await restoreSavedCandidate()
+        while !Task.isCancelled {
+            let workspace = model.defaults.string(forKey: "workspace")
+            candidate = nil; candidateRequiresExistingRecord = false
+            error = nil; skillConflict = false
+            working = true
+            let check: CLIInstallation
+            if let startup = model.takeStartupCLIInstallation() {
+                check = startup
+            } else {
+                cliActivity = .checking
+                check = await model.installer.checkCLI()
+            }
+            guard !Task.isCancelled else { return }
+            applyCLIInstallation(check)
+            cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
+            cliActivity = nil
+            if let workspace { await checkCandidate(URL(fileURLWithPath: workspace), requireExistingRecord: true) }
+            guard !Task.isCancelled else { return }
+            guard workspace == model.defaults.string(forKey: "workspace") else { continue }
+            checkedWorkspace = workspace
+            initialCheckCompleted = true
+            return
+        }
     }
+
+    func windowClosed() { initialCheckCompleted = false }
 
     func install() {
         guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil else { return }
@@ -45,7 +74,7 @@ final class SetupModel {
             }
             do {
                 let check = try await model.installer.installCLI()
-                cliReady = check.available; cliMessage = check.message; cliUserMessage = check.userMessage
+                applyCLIInstallation(check)
                 outcome.status = check.available ? .success : .failed; outcome.message = check.message; outcome.userMessage = check.userMessage
                 cliActivity = nil
                 if check.available { await restoreSavedCandidate() }
@@ -103,6 +132,10 @@ final class SetupModel {
     private func restoreSavedCandidate() async {
         guard candidate == nil, let path = model.defaults.string(forKey: "workspace") else { return }
         await checkCandidate(URL(fileURLWithPath: path), requireExistingRecord: true)
+    }
+
+    private func applyCLIInstallation(_ check: CLIInstallation) {
+        cliReady = check.available; cliMessage = check.message; cliUserMessage = check.userMessage
     }
 
     private func presentError(_ failure: Error) {

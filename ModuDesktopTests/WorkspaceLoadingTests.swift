@@ -915,6 +915,51 @@ import SwiftUI
         }
     }
 
+    @Test(arguments: ["missing-link", "missing-path", "no-saved-workspace"])
+    func setupUsesStartupCLIResultBeforeCheckingTheSavedWorkspace(_ kind: String) async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        if kind != "no-saved-workspace" {
+            let record = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
+            try fixture.service.store.save(record)
+            defaults.set(record.root, forKey: "workspace")
+        }
+        let installer = try makeInstaller(fixture, resolved: kind != "missing-path")
+        if kind == "missing-link" { try FileManager.default.removeItem(at: installer.commandLink) }
+        let model = AppModel(defaults: defaults, service: fixture.service, installer: installer)
+        #expect(await model.start() == true)
+        await model.workspace.detailPreloadTask?.value
+        let initial = try #require(model.startupCLIInstallation)
+        #expect(initial.available == (kind == "no-saved-workspace"))
+
+        let setup = SetupModel(model: model)
+        #expect(setup.cliReady == initial.available && setup.cliActivity == nil)
+        #expect(setup.cliMessage == initial.message && setup.cliUserMessage == initial.userMessage)
+        #expect(setup.cliPreviouslyInstalled)
+        try Data("#!/bin/sh\nexit 1\n".utf8).write(to: installer.executable)
+        if kind == "missing-link" { try FileManager.default.createSymbolicLink(at: installer.commandLink, withDestinationURL: installer.executable) }
+        await setup.check()
+        #expect(setup.cliReady == initial.available && setup.cliMessage == initial.message)
+        #expect(setup.cliActivity == nil && !setup.working && model.startupCLIInstallation == nil)
+        #expect(setup.candidate?.path == (kind == "no-saved-workspace" ? nil : PathSafety.canonical(fixture.root).path))
+
+        setup.windowClosed()
+        await setup.check()
+        #expect(!setup.cliReady && setup.cliUserMessage == .appSBundledCLICouldNotRun)
+
+        let otherWorkspace = PathSafety.canonical(fixture.directory.appending(path: "other-workspace"))
+        try FileManager.default.createDirectory(at: otherWorkspace, withIntermediateDirectories: true)
+        try fixture.service.store.save(WorkspaceRecord(root: otherWorkspace.path))
+        defaults.set(otherWorkspace.path, forKey: "workspace")
+        #expect(!setup.isPreparedForCurrentWorkspace)
+        await setup.check()
+        #expect(setup.isPreparedForCurrentWorkspace)
+        #expect(setup.candidate?.path == otherWorkspace.path)
+        await model.workspace.stopReads()
+    }
+
     @Test(arguments: ["cancelled", "quitting"])
     func interruptedSetupKeepsWorkspaceAndTools(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false)

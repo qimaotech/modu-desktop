@@ -10,11 +10,15 @@ struct SetupView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var setup: SetupModel
 
-    init(model: AppModel, canReturnToMainWindow: @escaping () -> Bool, returnToMainWindow: @escaping () -> Void) {
+    init(model: AppModel, preparedSetup: SetupModel? = nil, canReturnToMainWindow: @escaping () -> Bool, returnToMainWindow: @escaping () -> Void) {
         self.model = model
         self.canReturnToMainWindow = canReturnToMainWindow
         self.returnToMainWindow = returnToMainWindow
-        _setup = State(initialValue: SetupModel(model: model))
+        if let preparedSetup, preparedSetup.isPreparedForCurrentWorkspace {
+            _setup = State(initialValue: preparedSetup)
+        } else {
+            _setup = State(initialValue: SetupModel(model: model))
+        }
     }
 
     var body: some View {
@@ -58,7 +62,6 @@ struct SetupView: View {
                             Label(model.text.string(.uiWorkflowSkillUnavailable), systemImage: "exclamationmark.circle")
                         }
                         if let error = setup.error { ScrollView { IssueDescriptionView(message: error, details: setup.errorDetails, text: model.text).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 90) }
-                        if setup.working && !setup.settingUp && setup.cliActivity == nil { ProgressView().controlSize(.small) }
                     }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                 }
             }.padding(.horizontal, 24).padding(.vertical, 32)
@@ -81,10 +84,14 @@ struct SetupView: View {
             if let result = model.presentation.result { ResultView(text: model.presentation.text, result: result) { model.presentation.dismissResult() } }
         }
         .task { await setup.check() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let window = notification.object as? NSWindow, window.identifier?.rawValue == "setup" else { return }
+            setup.windowClosed()
+        }
     }
 
     private var showsStatus: Bool {
-        showsCLIMessage || setup.skillConflict || setup.error != nil || (setup.working && !setup.settingUp && setup.cliActivity == nil)
+        showsCLIMessage || setup.skillConflict || setup.error != nil
     }
 
     private var showsCLIMessage: Bool {

@@ -10,6 +10,7 @@ struct ModuDesktopApp: App {
     @State private var startupCompleted = false
     @State private var startupNeedsSetup = false
     @State private var startupWindowReady = false
+    @State private var startupSetup: SetupModel?
     @State private var chromeHeight: CGFloat = 0
     @State private var setupChromeHeight: CGFloat = 32
     @State private var settingsChromeHeight: CGFloat = 32
@@ -42,15 +43,20 @@ struct ModuDesktopApp: App {
                 startupWindowReady = true
                 openWindow(id: "main")
             }, onFinished: { needsCLISetup in
+                if needsCLISetup || !model.hasSavedWorkspace {
+                    let setup = SetupModel(model: model)
+                    await setup.check()
+                    guard !Task.isCancelled, !model.presentation.quitPending else { return }
+                    startupSetup = setup
+                    startupNeedsSetup = true
+                }
                 startupCompleted = true
-                if needsCLISetup || !model.hasSavedWorkspace { startupNeedsSetup = true }
                 checkForUpdatesAutomatically()
             })
         }
         .onChange(of: canPresentStartupSetup) { _, present in
             guard present else { return }
-            startupNeedsSetup = false; startupWindowReady = true
-            openWindow(id: "setup"); dismissWindow(id: "main")
+            presentStartupSetup()
         }
         .onChange(of: canPresentAutomaticUpdate) { _, present in
             guard present else { return }
@@ -60,9 +66,10 @@ struct ModuDesktopApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
         Window(model.text.string(.uiSetUpWorkspace), id: "setup") {
-            SetupView(model: model, canReturnToMainWindow: { delegate.mainWindowIsOpen }, returnToMainWindow: delegate.returnToMainWindow).id(model.workspace.record?.root)
+            SetupView(model: model, preparedSetup: startupSetup, canReturnToMainWindow: { delegate.mainWindowIsOpen }, returnToMainWindow: delegate.returnToMainWindow)
+                .id(model.workspace.record?.root ?? model.defaults.string(forKey: "workspace"))
                 .environment(\.locale, model.preferences.activeLocale.locale)
-                .onAppear { delegate.model = model }.frame(width: 560).frame(minHeight: 320 - setupChromeHeight)
+                .onAppear { delegate.model = model; startupSetup = nil }.frame(width: 560).frame(minHeight: 320 - setupChromeHeight)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(WindowChromeHeight(height: $setupChromeHeight))
                 .background(WindowCloseHandler(shouldQuit: { !delegate.mainWindowIsOpen }, onClose: delegate.returnToMainWindow))
@@ -89,6 +96,22 @@ struct ModuDesktopApp: App {
     }
     private var canPresentStartupSetup: Bool {
         startupNeedsSetup && !model.busy && model.management.sheet == nil && model.presentation.result == nil && model.presentation.message == nil && !model.presentation.quitPending
+    }
+
+    private func presentStartupSetup() {
+        guard canPresentStartupSetup else { return }
+        guard startupSetup?.isPreparedForCurrentWorkspace == true else {
+            delegate.continueStartup {
+                let setup = SetupModel(model: model)
+                await setup.check()
+                guard !Task.isCancelled, !model.presentation.quitPending, startupNeedsSetup else { return }
+                startupSetup = setup
+                presentStartupSetup()
+            }
+            return
+        }
+        startupNeedsSetup = false; startupWindowReady = true
+        openWindow(id: "setup"); dismissWindow(id: "main")
     }
 
     private var canPresentAutomaticUpdate: Bool {

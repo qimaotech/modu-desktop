@@ -18,6 +18,7 @@ final class AppModel {
     var tools: [ExternalTool] = []
     private(set) var preferredToolIDs: [String: String] = [:]
     private(set) var started = false
+    private(set) var startupCLIInstallation: CLIInstallation?
     #if DEBUG
     @ObservationIgnored var mockWorkspace: MockWorkspace?
     #endif
@@ -108,7 +109,16 @@ final class AppModel {
         #endif
         let cli = await installer.checkCLIInstallation()
         guard !Task.isCancelled else { return false }
-        if !cli.available || !hasSavedWorkspace { return true }
+        if !cli.available {
+            startupCLIInstallation = cli
+            return true
+        }
+        if !hasSavedWorkspace {
+            let path = await installer.checkCLIPath()
+            guard !Task.isCancelled, !presentation.quitPending else { return false }
+            startupCLIInstallation = path
+            return true
+        }
         async let pathCheck = installer.checkCLIPath()
         tools = await toolService.available()
         guard !Task.isCancelled, !presentation.quitPending else { return false }
@@ -132,7 +142,14 @@ final class AppModel {
         }
         guard !Task.isCancelled, !presentation.quitPending else { return false }
         let path = await pathCheck
-        return !Task.isCancelled && !path.available
+        guard !Task.isCancelled, !presentation.quitPending else { return false }
+        if !path.available { startupCLIInstallation = path }
+        return !path.available
+    }
+
+    func takeStartupCLIInstallation() -> CLIInstallation? {
+        defer { startupCLIInstallation = nil }
+        return startupCLIInstallation
     }
 
     func activate() async {
