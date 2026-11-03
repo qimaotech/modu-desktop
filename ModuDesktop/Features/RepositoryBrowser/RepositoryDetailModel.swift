@@ -126,6 +126,7 @@ final class RepositoryDetailModel {
         applyWorkspace(workspace)
         if changedSelection {
             cancelCurrent()
+            pendingChange = nil; revalidateConfiguration = false
             self.selection = selection
             let saved = selection.flatMap { resources[$0]?.lastSuccessfulDetail }
             if saved != nil { diagnostics?.record("detail.memory.hit") }
@@ -133,7 +134,16 @@ final class RepositoryDetailModel {
             collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? [])
             updatePreloadScope(visiblePreloadResources)
         }
-        guard selection != nil, workspace != nil else { onIdle?(); return }
+        guard let selection, let workspace else { onIdle?(); return }
+        if changedSelection, !userInitiated, active, !suspended, hasRecentDetailAttempt(for: selection),
+           resources[selection]?.lastSuccessfulDetail != nil, let context = resources[selection]?.detailContext,
+           context.isValid(in: workspace) {
+            readContext = context
+            startMonitoring(context, token: generation)
+            diagnostics?.record("detail.selection.hit")
+            onIdle?()
+            return
+        }
         userInitiatedRefresh = userInitiatedRefresh || userInitiated
         diagnostics?.record("detail.request.refresh")
         request(.structure, revalidatingConfiguration: true)
@@ -144,10 +154,7 @@ final class RepositoryDetailModel {
         guard let selection else { return }
         if !pendingCandidates.isEmpty { scheduleEventFilter() }
         guard detailTask == nil else { diagnostics?.record("detail.activation.join"); return }
-        let entry = resources[selection]
-        let identityChanged = entry?.identity?.isCurrent() == false || entry?.detailStatusIdentity != statusIdentity(for: selection)
-        if pendingChange == nil, entry?.detailInvalidated == false, !identityChanged,
-           let attempted = entry?.lastDetailAttempt, attempted.duration(to: now()) < .seconds(10) {
+        if hasRecentDetailAttempt(for: selection) {
             diagnostics?.record("detail.activation.hit")
             return
         }
@@ -375,7 +382,7 @@ final class RepositoryDetailModel {
                 guard valid() else { return }
                 await invalidateDiskDetails()
                 guard valid() else { return }
-                recordDetailAttempt(resource)
+                recordDetailAttempt(resource, context: result.context)
                 updateState(resource, changes: result.detail.changes, error: result.detail.changesError)
                 pendingSnapshots.remove(resource)
                 diagnostics?.record("detail.preload.completed")
@@ -478,7 +485,7 @@ final class RepositoryDetailModel {
             } else {
                 detail = next
             }
-            if revision == resources[resource]?.detailRevision { recordDetailAttempt(resource) }
+            if revision == resources[resource]?.detailRevision { recordDetailAttempt(resource, context: result.context) }
         }
         changesLoading = false; summaryLoading = false
         await invalidateDiskDetails()
@@ -885,8 +892,16 @@ final class RepositoryDetailModel {
         resources[resource, default: .init()].detailRevision += 1
     }
 
-    private func recordDetailAttempt(_ resource: Resource) {
+    private func hasRecentDetailAttempt(for resource: Resource) -> Bool {
+        guard pendingChange == nil, let entry = resources[resource], !entry.detailInvalidated,
+              entry.identity?.isCurrent() != false, entry.detailStatusIdentity == statusIdentity(for: resource),
+              let attempted = entry.lastDetailAttempt else { return false }
+        return attempted.duration(to: now()) < .seconds(10)
+    }
+
+    private func recordDetailAttempt(_ resource: Resource, context: ResourceReadContext?) {
         resources[resource, default: .init()].lastDetailAttempt = now()
+        resources[resource, default: .init()].detailContext = context
         resources[resource, default: .init()].detailInvalidated = false
         resources[resource, default: .init()].detailStatusIdentity = statusIdentity(for: resource)
     }
@@ -908,6 +923,7 @@ final class RepositoryDetailModel {
         var state: ResourceState?
         var lastAttempt: ContinuousClock.Instant?
         var lastDetailAttempt: ContinuousClock.Instant?
+        var detailContext: ResourceReadContext?
         var detailStatusIdentity: [PathStamp]?
         var detailInvalidated = true
         var detailRevision = 0

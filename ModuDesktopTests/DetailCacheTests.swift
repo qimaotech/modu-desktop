@@ -219,10 +219,11 @@ import Testing
         }
     }
 
-    @Test func cachedDetailsAppearImmediatelyAndRefreshLocalChanges() async throws {
+    @Test func cachedDetailsAppearImmediatelyAndRefreshExpiredLocalChanges() async throws {
         let fixture = try await Fixture()
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        var now = ContinuousClock.now
+        let model = try await makeModel(fixture, now: { now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let repository = Resource.repository("repo")
         let path = try #require(model.workspace.record?.repositoryURL("repo"))
@@ -238,6 +239,7 @@ import Testing
         #expect(model.workspace.currentURL == model.workspace.record?.rootURL)
         #expect(model.workspace.detail.summary == nil && !model.workspace.detailLoading)
         try Data("changed".utf8).write(to: path.appending(path: "new.txt"))
+        now = now.advanced(by: .seconds(10))
         model.workspace.selection = repository
         #expect(model.workspace.detailLoading)
         #expect(model.workspace.detail.summary?.headOID == head)
@@ -276,7 +278,8 @@ import Testing
         let trace = fixture.directory.appending(path: "selection-trace")
         var runner = fixture.service.git.runner
         runner.environment["GIT_TRACE"] = trace.path
-        let model = AppModel(defaults: initial.defaults, service: WorkspaceService(store: fixture.service.store, git: Git(runner: runner)))
+        var now = ContinuousClock.now
+        let model = AppModel(defaults: initial.defaults, service: WorkspaceService(store: fixture.service.store, git: Git(runner: runner)), now: { now })
         model.workspace.record = record
         let path = record.rootURL.appending(path: resource.path)
         let base = try #require(await fixture.service.git.oid("refs/remotes/origin/main", at: path))
@@ -319,6 +322,7 @@ import Testing
         _ = try await fixture.service.git.run(["push", "--force", fixture.remoteURL, "\(base):refs/heads/main"], at: source)
         _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
         model.workspace.selection = nil
+        now = now.advanced(by: .seconds(10))
         model.workspace.selection = resource
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID == base)
@@ -635,13 +639,14 @@ import Testing
         #expect(switching.workspace.detail.changes?.map(\.path) == ["next.txt"])
     }
 
-    private func makeModel(_ fixture: Fixture, repository: Bool = true) async throws -> AppModel {
+    private func makeModel(_ fixture: Fixture, repository: Bool = true,
+                           now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }) async throws -> AppModel {
         let skill = try #require(Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow"))
         #expect(await fixture.service.openWorkspace(fixture.root, skill: skill).status == .success)
         if repository { #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success) }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defaults.set(fixture.root.path, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service)
+        let model = AppModel(defaults: defaults, service: fixture.service, now: now)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         return model
     }

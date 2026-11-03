@@ -4,6 +4,89 @@ import Testing
 @testable import ModuDesktop
 
 @MainActor struct ActivationReadSchedulingTests {
+    @Test(arguments: [false, true])
+    func selectionReusesTenSecondDetailsWithoutExtendingFreshness(_ preloaded: Bool) async throws {
+        let f = try await Fixture(); defer { f.remove() }
+        _ = try await prepare(f)
+        try await f.prepareEmptyGroup("other")
+        let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
+        let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
+        let clock = ActivationReadClock(), counts = ActivationReadCounts(), monitor = ActivationResourceMonitor()
+        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor,
+                                           now: { clock.now }, diagnostics: counts.diagnostics)
+        do {
+            if preloaded {
+                details.setPreloadScope(in: record, including: [resource])
+                details.drainPreload()
+                await details.detailPreloadTask?.value
+                details.drainPreload()
+                await details.snapshotPreloadTask?.value
+                #expect(counts.count("detail.preload.completed") == 1)
+            } else {
+                details.refresh(resource, in: record)
+                await details.detailTask?.value
+            }
+            details.refresh(.group("other"), in: record)
+            await details.detailTask?.value
+            #expect(monitor.monitoredResource == .group("other"))
+            let reads = counts.count("detail.read")
+            clock.now = clock.now.advanced(by: .milliseconds(9_999))
+            details.refresh(resource, in: record)
+            #expect(details.detailTask == nil && !details.snapshotLoading)
+            #expect(details.detail.summary != nil && details.detail.commits != nil)
+            #expect(counts.count("detail.read") == reads && counts.count("detail.selection.hit") == 1)
+            #expect(monitor.monitoredResource == resource)
+
+            details.refresh(nil, in: record)
+            clock.now = clock.now.advanced(by: .milliseconds(1))
+            details.refresh(resource, in: record)
+            let expired = try #require(details.detailTask)
+            await expired.value
+            #expect(counts.count("detail.read") == reads + 1)
+            details.stop(); await details.waitForReads()
+        } catch {
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
+    @Test func selectionCacheHitsRestoreEventsAndExplicitRequestsBypassCooldown() async throws {
+        let f = try await Fixture(); defer { f.remove() }
+        let record = try await prepare(f), resource = Resource.repository("repo")
+        let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
+        let clock = ActivationReadClock(), counts = ActivationReadCounts(), monitor = ActivationResourceMonitor()
+        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor,
+                                           now: { clock.now }, diagnostics: counts.diagnostics)
+        do {
+            details.refresh(resource, in: record)
+            await details.detailTask?.value
+            details.refresh(nil, in: record)
+            details.refresh(resource, in: record)
+            #expect(details.detailTask == nil && counts.count("detail.selection.hit") == 1)
+
+            try Data("tracked change".utf8).write(to: record.repositoryURL("repo").appending(path: "README"))
+            monitor.emitCandidates(["README"])
+            try await eventually { counts.count("detail.read") == 2 && !details.detailLoading }
+            #expect(details.detail.changes?.map(\.path) == ["README"])
+
+            details.refresh(resource, in: record, userInitiated: true)
+            await details.detailTask?.value
+            #expect(counts.count("detail.read") == 3)
+            details.refresh(nil, in: record)
+            details.invalidate(resources: [resource])
+            details.refresh(resource, in: record)
+            let invalidated = try #require(details.detailTask)
+            await invalidated.value
+            #expect(counts.count("detail.read") == 4)
+            details.stop(); await details.waitForReads()
+        } catch {
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
     @Test func detailActivationReusesTenSecondResultsButExplicitRequestsBypassThem() async throws {
         let f = try await Fixture(); defer { f.remove() }
         let record = try await prepare(f)
@@ -176,6 +259,10 @@ import Testing
             await details.detailPreloadTask?.value
             #expect(details.state(for: resource)?.dirty == true)
             #expect(counts.count("sidebar.completed") == 1)
+            details.refresh(resource, in: record)
+            let invalidated = try #require(details.detailTask)
+            await invalidated.value
+            #expect(details.detail.changes?.map(\.path) == ["new.txt"])
             details.stop(); await details.waitForReads()
         } catch {
             details.stop(); await details.waitForReads()
@@ -211,10 +298,12 @@ private final class ActivationReadCounts: @unchecked Sendable {
 private final class ActivationResourceMonitor: ResourceChangeMonitoring, @unchecked Sendable {
     private let lock = NSLock()
     private var callback: (@Sendable (ResourceChangeEvent) -> Void)?
+    private var resource: Resource?
+    var monitoredResource: Resource? { lock.withLock { resource } }
     func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChangeEvent) -> Void) -> Bool {
-        lock.withLock { callback = onChange }; return true
+        lock.withLock { callback = onChange; resource = context.resource }; return true
     }
-    func stop() { lock.withLock { callback = nil } }
+    func stop() { lock.withLock { callback = nil; resource = nil } }
     func emit(_ change: ResourceChange) { lock.withLock { callback }?(.init(change: change)) }
     func emitCandidates(_ paths: [String]) { lock.withLock { callback }?(.init(candidatePaths: paths)) }
 }

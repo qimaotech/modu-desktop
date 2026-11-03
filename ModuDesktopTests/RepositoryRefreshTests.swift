@@ -164,12 +164,12 @@ import Testing
             try Data("edit".utf8).write(to: path.appending(path: "new.txt"))
             gate.started = []; gate.completed = []
             gate.blockedHead = blocksAhead ? second : base
-            var backgroundRequested = false
-            details.onIdle = { backgroundRequested = true }
+            var idleNotified = false
+            details.onIdle = { idleNotified = true }
             details.request(.structure)
             let reading = try #require(details.detailTask)
             try await eventually { gate.started.contains(gate.blockedHead!) && gate.completed.contains(blocksAhead ? base : second) }
-            #expect(backgroundRequested && !details.snapshotLoading && details.detailLoading)
+            #expect(!idleNotified && !details.snapshotLoading && details.detailLoading)
             #expect(details.detail.changes?.isEmpty == true && details.detail.summary?.head == "main")
             #expect(details.detail.summary?.headOID == first && details.detail.commits?.map(\.subject) == ["first"])
             try Data("during history".utf8).write(to: path.appending(path: "last.txt"))
@@ -178,6 +178,7 @@ import Testing
             gate.blockedHead = nil
             await reading.value
             try await settle(details)
+            #expect(idleNotified)
             #expect(details.detail.changes?.map(\.path) == ["last.txt", "new.txt"])
             #expect(details.detail.summary?.head == "feature" && details.detail.summary?.headOID == second)
             #expect(details.detail.commits?.map(\.subject) == ["second", "first"] && details.detail.behindCommits?.isEmpty == true)
