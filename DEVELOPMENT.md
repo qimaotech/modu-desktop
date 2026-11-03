@@ -126,8 +126,8 @@
 
 ### CI 与安装包契约
 
-- [CI](.github/workflows/ci.yml) 在 tag 构建中校验版本与 CHANGELOG，Release 打包与单个测试 Job 并行；测试 Job 通过 `task test` 串行运行全量测试，超时为 60 分钟，失败时上传 `test-results` 结果包（`.xcresult`）。构建打包和全部测试通过后才创建 GitHub Release。main 分支 push、PR 和手动触发仅构建打包。
-- Swift Package 源码缓存按系统、架构、Xcode 和 `Package.resolved` 区分，仅 main 分支 push 构建成功后保存，发布和 PR 可读取。缓存不包含 Debug/Release 编译产物；首次运行或缓存失效时照常解析锁定依赖。
+- [CI](.github/workflows/ci.yml) 在 tag 构建中校验版本与 CHANGELOG，Release 打包与单个测试 Job 并行；测试 Job 通过 `task test` 串行运行全量测试，超时为 60 分钟，失败时上传 `test-results` 结果包（`.xcresult`）。构建打包和全部测试通过后才创建 GitHub Release。main 分支 push 不触发 CI，PR 和手动触发仅构建打包。
+- Swift Package 源码缓存按系统、架构、Xcode 和 `Package.resolved` 区分，仅手动触发 main 分支构建成功后保存，发布和 PR 可读取。缓存不包含 Debug/Release 编译产物；首次运行或缓存失效时照常解析锁定依赖。
 - [release_notes.py](script/release_notes.py) 校验 tag 与产品版本一致、当前版本章节格式正确且唯一非空，并提取该章节供 Release 使用；CI 附加系统要求与签名说明。章节格式见发布流程，普通分支构建无需发布章节，Unreleased 与其他版本内容不会混入本次发布。
 - 发布 tag、产品版本与 DMG 附件名必须匹配；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只提供更高产品版本的最新正式 Release，并要求包含 `Modu-<版本号>-arm64.dmg`。
 - [自动安装](ModuCore/Infrastructure/AppUpdateInstaller.swift) 还要求 Release 附件元数据提供有效的 SHA-256 `digest`，并通过文件大小与摘要校验；缺失或不匹配时拒绝安装。

@@ -5,7 +5,6 @@ run-name: >-
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -63,7 +62,7 @@ jobs:
         run: task package
 
       - name: Save Swift packages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.packages.outputs.cache-hit != 'true'
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && steps.packages.outputs.cache-hit != 'true'
         uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with: *package_cache
 
