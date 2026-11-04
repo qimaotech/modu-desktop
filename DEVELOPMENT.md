@@ -2,144 +2,140 @@
 
 ## 功能模型与异步协调
 
+### 模型职责与生命周期
+
 | 模型 | 职责 |
 | --- | --- |
-| `WorkspaceModel` | 工作区加载、侧栏与选择 |
-| `ManagementModel` | 管理表单、预览与增删操作 |
-| `RepositoryDetailModel` | Git 详情读取、资源状态缓存与后台补查 |
-| `GlobalShortcutModel` | 全局快捷键配置与录制 |
-| `AppUpdateModel` | 手动与自动检查更新、准备安装、请求取消与重启交接 |
+| [WorkspaceModel](ModuDesktop/Features/Workspace/WorkspaceModel.swift) | 工作区加载、侧栏与选择 |
+| [ManagementModel](ModuDesktop/Features/Management/ManagementModel.swift) | 管理表单、预览与增删操作 |
+| [RepositoryDetailModel](ModuDesktop/Features/RepositoryBrowser/RepositoryDetailModel.swift) | Git 详情、状态缓存与后台预加载 |
+| [GlobalShortcutModel](ModuDesktop/Features/Settings/GlobalShortcutModel.swift) | 全局快捷键配置与录制 |
+| [AppUpdateModel](ModuDesktop/Features/Updates/AppUpdateModel.swift) | 更新检查、安装准备与重启交接 |
 
-- 工作区与管理操作复用 `OperationLifecycle` 和 `OperationPresentation`；详情读取与更新检查独立维护任务、取消和缓存上下文，发布前均检查操作标识及当前上下文。
-- 当前资源依次读取更改与分支、基准摘要，再并发读取两侧历史，完成或失败后统一发布。最近成功详情和待提示失败事件分开保存；读取期间在路径行固定占位显示加载指示，不增加详情卡片高度；刷新失败保留整份成功快照，无快照时沿用错误视图。后台状态不替代详情；读取期间的新失效需求在本轮结束后补刷，仅发布无待补刷需求的最终详情失败。失败弹窗正文仅显示资源名称、错误说明及保留旧结果的简短提示；诊断为空或与错误说明相同时省略，仅追加有额外信息的诊断。详情失败经 App 层等待前台、业务操作和已有弹窗结束后提示，展示前复核工作区、资源与上下文代际；切换、取消或读取成功丢弃待提示事件。同一资源身份的相同错误按错误码与清理后的诊断文本去重，实际提示后才记账，成功恢复重置；仅 `⌘R` 标记主动重试并绕过去重，已有同一错误弹窗时不重复排队。
-- 当前资源和登记均通过 FSEvents 监听；登记事件和普通工作树事件按 150 毫秒防抖、最长 1 秒合并，HEAD、refs、index、配置及结构变化直接请求刷新。当前资源监听工作目录与 Git 元数据，后台仅记录失效，不可用时前台每 2 秒补查。激活按工作区、资源和检查类型复用 10 秒内未失效的本进程结果，失败另用 10 秒激活冷却，取消不更新时钟；在途激活合并，不额外补刷。完整详情更新侧栏状态时钟，轻量状态不能替代详情，磁盘恢复不获得新鲜度。文件事件、手动刷新和业务操作失效绕过 10 秒复用期限；登记激活仍只读同步，内容未变不重复读取 Git。
-- 登记监听 JSON 父目录以覆盖原子替换，并过滤其他登记文件；后台或忙碌时保留请求，内容未变化时不重复读取 Git。登记激活读取完成后冷却 10 秒，失败也计时，取消不计时，切换工作区成功后重置；在途激活复用同批读取，文件通知和显式刷新不受冷却限制。切换成功才重绑监听，失败保留原目标；监听失败依赖激活与手动刷新，登记缺失或损坏不自动初始化。
-- 侧栏由视图携带工作区标识报告展开分区和分组中的资源，不按滚动视口或窗口遮挡裁剪。没有周期检查；首次出现或展开时立即补查缺失、失效或超过 30 秒的状态，激活使用 10 秒门槛，排除当前资源，最多 4 个并发。请求与派发分开，详情空闲回调只派发已排队需求。失败记录尝试时间，取消不更新新鲜度；后台、维护和写操作期间暂停，恢复后仅处理仍可见的资源。
-- 完整详情在启动维护结束后、新展开和已知失效时排队预加载，范围沿用侧栏展开的主仓库、分组根及成员；后台低优先级串行读取。调度依次优先当前完整详情（含两侧历史）、本轮轻量状态查询和完整详情预加载；切换或刷新立即取消后台读取，前台不等待后台队列，取消收尾后再恢复派发。先处理没有成功快照的资源，其余按需更新，同级按资源 ID 稳定排序。新展开使用独立的完整详情尝试时间与 30 秒门槛，明确失效绕过期限；单纯激活或空闲回调不新增完整预加载需求。成功和失败均消费本轮需求，失败等待下一次展开或明确失效等触发，取消不更新时间；读取中新增的失效需求合并保留。收起移除排队需求并取消对应在途任务，工作区切换、后台、维护、写操作和退出统一取消及收尾。
-- 前台与后台复用资源读取逻辑，读取结果与当前页面发布分离。后台仅更新目标资源完整成功快照、侧栏状态及缓存，不修改当前页面、加载状态、监听或失败提示；失败静默保留旧成功快照，不新增后台资源监听。每个异步阶段及缓存写入前核对任务、工作区、资源登记与文件身份和失效代际，过期结果不得发布。Core 查询只读：轻量状态使用 `inspectStates` 和专用布尔状态读取，保留 application 可见性规则，不构造完整更改列表或读取分支；完整预加载复用详情读取更改、摘要及两侧历史的规则。CLI 默认 `withSummary` 保留摘要及 JSON 契约，不读取历史；以上读取均不 fetch。远端同步由克隆和“更新主仓库”负责。
-- 每个资源在内存中缓存状态、最近成功详情以及独立的轻量状态和完整详情新鲜度、尝试时间与失效状态，轻量查询成功不解除完整详情失效；登记删除或身份变化时移除，业务操作按共享 Git 仓库族标记失效并保留详情，工作区切换时清空内存。领先与落后历史按工作区、仓库实体、HEAD/base OID 合并缓存，每个仓库族最多两组、总计最多 32 组，按 LRU 淘汰。
-- 正式启动注入 Git 浏览磁盘缓存，直接构造功能模型默认禁用，mock 与测试使用本次临时目录。v1 JSON 原子写入，总容量 64 MiB、单条上限 8 MiB、闲置 30 天清理，按最近使用淘汰；这些限制不决定新鲜度。损坏、版本不符或无法写入均静默回退。详情按内容去重，首次变更后固定 1 秒合并写入，相同内容的观察时间最多每 60 秒 checkpoint。目标读取不扫描全目录；容量账本增量维护，同目录写批次通过短锁和代际协调，活动中的闲置清理最多每 5 分钟一次。
-- 磁盘缓存 actor 的完整详情另受 32 MiB 估算成本和 64 条 LRU 限制，最新值与持久基线分别计费；超预算可淘汰待写缓存，不提前写盘。编码超限、写入失败或锁忙后释放失败详情，保留既有磁盘值；退出 flush 只做一次非阻塞尝试。跨实例变化通过目标文件指纹识别，持锁写入时按 `observedAt` 拒绝旧值；同时间不同内容保留已落盘值，同内容保留较新观察时间。
-- 切换资源时先回显同一登记身份的成功内存快照；未失效且身份、读取上下文仍有效的本进程详情在 10 秒内跳过刷新，恢复目标资源监听，不延长新鲜度，完整预加载结果同样适用。没有内存成功详情时，先准备读取上下文、核对登记及仓库/worktree 文件身份，再恢复磁盘快照并继续读取实时数据。磁盘恢复不更新新鲜度或解除首轮详情等待。仅完整成功详情落盘，无远端是合法成功，错误和任务不保存。同路径仓库替换与资源身份变化使旧快照失效。
-- 历史磁盘层按仓库实体、HEAD/base OID 与查询版本复用，仅保存两侧完整成功结果。shallow、grafts 或 replace refs（含 packed refs）存在时按仓库族及特殊指纹清理一次并绕过；packed refs 判定复用文件指纹，查询前后仍复核，变化时不保存并补刷。
-- 缓存读取与入队归属详情任务；缓存 actor 的唯一延迟任务处理仍保留的成功快照，切换不强制刷盘，失效移除待写项。正常退出先停止并 drain 读取，再尽力 flush 尚在缓存中的最新内容和观察时间，最后清理 mock。
-- App 只读流程使用 `ResourceReadSession` 跨轮复用成功上下文及仓库族准备，不跨轮共享可取消的任务；写操作安全检查与 CLI 不使用该会话。状态失效保留准备结果并要求配置重探测，维护后的侧栏补查使用此方式；业务操作实际效果、登记删除或资源身份变化仍使准备结果失效。准备阶段始终复核目录、登记及配置依赖，变化时重建；实际激活检查与手动刷新也重新探测有效 global/system/include/worktree 配置，无法确认则重读。无关登记变化不使当前资源的准备结果失效。
-- 配置依赖由 Git 展开 include 路径，记录缺失、空文件、symlink 原始路径及默认 global/system 候选；无法可靠探测时放弃配置上下文复用。单次 `prepare` 按原始路径、Git 目录和公共目录复用本次配置查询，成功快照仅在依赖仍有效时复用，不可缓存结果仅在本次调用内去重；linked worktree 保持独立作用域。普通 HEAD 与主仓库、worktree 的 `reftable/tables.list` 均参与依赖校验，reftable 元数据变化触发摘要刷新。
-- 普通文件事件合并后按 Git 的真实 ignore 规则筛选，最多 256 个候选或 64 KiB；tracked 文件仍可触发刷新。目录、rename、不确定事件与配置、index、refs 等重要变化不等待筛选；溢出或失败回退正常刷新。更改树、可见行、提交日期及列宽在 Desktop 呈现层按内容、折叠、语言和字体复用，刷新状态变化不重算。
-- 读取模型统一等待已取消的详情、事件筛选与扫描，工作区另行等待已取消的只读重载，维护不得等待自身循环。前台读取独立执行；旧扫描收尾前保留需求，不派发新扫描。写操作和退出前停止相关监听、防抖，并等待读取及辅助进程结束。
-- App 前台与后台读取使用独立的更改可见性策略，忽略常规 submodule 变更，保留 `.gitmodules`、类型转换和冲突；CLI 与业务安全读取维持完整状态。监听排除已登记子模块的内部普通文件事件，index 与 `.gitmodules` 变化后重新解析排除目录，不能将普通嵌套仓库视为子模块。不修改用户 Git 配置。
-- 启动在 CLI 安装检查后只读恢复工作区和页面，当前资源首轮完整详情完成、失败或取消后执行维护，维护结束且允许读取后开始后台补齐；CLI PATH 检查不阻塞页面。维护保留仍有效的选择，失败保留只读浏览、错误与重试入口，成功后恢复管理和外部工具。无法重新确认记录时保留上次快照并暂停读取。
-- 启动准备与维护进度显示在标题栏，不提供取消入口，不占用内容区布局；退出和工作区切换仍保留内部取消及清理。维护失败复用结果弹窗并保留本次结果，关闭后通过标题栏只读状态查看详情或重试；自动提示等待已有操作、弹窗和错误提示结束，取消且没有操作效果时保持静默。重试成功或工作区切换成功后清除旧失败状态。
-- 启动需要打开 Setup 时，启动任务先复用 CLI 检查结果并完成工作区目录校验，再展示准备好的引导模型；准备结果绑定工作区路径，检查期间或等待展示期间切换工作区时重新准备，继续纳入启动任务的退出取消与等待。引导身份使用已加载或已保存的工作区路径，避免加载过程重建视图。同一工作区、同一窗口展示期间只执行一次初始检查，实际关闭后下次手动打开重新检查；首次检查复用后释放 CLI 结果。工作区目录校验不显示 loading，通过禁用相关按钮限制操作。Setup 使用系统窗口标题，手动打开时的 CLI 检查、安装和完成设置的进度保留在对应按钮内。
-- `refreshRecord` 与 `maintainWorkspace` 分别提交只读刷新和维护，单个循环消费批次，当前与待处理批次分开保存。刷新意图区分登记、当前详情和侧栏；统一登记应用处理资源差异、选择、展开状态和缓存。回调按序执行，等待者只等待所属批次，取消等待不取消共享任务；忙碌时请求入队即返回。
-- 业务操作打断普通重载时，将刷新意图和激活标记复制到新的待处理批次；旧回调和等待者结束，不随重试恢复。激活标记独立驱动读取成功后的侧栏补查，带此标记的重试完成后才记录激活冷却；成功切换工作区或退出时沿用既有待办清理规则。
-- 维护开始前保留路径和选项，普通刷新不能降级维护；重复请求加入已开始的维护并沿用其选项，开始前合并则保留显示进度和不可取消要求。切换失败或取消后继续原请求，成功后丢弃；维护期间未命中登记冷却的激活排入后续只读批次。自动刷新不执行目录修复、登记清理或内置工作流同步。
+- 工作区与管理操作复用 [OperationLifecycle](ModuDesktop/App/OperationLifecycle.swift) 和 [OperationPresentation](ModuDesktop/App/OperationPresentation.swift)；详情与更新独立管理任务。异步结果发布前复核操作标识、生命周期和当前上下文。
+- 取消请求与等待收尾分开处理；切换、写操作和退出覆盖读取、事件筛选、扫描、只读重载及辅助进程。维护不能等待自身循环；旧后台任务收尾前保留需求，不派发新任务，前台详情可独立启动。
+- 写操作和退出前停止相关监听与防抖，等待读取结束；退出再尽力保存缓存，最后清理 mock。取消或失败按实际效果反馈，不承诺整体回滚。
+
+### Git 读取与缓存
+
+- 前台与后台共享读取流程，与页面发布分离。完整详情包含更改、分支与基准摘要及两侧提交历史，统一发布成功快照；刷新失败保留仍有效的旧成功结果，不用部分结果覆盖。
+- 侧栏查询已展开的主仓库、分组根和成员，排除当前资源，不受滚动位置影响，有界并发 **4**；完整详情低优先级、串行预加载。顺序固定为当前完整详情（含历史）→ 本轮侧栏查询 → 后台完整详情。
+- 启动维护结束、新展开和明确失效产生完整预加载需求；激活与空闲回调不新增完整预加载需求。侧栏查询与完整预加载无周期轮询。先补没有成功快照的资源，同级按资源 ID 排序并合并重复请求；收起移除需求并取消对应读取。
+- 轻量状态与完整详情独立维护新鲜度、尝试时间和失效代际；轻量成功不解除详情失效。展开按各自尝试时间判断，明确失效绕过期限。成功或失败消费本轮需求，失败等待后续触发，取消不计时；读取中新失效需求仍须补齐。
+- 切换或刷新立即取消后台读取并优先启动当前详情，不等待整个队列。后台、维护、写操作和退出暂停派发并取消、收尾；恢复后只处理仍在范围内的资源。后台成功只更新目标快照、侧栏状态和缓存，失败静默保留旧快照，不修改页面、加载状态、监听或弹窗。
+- 切换资源先回显同一登记身份的成功内存快照，再核对文件身份；身份失效时丢弃旧缓存，仍新鲜且上下文有效的本进程结果可复用。磁盘恢复须先核对登记、仓库及 worktree 文件身份，再继续实时读取，不视为实时成功。每个异步阶段及缓存写入前复核取消、工作区、资源身份与失效代际，防止旧结果回流。
+- 业务操作按共享 Git 仓库族失效并保留成功快照；登记删除或身份变化移除缓存，切换工作区清空内存。历史按仓库实体和 HEAD/base OID 复用；shallow、grafts、replace refs 等改变历史语义时绕过普通缓存，查询前后复核依赖。
+- 磁盘仅保存完整成功详情与两侧完整历史；损坏、版本不符、写入失败静默回退。原子写入、容量淘汰与多实例协调不得让旧观察覆盖新结果；失效移除待写项，切换不强制刷盘。容量、合并写入与清理期限以 [RepositoryDiskCache](ModuCore/Infrastructure/Persistence/RepositoryDiskCache.swift) 为准，历史复用见 [RepositoryHistoryCache](ModuCore/Workflows/RepositoryHistoryCache.swift)。正式启动注入缓存，直接构造模型默认禁用，mock 和测试使用本次临时目录。
+- [ResourceReadSession](ModuCore/Workflows/ResourceReadSession.swift) 只供 App 只读流程复用成功上下文，不跨轮共享可取消任务，也不用于 CLI 或写操作安全检查。登记、文件身份与有效 Git 配置依赖变化须重新验证；无法可靠确认时放弃复用，不修改用户 Git 配置。
+- 文件监听覆盖[当前资源](ModuCore/Infrastructure/FileSystem/ResourceChangeMonitor.swift)和[工作区登记](ModuCore/Infrastructure/FileSystem/WorkspaceRecordChangeMonitor.swift)；后台保留失效，前台恢复处理，监听不可用时补查。普通事件可防抖并按真实 ignore 规则筛选，重要元数据或不确定事件直接刷新。前台失败提示须等待空闲并复核上下文；切换、取消或成功后丢弃，持续相同错误去重，手动刷新允许重试。
+- Git 浏览与 CLI 查询只读本地数据，不 fetch。App 隐藏常规 submodule 内部及指针变化，仍保留 `.gitmodules`、类型转换和冲突；CLI 与业务安全检查读取完整状态，不能把普通嵌套仓库当子模块。
+
+### 工作区加载与维护
+
+- `refreshRecord` 只读同步，`maintainWorkspace` 执行目录修复、登记清理和内置工作流同步；自动刷新不得升级为维护。维护的用户影响见 [工作区文件与自动提交](README.md#工作区文件与自动提交)。
+- 单个加载循环合并请求，当前批次与待处理批次分离；登记应用统一处理资源差异、选择、展开和缓存。等待者只等待所属批次，取消等待不取消共享任务；忙碌时保留请求。
+- 写操作打断只读重载时保留刷新意图，不重放旧回调；普通刷新不能降级维护。同一维护请求合并并保留已确定的选项；切换失败或取消继续原工作区需求，切换成功或退出清理旧需求。
+- 登记监听覆盖原子替换；无关或内容未变的通知不重复读取 Git。激活按现有冷却规则合并，文件事件与手动刷新不受冷却限制。切换成功才重绑监听，记录缺失或损坏不自动初始化；无法重新确认记录时保留旧快照并暂停读取。
+
+### 启动与设置
+
+- [AppModel](ModuDesktop/App/AppModel.swift) 先检查 CLI，再只读恢复工作区与页面；当前首轮完整详情完成、失败或取消后才维护，维护结束且读取允许后再补齐后台队列。PATH 检查不阻塞页面；无当前选择时直接进入维护。
+- 维护不提供用户取消入口；启动维护支持内部取消，手动维护期间阻止工作区切换，退出等待收尾。失败保留只读浏览、错误与重试入口，提示等待前台空闲；重试或切换成功清除旧失败。
+- [SetupModel](ModuDesktop/Features/Setup/SetupModel.swift) 展示前完成初始检查，复用启动 CLI 检查结果并绑定工作区路径；切换后重新准备。同次展示避免重复检查，关闭后重开重新检查；准备任务纳入启动取消与退出等待。
 
 ### 自动更新
 
-- 自动检查默认开启，开关与最近一次检查尝试时间由 `AppPreferences` 持久化。启动完成或 App 重新激活时触发，距上次检查（含手动检查、失败或取消）至少 24 小时才发起后台请求；已有待安装版本或更新窗口可见时不重复自动检查。mock 与单元测试宿主不触发真实自动检查。
-- 后台检查无新版或失败时不弹窗，发现新版后由 App 层等待启动窗口就绪、App 处于前台、业务操作与结果提示结束，再打开更新窗口。手动检查不受开关或间隔限制，并接替进行中的后台检查；关闭自动检查会取消本次后台请求，过期结果不能发布。自动检查不下载或安装，安装仍由用户确认。
-- 更新窗口左下角为“自动检查更新”复选框；发现新版后，版本变化中的目标版本号作为链接打开该版本的发布说明。
-- 更新窗口内容区固定为 460 × 200，各状态切换不调整主窗口尺寸；“详细信息”链接紧接错误说明，点击后在浮层中显示诊断信息；长错误正文在状态区内滚动。下载显示定量进度，其他处理阶段使用忙碌指示；等待退出时由 App 层提供当前操作或结果确认的等待原因，主操作按钮隐藏。
-- DMG 缓存在 `~/Library/Caches/fun.armantang.ModuDesktop/Updates/` 下的独立目录。准备安装成功后立即清理，后续替换和重启不再依赖 DMG；下载完整性校验失败（`update-integrity-failed`）、取消、重新检查或退出时清理本次缓存，其余准备失败可保留供重试。
-- 自动更新由 Core 准备并校验 DMG 中的应用，在当前应用旁暂存；退出准备期间先拒绝当前退出请求，异步清理完成并启动内置 CLI 的独立安装进程、确认就绪后，再次请求退出，避免 AppKit 的延迟退出模态循环阻塞主线程任务。安装器最多等待原进程退出 60 秒，超时通过本次安装的结果文件回传错误，原应用清除待退出状态并允许重试。
-- 安装器验证应用身份后原子替换应用，清理被替换的旧应用，再通过系统 `open` 请求启动新版；成功后删除暂存目录。替换或启动请求失败时保留已完成的效果和诊断文件，安装后的应用不自动还原。
-- 更新任务通过请求与安装标识隔离取消和过期回传，不修改工作区数据；CLI 链接随应用原路径替换指向新版，迁移与修复方式见 [CLI 与 Agent](README.md#cli-与-agent)。
+- [AppUpdateModel](ModuDesktop/Features/Updates/AppUpdateModel.swift) 持久化自动检查开关和尝试时间，手动、失败或取消也计入自动间隔；已有待安装版本或窗口时不重复检查，mock 与测试不发起真实请求。
+- 后台无新版或失败保持静默，新版等待启动就绪、前台且业务及提示结束后展示。手动检查可接替后台请求，关闭自动检查取消后台请求，过期结果不得发布；下载与安装须用户确认。
+- [AppUpdateInstaller](ModuCore/Infrastructure/AppUpdateInstaller.swift) 校验并在应用旁暂存新版，通过独立 CLI 安装进程接管退出后的替换与启动。App 先完成异步收尾、确认安装进程就绪再退出，避免 AppKit 延迟退出阻塞；退出超时回传失败并允许重试。
+- 请求与安装标识隔离取消及回传，不修改工作区数据。成功准备、完整性失败、取消及退出清理本次下载；其他准备失败可保留供重试。替换后不自动回滚，部分失败保留实际效果与诊断；安装要求见[安装包契约](#ci-与安装包契约)。
 
 ## 构建启动与调试
 
-- 需要完整 Xcode（含命令行工具）和 Task 3，在仓库根目录执行。系统与 SDK 配置见 [Xcode 工程](ModuDesktop.xcodeproj/project.pbxproj)，工具链见 [CI](.github/workflows/ci.yml)；Swift Package 依赖由 Xcode 按 [锁文件](ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved) 解析。
-- 完整任务见 [Taskfile.yml](Taskfile.yml)，启动参数见 [build_and_run.sh](script/build_and_run.sh)；`task --dry <任务>` 只查看命令，额外参数通过 `--` 透传。
+需要完整 Xcode（含命令行工具）和 Task 3，在仓库根目录执行。系统与 SDK 见 [Xcode 工程](ModuDesktop.xcodeproj/project.pbxproj)，工具链见 [CI](.github/workflows/ci.yml)，依赖由 [Package.resolved](ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved) 锁定。完整任务与参数见 [Taskfile.yml](Taskfile.yml) 和 [build_and_run.sh](script/build_and_run.sh)；`task --dry <任务>` 查看命令，`--` 后透传额外参数。
 
 | 任务 | 命令 |
 | --- | --- |
-| 普通开发启动，恢复上次工作区与页面选择 | `task run` |
+| 普通开发启动，恢复工作区与选择 | `task run` |
 | 重新选择开发工作区 | `task run -- --reset` |
-| 构建并激活隔离 Git 场景，验证启动并输出 PID | `task mock` |
-| 隔离工作区数据的构建与启动验证，不停止已有实例；输出 PID 后保持后台运行 | `task verify -- --mock linked-worktree-selected` |
+| 构建并激活隔离 Git 场景 | `task mock` |
+| 隔离构建与启动验证，输出 PID 后保持运行 | `task verify -- --mock linked-worktree-selected` |
 | 隔离 LLDB 调试，输入 run 启动 | `task debug -- --mock linked-worktree-selected` |
 | 本次隔离实例的进程日志 | `task logs -- --mock linked-worktree-selected` |
 | 本次隔离实例的 Modu subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
 
-- 临时验证优先使用带 mock 的 verify；构建或启动相关改动用它检查构建与启动，原生窗口或交互改动按需临时执行 UI 自动化。
-- mock 默认复用开发构建产物；需要独立构建产物时，为 `MODU_DERIVED_DATA_PATH` 指定本次专用目录。
-- 调试与日志命令使用临时场景示例；普通开发模式可省略 mock 参数。
-- mock 数据由 [prepare_mock_workspace.py](script/prepare_mock_workspace.py) 准备，启动验证由 [verify_app.swift](script/verify_app.swift) 执行。
+- 构建或启动改动优先用 mock verify；它只证明启动完成，不代表工作区加载或界面验证通过。浏览器验证仅在用户明确要求时执行。
+- mock 每次创建新场景，复用开发构建产物；需要独立产物时指定本次专用 `MODU_DERIVED_DATA_PATH`。场景准备见 [prepare_mock_workspace.py](script/prepare_mock_workspace.py)，启动验证见 [verify_app.swift](script/verify_app.swift)，验证后按[临时实例收尾](#临时实例收尾)退出并清理。
 
 ### 偏好与工作区选择
 
-- Debug 默认使用 `fun.armantang.ModuDesktop.development` 偏好域，与正式版隔离且不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。
-- 正式版与开发版使用相同的[页面恢复规则](README.md#开始使用)。页面选择和侧栏展开状态按工作区保存，文件树折叠状态再按资源区分；侧栏宽度和 Git 面板比例在同一偏好域内共用。临时加载失败不覆盖已保存的页面选择。
-- 主窗口通过 `AppDelegate` 在当前偏好域保存窗口几何信息，并由 `defaultWindowPlacement` 在首次显示前恢复尺寸与位置，避免显示默认尺寸后再跳变；恢复时按可用屏幕区域约束窗口，兼容原有 AppKit frame 描述。标题栏配置在 `WindowChromeHeight` 的 `viewWillAppear` 中提前应用，尺寸测量仍异步发布。拖动调整尺寸结束、关闭窗口、退出 App 和进入全屏前保存，全屏期间不覆盖普通窗口的记录。窗口仍由启动流程按需打开，不依赖系统的窗口恢复开关。
-- 带 `--mock` 的启动任务每次创建新场景并预选示例成员；同一场景因切换语言重启时恢复已保存的页面与展开状态。场景与偏好的退出清理见[临时实例收尾](#临时实例收尾)。
-- 工作区记录和锁位于 `~/Library/Application Support/Modu/`；`~/.local/bin/modu-cli` 直接链接当前 App 的 `Contents/Resources/modu-cli`，更新 App 无需重新安装 CLI。旧版 CLI 链接在重新安装时迁移，保留原版本目录；不带 mock 的 verify 使用当前开发偏好所选的工作区。
-- `--reset` 仅用于不带 mock 的普通 run，在构建成功后只删除偏好的 `workspace` 键，保留各工作区的浏览状态、其他偏好、CLI 安装与工作区数据。设置了 `MODU_TEST_DEFAULTS` 时清除该域中的工作区选择，并取消传入 `MODU_TEST_WORKSPACE`，避免立即恢复工作区选择。
+- Debug 使用 `fun.armantang.ModuDesktop.development` 偏好域，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。数据、锁和 CLI 的共享风险见 [AGENTS.md](AGENTS.md#关键风险)。
+- 页面选择与展开状态按工作区、文件树折叠按资源保存，临时加载失败不覆盖选择。窗口几何与布局在当前偏好域保存；恢复限制在可用屏幕内，全屏期间不覆盖普通窗口记录。实现见 [AppPreferences](ModuDesktop/App/AppPreferences.swift) 与 [AppDelegate](ModuDesktop/App/AppDelegate.swift)。
+- `--reset` 仅支持不带 mock 的 run，构建成功后只清除工作区选择，保留浏览偏好、CLI 和工作区数据；使用测试偏好域时清除对应键，并取消 `MODU_TEST_WORKSPACE` 覆盖。
 
 ### 构建与日志诊断
 
-- 开发构建使用当前运行架构，默认显示阶段进度、耗时、警告和错误；启动任务追加 `-- --verbose` 可查看完整构建日志与耗时汇总，例如 `task mock -- --verbose`。
-- mock 会报告数据准备耗时和并行构建总耗时；启动耗时包含验证脚本的编译与执行。
-- logs 与 telemetry 验证启动后，按本次实例的 PID 收集日志；telemetry 额外筛选 Modu subsystem。启动失败或无法取得有效 PID 时返回失败，不进入日志流。监听从启动验证完成后开始，可能遗漏最早的启动日志。
-- 日志流的 Ctrl-C 只停止日志，App 继续运行。
-- Git 浏览诊断默认关闭；`MODU_READ_DIAGNOSTICS=1` 向标准错误输出本地 JSON 事件，统计读取来源、阶段耗时、Git 命令次数和输出字节、缓存命中、编码/写入、目录扫描及呈现重算。事件不记录命令参数或仓库路径，也可通过 `RepositoryReadDiagnostics` 注入本地收集器；没有产品设置入口。
+- 启动任务追加 `-- --verbose` 查看完整构建日志，如 `task mock -- --verbose`。
+- logs 与 telemetry 启动验证后按本次 PID 收集，失败不进入日志流，可能遗漏最早启动日志；Ctrl-C 只停止日志，App 继续运行。
+- `MODU_READ_DIAGNOSTICS=1` 向标准错误输出本地 JSON 读取诊断，包含阶段、命令量和缓存统计，不记录命令参数或仓库路径。
 
 ## 测试执行与诊断
+
+测试取舍遵循 [AGENTS.md](AGENTS.md#验证与交付)，执行入口为 [run_tests.py](script/run_tests.py)。
 
 | 任务 | 命令 |
 | --- | --- |
 | 最小范围测试 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>'` |
-| 枚举测试方法标识（Swift Testing 含括号） | `task test -- -enumerate-tests` |
-| 保留测试结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
-| 实时查看完整测试日志 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- --verbose` |
+| 枚举方法标识（Swift Testing 含括号） | `task test -- -enumerate-tests` |
+| 保留结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
+| 实时完整日志 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- --verbose` |
 | 明确需要时运行全量测试 | `task test` |
 
-- 在 Codex 沙箱中运行测试前，核对用户级 SwiftPM 缓存的写入权限。若缓存不在可写范围，且已有日志确认该测试入口需要提权，首次执行即申请所需权限，不重复尝试已知会失败的普通执行；权限配置变化后重新评估。
-- [run_tests.py](script/run_tests.py) 默认每 10 秒报告英文进度，包含阶段、累计耗时、已完成和失败数量、当前用例及运行时长；无新日志时仍更新。终端覆盖同一行，Codex/CI 等非终端环境追加低频文本，不额外枚举用例或估算百分比，最终数量以结果包为准。失败诊断立即显示并去重，最多 20 条。`--verbose` 实时显示完整日志，枚举测试时直接显示枚举结果。
-- 交互终端使用系统 ANSI 配色：运行阶段蓝色、成功绿色、失败红色、跳过或中断黄色，时间、路径和分隔符弱化。颜色只用于终端显示，不写入日志；非终端、`NO_COLOR` 或 `TERM=dumb` 环境禁用颜色，`TERM=dumb` 同时禁用单行覆盖。
-- 完整日志保存在系统临时目录独立的 `modu-tests-*.log`，清理测试环境时保留，按输出的精确路径查看或删除。日志定位优先读取进度、结果汇总和具体失败，避免反复输出日志尾部。
-- 测试环境隔离，默认删除结果包；退出或清理无法确认时保留环境并返回失败。Xcode 耗时包含构建与测试，另报告清理及总耗时。
-- 零用例或全跳过不算通过，`-enumerate-tests` 除外；筛选失败时先核对方法标识与 `TEST_FILTER`。
-- Mock 测试聚焦场景加载、外部工具目标及安装、删除、目录和网络隔离；完整刷新、分组管理与 YAML 流程复用 [业务测试](ModuDesktopTests/)，避免重复覆盖。
-- 可重复的读取/缓存比较使用 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`，默认不执行。场景在本次临时目录准备多仓库、分组、2,000 个未跟踪文件和 250 条历史缓存，`BENCHMARK` JSON 写入完整日志，追加 `-- --verbose` 可实时查看；比较冷/热轻量查询与完整查询，以及重复保存和目标读取的调用次数。激活切换与忽略事件降噪分别复用 `ActivationReadSchedulingTests`、`WorkspaceSyncTests` 的可控时钟和事件替身；确定性断言使用次数，耗时只用于比较。
+- 沙箱执行前只读核对用户级 SwiftPM 缓存写入权限；已有日志确认需提权时首次即申请，不重复已知失败的普通执行，权限变化后重新评估。
+- 按输出的精确路径读取或删除完整日志，不按目录前缀清理。测试环境隔离，默认删除结果包；退出或清理无法确认时保留环境并返回失败。
+- 零用例或全跳过不算通过，枚举除外；筛选失败先核对方法标识与 `TEST_FILTER`。
+- mock 测试关注场景准备、外部工具目标和隔离；业务行为复用已有测试。读取性能比较按需运行 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`；确定性断言使用次数或调度条件，耗时只作比较。
+- Git 夹具复用 [Fixture](ModuDesktopTests/ModuDesktopTests.swift)：已有状态用 `Fixture(template:)`，未初始化目录用 `Fixture(createRemote: false)`；被测初始化、添加与创建流程仍现场执行。模板仅在本轮测试环境内共享，各用例独立复制并重建记录和远端映射；直接从 Xcode 运行不共享模板。
+- 超时与取消测试使用可控等待和可注入时限；观察中间状态时用可取消替身阻塞并显式放行。保留真实文件锁、进程组清理及底层锁超时覆盖，不改变生产默认策略。
 
 ## 临时实例收尾
 
-1. 启动前记录已有实例与临时目录；启动后核实并保存本次 PID、可执行路径、参数、启动时间、临时目录及辅助进程。
-2. 先恢复被调试器暂停的 App，再执行 `task quit PID=<本次进程号>`，等待并确认该 PID 已退出；实现见 [quit_app.swift](script/quit_app.swift)。
-3. mock 正常退出会清理数据；核对临时仓库、worktree、偏好域与日志，并停止本次辅助进程、移除临时 UI 验证脚本。遗留数据在确认 App 退出后用 `task mock:cleanup DIRECTORY="<本次临时目录>"` 定向清理。
-4. 正常退出失败时，核实身份后仅定向终止本次进程；无法确认归属时保留现场并报告。[find_mock_app.py](script/find_mock_app.py) 可辅助核对 mock 实例归属。
+1. 启动前记录已有实例；启动后保存本次 PID、可执行路径、参数、启动时间、临时目录及辅助进程，用于确认归属。
+2. 先恢复被调试器暂停的 App，再执行 `task quit PID=<本次进程号>`，等待并确认该 PID 退出；实现见 [quit_app.swift](script/quit_app.swift)。
+3. mock 正常退出会清理数据；核对本次仓库、worktree、偏好域与日志，停止本次辅助进程并移除临时验证脚本。遗留数据在确认退出后用 `task mock:cleanup DIRECTORY="<本次临时目录>"` 定向清理。
+4. 正常退出失败时，核实身份后仅终止本次进程；归属不明则保留并报告。[find_mock_app.py](script/find_mock_app.py) 可辅助核对。用户要求保留的实例除外。
 
 ## 版本打包与发布
 
 ### 版本生成与本地准备
 
-- [generate_version.sh](script/generate_version.sh) 从 [Version.xcconfig](Version.xcconfig) 生成 Core 的 `ModuVersion`，App Info.plist 与 CLI 的 `--version` 使用同一配置；DMG 文件名随产品版本生成。
-- 版本选择、格式、构建号递增、CHANGELOG 收录、暂存提交及 tag 授权、失败续跑按 [发布流程](.agents/skills/release-modu-desktop/SKILL.md) 执行，仅在用户显式调用该流程时运行完整步骤。
+- 版本只改 [Version.xcconfig](Version.xcconfig)，[generate_version.sh](script/generate_version.sh) 生成 App、CLI 共用的 `ModuVersion`。完整版本准备流程仅在显式调用[发布 skill](.agents/skills/release-modu-desktop/SKILL.md)时执行。
+- 修改代码或文档不隐含暂存、提交或发布授权。显式请求完整发布流程仅授权 `Version.xcconfig`、`CHANGELOG.md` 暂存、提交及对应本地 tag；推送分支、tag 和创建 GitHub Release 仍需单独授权。推送 `v*` tag 会触发 CI 发布。
 
 | 任务 | 命令 |
 | --- | --- |
-| 修改版本后、提交前核对 App 版本、构建号与内置 CLI | `task test TEST_FILTER=ModuDesktopTests/VersionTests` |
-| 校验并预览当前版本的发布说明 | `python3 script/release_notes.py v<版本号>` |
-| 打包 arm64 发布版 DMG，本地完成后自动打开 | `task package` |
+| 修改版本后、提交前核对 App 与 CLI 版本 | `task test TEST_FILTER=ModuDesktopTests/VersionTests` |
+| 校验并预览当前版本发布说明 | `python3 script/release_notes.py v<版本号>` |
+| 打包 arm64 发布 DMG，本地完成后自动打开 | `task package` |
 
-- [package_app.sh](script/package_app.sh) 核对 App/CLI 版本、架构、签名、内置资源与 DMG 完整性；构建参数和输出目录以该脚本为准。
+打包检查、参数与输出目录见 [package_app.sh](script/package_app.sh)；发布说明收录与格式只在发布 skill 中维护。
 
 ### CI 与安装包契约
 
-- [CI](.github/workflows/ci.yml) 在 tag 构建中校验版本与 CHANGELOG，Release 打包与单个测试 Job 并行；测试 Job 通过 `task test` 串行运行全量测试，超时为 60 分钟，失败时上传 `test-results` 结果包（`.xcresult`）。构建打包和全部测试通过后才创建 GitHub Release。main 分支 push 不触发 CI，PR 和手动触发仅构建打包。
-- Swift Package 源码缓存按系统、架构、Xcode 和 `Package.resolved` 区分，仅手动触发 main 分支构建成功后保存，发布和 PR 可读取。缓存不包含 Debug/Release 编译产物；首次运行或缓存失效时照常解析锁定依赖。
-- [release_notes.py](script/release_notes.py) 校验 tag 与产品版本一致、当前版本章节格式正确且唯一非空，并提取该章节供 Release 使用；CI 附加系统要求与签名说明。章节格式见发布流程，普通分支构建无需发布章节，Unreleased 与其他版本内容不会混入本次发布。
-- 发布 tag、产品版本与 DMG 附件名必须匹配；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只提供更高产品版本的最新正式 Release，并要求包含 `Modu-<版本号>-arm64.dmg`。
-- [自动安装](ModuCore/Infrastructure/AppUpdateInstaller.swift) 还要求 Release 附件元数据提供有效的 SHA-256 `digest`，并通过文件大小与摘要校验；缺失或不匹配时拒绝安装。
+- [CI](.github/workflows/ci.yml) 的 `v*` tag 流程校验版本与 CHANGELOG，打包和串行全量测试均通过后才发布；测试失败时上传结果包。PR 和手动触发仅构建打包，main push 不触发。
+- tag、产品版本、发布说明与 `Modu-<版本号>-arm64.dmg` 必须一致；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只接受更高版本的最新正式 Release。
+- 自动安装要求附件元数据提供有效 SHA-256 `digest`，下载后核对文件大小和摘要，缺失或不匹配拒绝安装。
 
 ## 文档与提示词维护
 
+- 产品文档介绍核心功能、用法和用户风险；开发文档记录职责、关键设计与操作入口。业务规则、数据格式和参数以代码为准，避免罗列实现分支、调优常量和界面布局细节。
+- 规则保留单一来源，其他入口引用；完整参数查 CLI `--help` 或脚本。纯文档改动检查路径、命令、章节引用及 `git diff --check`。
+
 | 提示词 | 实现核对入口 |
 | --- | --- |
-| [内置工作流 SKILL.md](ModuDesktop/Resources/modu-workflow/SKILL.md)、[openai.yaml](ModuDesktop/Resources/modu-workflow/agents/openai.yaml) | `ModuCLI/Commands/` 与 Core 的操作结果 |
-| [发布 SKILL.md](.agents/skills/release-modu-desktop/SKILL.md)、[openai.yaml](.agents/skills/release-modu-desktop/agents/openai.yaml) | `Version.xcconfig`、`script/release_notes.py` 和 `.github/workflows/ci.yml` |
+| [内置工作流](ModuDesktop/Resources/modu-workflow/SKILL.md)、[调用配置](ModuDesktop/Resources/modu-workflow/agents/openai.yaml) | [CLI 命令](ModuCLI/Commands/)与 [Core](ModuCore/Workflows/) 操作结果 |
+| [发布流程](.agents/skills/release-modu-desktop/SKILL.md)、[调用配置](.agents/skills/release-modu-desktop/agents/openai.yaml) | `Version.xcconfig`、[发布说明脚本](script/release_notes.py)与 CI |
+| [手动自检](.agents/skills/check-modu-desktop/SKILL.md)、[调用配置](.agents/skills/check-modu-desktop/agents/openai.yaml) | 检查范围、测试取舍与交付约束 |
 
-- 详细规则维护单一来源，其他入口保留摘要与引用；完整参数说明引用 CLI `--help` 或脚本，发布说明的收录标准维护在发布流程中。
-- 纯文档或提示词改动检查路径、命令、交叉引用及 `git diff --check`。
-- 内置工作流源文件位于 App 资源目录，工作区副本的覆盖规则与自定义方式见 [CLI 与 Agent](README.md#cli-与-agent)。同步实现见 [WorkspaceService.swift](ModuCore/Workflows/WorkspaceService.swift)：丢弃托管文件改动后，按需 stash 其他工作区文件，同步并自动提交内置内容，最后恢复其他改动。
-- 内置工作流默认允许自动调用（`allow_implicit_invocation: true`），发布流程仅显式调用（`allow_implicit_invocation: false`）；修改时同步核对 `SKILL.md` 的 description，以及 `agents/openai.yaml` 的 default_prompt 与调用策略。
+- 内置工作流在 App 资源目录维护，工作区副本的覆盖与自定义规则见 [README](README.md#工作区文件与自动提交)，同步实现见 [WorkspaceService](ModuCore/Workflows/WorkspaceService.swift)。
+- 内置工作流允许自动调用，发布和自检仅手动调用；修改 skill 时同步核对 description、`agents/openai.yaml` 的 default_prompt 与调用策略。
