@@ -40,10 +40,8 @@ import Testing
     }
 
     @Test func cancellingDeletionPreservesContentAndCleansUpAfterDismissal() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }

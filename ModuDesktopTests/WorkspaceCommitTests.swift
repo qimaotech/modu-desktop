@@ -4,8 +4,7 @@ import Testing
 
 struct WorkspaceCommitTests {
     @Test func unchangedManagedFilesKeepStagedEditsAndSkipStagingAndCommit() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let ignore = f.root.appending(path: ".gitignore")
         let original = try Data(contentsOf: ignore)
         var staged = original; staged.append(Data("# staged edit\n".utf8))
@@ -258,7 +257,7 @@ struct WorkspaceCommitTests {
 
     @Test func repositoryCommitFailureKeepsRepositoryAndRetryOnlyCommitsIgnore() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let head = try await f.service.git.oid("HEAD", at: f.root)
         try await failSigning(f)
         let added = await f.service.addRepository(.init(url: f.remoteURL), at: f.root)
@@ -279,7 +278,7 @@ struct WorkspaceCommitTests {
 
     @Test func workspaceImportClonesAllRepositoriesThenCommitsOnceBeforeGroups() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let other = "https://modu-test.invalid/other.git"
         _ = try await f.service.git.run(["config", "--global", "--add", "url.\(f.directory.appending(path: "repo.git").path).insteadOf", other], at: f.root)
         let trace = f.directory.appending(path: "trace")
@@ -306,7 +305,7 @@ struct WorkspaceCommitTests {
 
     @Test func workspaceImportCommitFailureKeepsRepositoriesAndSkipsGroups() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         try await failSigning(f)
         let result = await f.service.importWorkspaceYAML(workspaceYAML(f), at: f.root)
         #expect(result.status == .partialSuccess)
@@ -321,7 +320,7 @@ struct WorkspaceCommitTests {
     @Test(arguments: [false, true])
     func cancelledWorkspaceImportFinishesIgnoreCommitAndStopsPendingGroups(_ hasGroups: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let yaml = hasGroups ? workspaceYAML(f) : "version: 1\nrepositories: [{url: \(f.remoteURL)}]\ngroups: {}\n"
         let result = await Task {
             await f.service.importWorkspaceYAML(yaml, at: f.root) { value in
@@ -337,7 +336,7 @@ struct WorkspaceCommitTests {
     @Test(arguments: [false, true])
     func repositoryYAMLStopsAfterAutomaticCommitFailure(_ alreadyExists: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         if alreadyExists {
             #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
             let file = f.root.appending(path: ".gitignore")

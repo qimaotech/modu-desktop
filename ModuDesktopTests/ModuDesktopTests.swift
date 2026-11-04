@@ -212,12 +212,10 @@ struct ModuCoreTests {
         #expect(try Data(contentsOf: file) == existingRules)
     }
     @Test func lockAndUnmanagedWorktreeBlockDeletion() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        _ = await f.service.openWorkspace(f.root)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let lease = try f.service.store.tryLock(f.root)
         #expect(throws: ModuError.self) { try f.service.store.tryLock(f.root) }
         lease.unlock()
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let main = f.root.appending(path: "repositories/repo")
         _ = try await f.service.git.run(["worktree", "add", "-b", "outside", f.directory.appending(path: "outside").path], at: main)
         let result = await f.service.remove(.repository("repo"), at: f.root, execute: true)
@@ -227,13 +225,39 @@ struct ModuCoreTests {
     }
 }
 
-struct Fixture {
+struct Fixture: Sendable {
     let directory: URL
     let root: URL
     let service: WorkspaceService
     let remoteURL = "https://modu-test.invalid/repo.git"
     init(createRemote: Bool = true) async throws {
-        directory = TestEnvironment.temporaryDirectory.appending(path: "modu-tests-\(UUID().uuidString)")
+        try self.init(directory: TestEnvironment.temporaryDirectory.appending(path: "modu-tests-\(UUID().uuidString)"))
+        do {
+            if createRemote { try await restore(.repositorySeed) }
+        } catch {
+            remove()
+            throw error
+        }
+    }
+    init(template: FixtureTemplate) async throws {
+        try self.init(directory: TestEnvironment.temporaryDirectory.appending(path: "modu-tests-\(UUID().uuidString)"))
+        do { try await restore(template) }
+        catch { remove(); throw error }
+    }
+    func prepareWorkspace() async throws {
+        try Task.checkCancellation()
+        guard try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty,
+              !PathSafety.exists(service.store.recordURL(root)) else {
+            throw ModuError("fixture-not-empty", "Workspace preparation requires an empty, unregistered directory.")
+        }
+        let template = try await FixtureTemplates.shared.fixture(for: .emptyWorkspace)
+        defer { if !FixtureTemplates.isSessionScoped { template.remove() } }
+        try Task.checkCancellation()
+        try copyWorkspace(from: template)
+        try Task.checkCancellation()
+    }
+    private init(directory: URL) throws {
+        self.directory = directory
         root = directory.appending(path: "workspace")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let source = directory.appending(path: "source")
@@ -253,12 +277,6 @@ struct Fixture {
             try FileManager.default.moveItem(at: source, to: target)
             return target
         })
-        guard createRemote else { return }
-        _ = try await git.run(["init", "-b", "main"], at: source)
-        try Data("hello\n".utf8).write(to: source.appending(path: "README"))
-        _ = try await git.run(["add", "README"], at: source)
-        _ = try await git.run(["commit", "-m", "fixture"], at: source)
-        _ = try await git.run(["clone", "--bare", source.path, remote.path], at: directory)
     }
     func prepareGroup(_ name: String, repositories: [String]) async throws {
         // Deletion tests need real worktrees without repeating the group creation workflow.
@@ -285,4 +303,79 @@ struct Fixture {
         }
     }
     func remove() { try? FileManager.default.removeItem(at: directory) }
+
+    private func restore(_ kind: FixtureTemplate) async throws {
+        try Task.checkCancellation()
+        let template = try await FixtureTemplates.shared.fixture(for: kind)
+        defer { if !FixtureTemplates.isSessionScoped { template.remove() } }
+        try Task.checkCancellation()
+        if kind != .emptyWorkspace {
+            try FileManager.default.removeItem(at: directory.appending(path: "source"))
+            for name in ["source", "repo.git"] {
+                try FileManager.default.copyItem(at: template.directory.appending(path: name), to: directory.appending(path: name))
+            }
+        }
+        if kind != .repositorySeed { try copyWorkspace(from: template) }
+        try Task.checkCancellation()
+    }
+
+    private func copyWorkspace(from template: Fixture) throws {
+        for file in try FileManager.default.contentsOfDirectory(at: template.root, includingPropertiesForKeys: nil) {
+            try FileManager.default.copyItem(at: file, to: root.appending(path: file.lastPathComponent))
+        }
+        var record = try template.service.store.load(template.root)
+        record.root = PathSafety.canonical(root).path
+        try service.store.save(record)
+    }
+
+    fileprivate static func makeTemplate(_ kind: FixtureTemplate) async throws -> Fixture {
+        let fixture = try Fixture(directory: TestEnvironment.temporaryDirectory.appending(path: "modu-fixture-template-\(UUID().uuidString)"))
+        do {
+            let git = fixture.service.git
+            if kind != .emptyWorkspace {
+                if kind == .singleRepository {
+                    try await fixture.restore(.repositorySeed)
+                } else {
+                    let source = fixture.directory.appending(path: "source")
+                    _ = try await git.run(["init", "-b", "main"], at: source)
+                    try Data("hello\n".utf8).write(to: source.appending(path: "README"))
+                    _ = try await git.run(["add", "README"], at: source)
+                    _ = try await git.run(["commit", "-m", "fixture"], at: source)
+                    _ = try await git.run(["clone", "--bare", source.path, fixture.directory.appending(path: "repo.git").path], at: fixture.directory)
+                }
+            }
+            if kind != .repositorySeed {
+                let opened = await fixture.service.openWorkspace(fixture.root)
+                try #require(opened.status == .success, "\(opened.items)")
+            }
+            if kind == .singleRepository {
+                let added = await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root)
+                try #require(added.status == .success, "\(added.items)")
+            }
+            return fixture
+        } catch {
+            fixture.remove()
+            throw error
+        }
+    }
+}
+
+enum FixtureTemplate: Hashable, Sendable {
+    case repositorySeed, emptyWorkspace, singleRepository
+}
+
+private actor FixtureTemplates {
+    static let shared = FixtureTemplates()
+    static let isSessionScoped = ProcessInfo.processInfo.environment["MODU_TEST_SESSION_DIRECTORY"] != nil
+    private var fixtures: [FixtureTemplate: Task<Fixture, Error>] = [:]
+
+    func fixture(for kind: FixtureTemplate) async throws -> Fixture {
+        // Xcode runs without the session cleanup provided by task test.
+        if !Self.isSessionScoped { return try await Fixture.makeTemplate(kind) }
+        if let task = fixtures[kind] { return try await task.value }
+        // Publish only a completed template; concurrent callers share its preparation.
+        let task = Task { try await Fixture.makeTemplate(kind) }
+        fixtures[kind] = task
+        return try await task.value
+    }
 }

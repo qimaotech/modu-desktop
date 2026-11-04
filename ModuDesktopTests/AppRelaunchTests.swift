@@ -109,9 +109,8 @@ import Testing
     @Test func finalQuitWaitsForHelperReadinessAndHandoffFailureAllowsRetry() async throws {
         let fixture = try AppUpdateFixture()
         defer { fixture.remove() }
-        let browsing = try await Fixture(createRemote: false)
+        let browsing = try await Fixture(template: .emptyWorkspace)
         defer { browsing.remove() }
-        #expect(await browsing.service.openWorkspace(browsing.root).status == .success)
         try await browsing.prepareEmptyGroup("feature")
         let record = try browsing.service.store.load(browsing.root)
         let handoffPath = fixture.directory.appending(path: "handoff-path")

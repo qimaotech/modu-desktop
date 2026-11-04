@@ -20,18 +20,23 @@ struct MockWorkspacePreparationTests {
         let pidFile = directory.appending(path: "build.pid")
         let build = "import os, sys, time; from pathlib import Path; Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)"
         let task = Task { try await MockWorkspacePreparation.prepare(directory: directory, buildCommand: ["/usr/bin/python3", "-c", build, pidFile.path]) }
-        defer { task.cancel() }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while !PathSafety.exists(pidFile), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        let pid = try #require(try? Int32(String(contentsOf: pidFile, encoding: .utf8)))
-        task.cancel()
         do {
-            let fixture = try await task.value
-            fixture.remove()
-            Issue.record("Cancelled preparation should fail.")
-        } catch { #expect(error is CancellationError || (error as? ModuError)?.code == "cancelled") }
-        #expect(!PathSafety.exists(directory))
-        #expect(kill(pid, 0) == -1)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(pidFile), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            let pid = try #require(try? Int32(String(contentsOf: pidFile, encoding: .utf8)))
+            task.cancel()
+            do {
+                let fixture = try await task.value
+                fixture.remove()
+                Issue.record("Cancelled preparation should fail.")
+            } catch { #expect(error is CancellationError || (error as? ModuError)?.code == "cancelled") }
+            #expect(!PathSafety.exists(directory))
+            #expect(kill(pid, 0) == -1)
+        } catch {
+            task.cancel()
+            if let fixture = try? await task.value { fixture.remove() }
+            throw error
+        }
     }
 
     @Test func appRejectsUnfinishedDataWithoutGeneratingOrDeletingIt() async throws {

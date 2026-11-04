@@ -4,7 +4,7 @@ import Testing
 
 struct WorkspaceTreeTests {
     @Test func treeUsesPhysicalHierarchyWhileTheWorkspaceIsLocked() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         try await fixture.prepareEmptyGroup("a-empty")
         let unregistered = record.repositoryURL("unregistered")
@@ -28,7 +28,7 @@ struct WorkspaceTreeTests {
 
     @Test(arguments: ["missing-repository", "missing-member", "wrong-origin", "foreign-group", "foreign-member", "symlink"])
     func invalidResourcesAreFilteredWithoutChangingTheirRecords(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let repository = record.repositoryURL("repo")
         let member = record.memberURL("feature", "repo")
@@ -62,8 +62,7 @@ struct WorkspaceTreeTests {
 
     @Test(arguments: ["record", "git"])
     func invalidWorkspaceRootsAreReportedInsteadOfFiltered(_ kind: String) async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         if kind == "record" { try Data("invalid".utf8).write(to: fixture.service.store.recordURL(fixture.root)) }
         else { try FileManager.default.removeItem(at: fixture.root.appending(path: ".git")) }
         do {
@@ -77,8 +76,7 @@ struct WorkspaceTreeTests {
     }
 
     @Test func cancelledTreeQueriesDoNotProduceASuccessfulEmptyTree() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let query = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -92,9 +90,7 @@ struct WorkspaceTreeTests {
     }
 
     @Test func localInspectionDoesNotFetchOrRefreshTheGitIndex() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try fixture.service.store.load(fixture.root)
         let path = record.repositoryURL("repo")
         _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
@@ -124,9 +120,10 @@ struct WorkspaceTreeTests {
     }
 
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL, name: "Display name"), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        var record = try fixture.service.store.load(fixture.root)
+        record.repositories[0].name = "Display name"
+        try fixture.service.store.save(record)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         return try fixture.service.store.load(fixture.root)
     }
 }

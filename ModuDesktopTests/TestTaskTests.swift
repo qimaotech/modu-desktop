@@ -57,20 +57,25 @@ struct TestTaskTests {
         let fixture = try TestTaskFixture(outcome: "waiting")
         defer { fixture.remove() }
         let operation = Task { try await fixture.runCapturingLog() }
-        defer { operation.cancel() }
-        let pidFile = fixture.directory.appending(path: "helper.pid")
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while !PathSafety.exists(pidFile), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        let pid = try #require(try? Int32(String(contentsOf: pidFile, encoding: .utf8)))
-        let invocation = try fixture.invocation()
-        operation.cancel()
-        do { _ = try await operation.value; Issue.record("Expected cancellation") }
-        catch { #expect((error as? ModuError)?.code == "cancelled") }
-        #expect(kill(pid, 0) == -1)
-        let log = try String(contentsOf: fixture.directory.appending(path: "cancellation.log"), encoding: .utf8)
-        #expect(!PathSafety.exists(invocation.directory), "\(log)")
-        #expect(try await fixture.defaultsExist(invocation.environment["MODU_TEST_DEFAULTS"]!) == false, "\(log)")
-        #expect(PathSafety.exists(fixture.sentinel))
+        do {
+            let pidFile = fixture.directory.appending(path: "helper.pid")
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while !PathSafety.exists(pidFile), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            let pid = try #require(try? Int32(String(contentsOf: pidFile, encoding: .utf8)))
+            let invocation = try fixture.invocation()
+            operation.cancel()
+            do { _ = try await operation.value; Issue.record("Expected cancellation") }
+            catch { #expect((error as? ModuError)?.code == "cancelled") }
+            #expect(kill(pid, 0) == -1)
+            let log = try String(contentsOf: fixture.directory.appending(path: "cancellation.log"), encoding: .utf8)
+            #expect(!PathSafety.exists(invocation.directory), "\(log)")
+            #expect(try await fixture.defaultsExist(invocation.environment["MODU_TEST_DEFAULTS"]!) == false, "\(log)")
+            #expect(PathSafety.exists(fixture.sentinel))
+        } catch {
+            operation.cancel()
+            _ = try? await operation.value
+            throw error
+        }
     }
 }
 

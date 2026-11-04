@@ -6,8 +6,7 @@ import Testing
 @MainActor struct ActivationReadSchedulingTests {
     @Test(arguments: [false, true])
     func selectionReusesTenSecondDetailsWithoutExtendingFreshness(_ preloaded: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        _ = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         try await f.prepareEmptyGroup("other")
         let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
@@ -52,8 +51,8 @@ import Testing
     }
 
     @Test func selectionCacheHitsRestoreEventsAndExplicitRequestsBypassCooldown() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f), resource = Resource.repository("repo")
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts(), monitor = ActivationResourceMonitor()
@@ -88,8 +87,8 @@ import Testing
     }
 
     @Test func detailActivationReusesTenSecondResultsButExplicitRequestsBypassThem() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts()
@@ -115,8 +114,8 @@ import Testing
     }
 
     @Test func sideActivationHasItsOwnFreshnessAndIdleDoesNotCreateRequests() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts()
@@ -149,8 +148,7 @@ import Testing
     }
 
     @Test func failedActivationChecksHaveACooldown() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         var record = try f.service.store.load(f.root)
         record.groups["missing"] = WorktreeGroup()
         try f.service.store.save(record)
@@ -178,8 +176,8 @@ import Testing
     }
 
     @Test func activationJoinsAnInFlightRead() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let monitor = ActivationResourceMonitor(), gate = ActivationHistoryGate(), counts = ActivationReadCounts()
@@ -205,8 +203,8 @@ import Testing
     }
 
     @Test func ignoredCandidatesAvoidStatusButTrackedFilesAndOverflowRefresh() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f), resource = Resource.repository("repo")
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
         try Data("ignored\nREADME\n".utf8).write(to: path.appending(path: ".gitignore"))
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
@@ -240,8 +238,8 @@ import Testing
     }
 
     @Test func switchingBeforeCandidateFilteringInvalidatesTheFormerSelection() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f), resource = Resource.repository("repo")
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let monitor = ActivationResourceMonitor(), counts = ActivationReadCounts()
@@ -268,12 +266,6 @@ import Testing
             details.stop(); await details.waitForReads()
             throw error
         }
-    }
-
-    private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        return try f.service.store.load(f.root)
     }
 
     private func eventually(_ condition: () async -> Bool) async throws {

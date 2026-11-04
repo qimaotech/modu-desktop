@@ -6,7 +6,7 @@ struct RepositoryPreparationTests {
     @Test(arguments: [false, true])
     func concurrentPreparationsReleaseTheLockAndPublishAgainstCurrentRecords(_ sameRepository: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let other = "https://modu-test.invalid/other.git"
         let gate = try PreparationGate(fixture, blockedIDs: ["repo", "other"], aliases: [other])
         let first = Task { await gate.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root) }
@@ -40,9 +40,7 @@ struct RepositoryPreparationTests {
     }
 
     @Test func addingAnExistingRepositoryStillWorksWithoutItsRemote() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         try FileManager.default.removeItem(at: fixture.directory.appending(path: "repo.git"))
         let trace = fixture.directory.appending(path: "existing-repository-trace")
         var runner = fixture.service.git.runner
@@ -58,7 +56,7 @@ struct RepositoryPreparationTests {
     @Test(arguments: ["none", "directory", "file", "registered"])
     func workspacePublicationExcludesOnlyItsOwnStagingDirectory(_ foreign: String) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let gate = try PreparationGate(fixture, blockedIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let external = fixture.root.appending(path: "repositories/.modu-clone-external")
@@ -108,7 +106,7 @@ struct RepositoryPreparationTests {
 
     @Test func replacingTheOwnedStagingDirectoryDoesNotDeleteItsReplacement() async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let gate = try PreparationGate(fixture, blockedIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let operation = Task { await gate.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root) }

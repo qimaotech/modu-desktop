@@ -6,7 +6,7 @@ struct YAMLPreparationCancellationTests {
     @Test(arguments: ["cancelled", "git-failed", "workspace-not-empty"], [false, true])
     func unpublishedPreparationKeepsTheWorkspaceAndOriginalFailure(_ failure: String, _ cleanupFails: Bool) async throws {
         let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         let recordURL = fixture.service.store.recordURL(fixture.root)

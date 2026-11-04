@@ -5,7 +5,7 @@ import Testing
 struct ResourceSnapshotTests {
     @Test(arguments: [(false, InspectionContent.withSummary), (true, .workingTreeOnly)])
     func concurrentInspectionPublishesBeforeSlowResourcesAndPreservesOrder(_ cancelsAfterPublish: Bool, _ content: InspectionContent) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = try await submoduleRepository(f)
         try Data("ignored child edit".utf8).write(to: path.appending(path: "submodule/README"))
         try Data("parent edit".utf8).write(to: path.appending(path: "parent.txt"))
@@ -86,10 +86,8 @@ struct ResourceSnapshotTests {
 
     @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
     func workingStateMatchesExistingChangesAndIncludesHead(_ resource: Resource) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let record = try f.service.store.load(f.root)
         let path = record.rootURL.appending(path: resource.path)
         _ = try await f.service.git.run(["mv", "README", "renamed file\nname"], at: path)
@@ -121,7 +119,7 @@ struct ResourceSnapshotTests {
     }
 
     @Test func workingStateKeepsSubmoduleChangesCompatibleWithPorcelainV1() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = try await submoduleRepository(f)
         let child = path.appending(path: "submodule")
         try Data("staged".utf8).write(to: child.appending(path: "README"))
@@ -147,7 +145,7 @@ struct ResourceSnapshotTests {
     }
 
     @Test func applicationChangesHideRenamedGitlinks() async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = try await submoduleRepository(f)
         let changedPath = "renamed module"
         _ = try await f.service.git.run(["mv", "submodule", changedPath], at: path)
@@ -160,7 +158,7 @@ struct ResourceSnapshotTests {
 
     @Test(arguments: [false, true])
     func applicationChangesPreserveSubmoduleTypeConversions(_ toSubmodule: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = try await submoduleRepository(f)
         let converted: String
         if toSubmodule {
@@ -193,8 +191,6 @@ struct ResourceSnapshotTests {
     }
 
     private func submoduleRepository(_ fixture: Fixture) async throws -> URL {
-        try #require(await fixture.service.openWorkspace(fixture.root).status == .success)
-        try #require(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         let path = try fixture.service.store.load(fixture.root).repositoryURL("repo")
         _ = try await fixture.service.git.run(["submodule", "add", fixture.remoteURL, "submodule"], at: path)
         _ = try await fixture.service.git.run(["commit", "-m", "add submodule"], at: path)
@@ -202,9 +198,7 @@ struct ResourceSnapshotTests {
     }
 
     @Test func defaultQueriesKeepChangesAndMissingBaseLocal() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try fixture.service.store.load(fixture.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
         _ = try await fixture.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: path)
@@ -228,9 +222,8 @@ struct ResourceSnapshotTests {
 
     @Test(arguments: ["before-start", "between-resources", "after-completion"])
     func inspectionCancellationPreservesCompletedItems(_ timing: String) async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         for group in ["first", "second"] { try await fixture.prepareEmptyGroup(group) }
         let record = try fixture.service.store.load(fixture.root)
         let inspection = Task {
@@ -252,9 +245,8 @@ struct ResourceSnapshotTests {
     }
 
     @Test func inspectionCancellationKeepsEarlierFailures() async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         for group in ["broken", "first", "second"] { try await fixture.prepareEmptyGroup(group) }
         let record = try fixture.service.store.load(fixture.root)
         try Data("gitdir: missing-git-directory\n".utf8).write(to: record.groupURL("broken").appending(path: ".git"))

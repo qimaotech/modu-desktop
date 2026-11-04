@@ -250,10 +250,9 @@ import SwiftUI
 
     @Test(arguments: ["failed", "cancelled", "success"])
     func queuedStartupMaintenanceFollowsWorkspaceChangeOutcome(_ outcome: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try #require(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         initial.defaults.set(try JSONEncoder().encode(Resource.repository("repo")), forKey: "sidebar.\(record.root).selection")
         let next = fixture.directory.appending(path: "next-workspace")
@@ -279,7 +278,9 @@ import SwiftUI
         }
         var runner = fixture.service.git.runner
         runner.environment["MODU_STARTUP_SWITCH_PROBE"] = probe.path
-        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
+        let retry = WorkspaceLockRetryGate()
+        let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try await retry.wait() })
+        let service = WorkspaceService(store: store, git: Git(runner: runner))
         let tools = ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in })
         let model = AppModel(defaults: initial.defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
         let startup = Task { await model.start() }
@@ -297,9 +298,11 @@ import SwiftUI
             #expect(await startup.value == false)
             #expect(initialRead.isCancelled && model.busy)
             await model.activate()
+            try await retry.waitUntilStarted()
             try Data().write(to: probe.appending(path: "release"))
             if outcome == "success" { lease.unlock() }
             else if outcome == "cancelled" { model.cancel() }
+            await retry.release()
             await changing?.value
             lease.unlock()
 
@@ -318,6 +321,7 @@ import SwiftUI
             }
             await model.workspace.stopReads()
         } catch {
+            await retry.release()
             try? Data().write(to: probe.appending(path: "release"))
             lease.unlock()
             model.cancel(); startup.cancel()
@@ -431,11 +435,9 @@ import SwiftUI
     }
 
     @Test func maintenanceRefreshesStatusesWithoutDiscardingWarmPreparation() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let trace = fixture.directory.appending(path: "maintenance-read-trace")
-        try #require(await fixture.service.openWorkspace(fixture.root).status == .success)
-        try #require(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        try #require(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         // Start record monitoring after the fixture has its final membership.
         let model = try await makeModel(fixture, trace: trace)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -499,11 +501,10 @@ import SwiftUI
     }
 
     @Test func startupShowsCompleteDetailsBeforeMaintenanceAndKeepsNavigationDuringMaintenance() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try #require(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        try #require(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
         initial.workspace.record = try fixture.service.store.load(fixture.root)
         initial.workspace.selection = .repository("repo")
         await initial.workspace.details.detailTask?.value
@@ -546,12 +547,11 @@ import SwiftUI
     }
 
     @Test func reloadReinitializesRecreatedWorkspaceWithoutLosingUserFiles() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
+        try await fixture.prepareGroup("old", repositories: ["repo"])
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("old", repositories: ["repo"], at: fixture.root).status == .success)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         model.workspace.selection = .member("old", "repo")
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
@@ -824,10 +824,8 @@ import SwiftUI
     }
 
     @Test func startupPublishesWorkspaceAndToolsBeforeSlowResourceChecks() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         var record = try fixture.service.store.load(fixture.root)
         let other = Repository(url: "https://modu-test.invalid/other.git")
         try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(other.id))
@@ -972,11 +970,10 @@ import SwiftUI
 
     @Test(arguments: ["cancelled", "quitting"])
     func interruptedSetupKeepsWorkspaceAndTools(_ kind: String) async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let original = try fixture.service.store.load(fixture.root)
         let nextRoot = fixture.directory.appending(path: "next-workspace")
         try FileManager.default.createDirectory(at: nextRoot, withIntermediateDirectories: false)
@@ -1003,9 +1000,8 @@ import SwiftUI
 
     @Test(arguments: ["available", "missing-path", "cancelled"])
     func startupPublishesWorkspaceBeforeSlowCLIPathCheck(_ kind: String) async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -1107,7 +1103,9 @@ import SwiftUI
         let lease = kind == "busy" ? try fixture.service.store.tryLock(fixture.root) : nil
         defer { lease?.unlock() }
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: fixture.service, toolService: tools, installer: try makeInstaller(fixture))
+        let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try Task.checkCancellation() })
+        let service = WorkspaceService(store: store, git: fixture.service.git, trash: fixture.service.trashDirectory)
+        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
         var readyCount = 0
         let needsSetup = await model.start(onReady: {
             readyCount += 1
@@ -1124,9 +1122,8 @@ import SwiftUI
     }
 
     @Test func quittingAfterEarlyStartupPresentationStillPresentsRetainedEffects() async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let probe = fixture.directory.appending(path: "quit-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
         let monitor = probe.appending(path: "fsmonitor")
@@ -1180,13 +1177,12 @@ import SwiftUI
     }
 
     @Test func reloadRemovesDeletedDirectoriesAndTheirReferences() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        for group in ["feature", "kept"] {
+            try await fixture.prepareGroup(group, repositories: ["repo"])
+        }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        for group in ["feature", "kept"] {
-            #expect(await fixture.service.createGroup(group, repositories: ["repo"], at: fixture.root).status == .success)
-        }
         model.workspace.record = try fixture.service.store.load(fixture.root)
         model.workspace.expandedGroups = ["feature", "kept"]
         for resource in [Resource.member("feature", "repo"), .group("feature"), .repository("repo")] {
@@ -1221,9 +1217,8 @@ import SwiftUI
 
     @Test(arguments: ["open", "inspect", "tree", "repo", "worktree", "export"])
     func onlyMaintenanceRemovesMissingResourceRecords(_ entry: String) async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         let empty = try fixture.service.store.load(fixture.root)
         var record = empty
         record.repositories = [.init(url: fixture.remoteURL)]
@@ -1258,9 +1253,8 @@ import SwiftUI
 
     @Test(arguments: ["git", "file", "symlink", "permissions"])
     func unavailableDirectoriesKeepTheirConfiguration(_ kind: String) async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         var record = try fixture.service.store.load(fixture.root)
         record.repositories = [.init(url: fixture.remoteURL)]
         try fixture.service.store.save(record)
@@ -1301,13 +1295,15 @@ import SwiftUI
     }
 
     @Test func openingWorkspacesUsesSavedRecordsAndPreservesHistory() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
+        var record = try fixture.service.store.load(fixture.root)
+        record.repositories[0].name = "Custom"
+        try fixture.service.store.save(record)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareEmptyGroup("closed")
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL, name: "Custom"), at: fixture.root).status == .success)
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
-        try await fixture.prepareEmptyGroup("closed")
         await model.workspace.stopReads()
         model.workspace.record = try fixture.service.store.load(fixture.root)
         model.workspace.toggleGroup("closed")
@@ -1463,11 +1459,11 @@ import SwiftUI
     }
 
     @Test func invalidLockedAndCancelledChangesKeepTheCurrentWorkspace() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try Task.checkCancellation() })
+        let model = try await makeModel(fixture, store: store)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         await model.workspace.maintainWorkspace()
         await model.workspace.detailPreloadTask?.value
         model.workspace.selection = .repository("repo")
@@ -1561,19 +1557,28 @@ import SwiftUI
         let model = AppModel(defaults: defaults, service: fixture.service)
 
         let first = Task { await model.workspace.maintainWorkspace() }
-        try await waitForReadLock(fixture)
-        try await model.switchTo(nextRoot)
-        await first.value
+        do {
+            try await waitForReadLock(fixture)
+            try await model.switchTo(nextRoot)
+            await first.value
+        } catch {
+            first.cancel()
+            await model.workspace.stopReads()
+            await first.value
+            throw error
+        }
 
         #expect(model.workspace.record == next)
         #expect(model.workspace.blocked == nil)
+        await model.workspace.stopReads()
     }
 
     @Test(arguments: [false, true])
     func lockTimeoutReportsAnErrorAndKeepsTheCurrentWorkspace(_ alreadyLoaded: Bool) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture)
+        let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try Task.checkCancellation() })
+        let model = try await makeModel(fixture, store: store)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let record = try #require(model.workspace.record)
         if !alreadyLoaded { model.workspace.record = nil }
@@ -1640,13 +1645,13 @@ import SwiftUI
         try #require(model.busy && model.openingWorkspace)
     }
 
-    private func makeModel(_ fixture: Fixture, trace: URL? = nil,
+    private func makeModel(_ fixture: Fixture, trace: URL? = nil, store: WorkspaceStore? = nil,
                            now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }) async throws -> AppModel {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        if !PathSafety.exists(fixture.service.store.recordURL(fixture.root)) { try await fixture.prepareWorkspace() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         var git = fixture.service.git
         if let trace { git.runner.environment["GIT_TRACE"] = trace.path }
-        let service = WorkspaceService(store: fixture.service.store, git: git, trash: fixture.service.trashDirectory)
+        let service = WorkspaceService(store: store ?? fixture.service.store, git: git, trash: fixture.service.trashDirectory)
         let model = AppModel(defaults: defaults, service: service, now: now)
         model.workspace.record = try fixture.service.store.load(fixture.root)
         defaults.set(model.workspace.record?.root, forKey: "workspace")
@@ -1684,6 +1689,25 @@ import SwiftUI
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         try #require(condition(), "\(diagnostics())", sourceLocation: sourceLocation)
     }
+}
+
+private actor WorkspaceLockRetryGate {
+    private var started = false
+    private var released = false
+
+    func wait() async throws {
+        started = true
+        while !released { try await Task.sleep(for: .milliseconds(1)) }
+        try Task.checkCancellation()
+    }
+
+    func waitUntilStarted() async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while !started, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(1)) }
+        try #require(started)
+    }
+
+    func release() { released = true }
 }
 
 @MainActor struct ReloadValidationGate {

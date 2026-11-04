@@ -5,15 +5,22 @@ import Testing
 struct WorktreeCreationTests {
     @Test(arguments: ["root", "member"], ["prepared", "committed"])
     func cancellationDuringReferenceTransactionCleansTheNewBranch(_ kind: String, _ phase: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let probe = try installReferenceHook(at: repository, fixture: f, phase: phase)
         let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
-        defer { task.cancel(); try? Data().write(to: probe.release) }
-        try await waitFor(probe.started)
-        task.cancel()
-        let result = await task.value
+        let result: OperationResult
+        do {
+            try await waitFor(probe.started)
+            task.cancel()
+            result = await task.value
+        } catch {
+            task.cancel()
+            try? Data().write(to: probe.release)
+            _ = await task.value
+            throw error
+        }
         #expect(result.status == .cancelled, "\(result.items)")
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
         let item = try #require(result.items.first { $0.resource == resource })
@@ -36,8 +43,8 @@ struct WorktreeCreationTests {
 
     @Test(arguments: ["root", "member"])
     func cancellationDuringCheckoutKeepsTheReusedBranch(_ kind: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let oid = try #require(try await f.service.git.oid("HEAD", at: repository))
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", oid], at: repository)
@@ -51,10 +58,17 @@ struct WorktreeCreationTests {
         """.utf8).write(to: hook)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
         let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
-        defer { task.cancel(); try? Data().write(to: release) }
-        try await waitFor(started)
-        task.cancel()
-        let result = await task.value
+        let result: OperationResult
+        do {
+            try await waitFor(started)
+            task.cancel()
+            result = await task.value
+        } catch {
+            task.cancel()
+            try? Data().write(to: release)
+            _ = await task.value
+            throw error
+        }
         #expect(result.status == .cancelled, "\(result.items)")
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == oid)
         let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
@@ -63,14 +77,20 @@ struct WorktreeCreationTests {
     }
 
     @Test func branchCleanupFailureReportsTheResidualBranch() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        _ = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let probe = try installReferenceHook(at: f.root, fixture: f, phase: "committed", rejectDeletion: true)
         let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
-        defer { task.cancel(); try? Data().write(to: probe.release) }
-        try await waitFor(probe.started)
-        task.cancel()
-        let result = await task.value
+        let result: OperationResult
+        do {
+            try await waitFor(probe.started)
+            task.cancel()
+            result = await task.value
+        } catch {
+            task.cancel()
+            try? Data().write(to: probe.release)
+            _ = await task.value
+            throw error
+        }
         #expect(result.status == .failed && result.exitCode == 1)
         let item = try #require(result.items.first)
         #expect(item.reasonCode == "cleanup-failed" && item.causeCode == "cancelled")
@@ -81,8 +101,8 @@ struct WorktreeCreationTests {
 
     @Test(arguments: [("root", "ahead"), ("member", "diverged")])
     func reusedBranchReportsMissingBaseCommitsWithoutChangingItsHead(_ kind: String, _ history: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let original = try #require(try await f.service.git.oid("HEAD", at: repository))
         let base = history == "diverged" ? try await commit(after: original, message: "Base change", at: repository, git: f.service.git) : original
@@ -105,8 +125,8 @@ struct WorktreeCreationTests {
     }
 
     @Test func reusedMemberWithUnavailableBaseKeepsItsBranchAndReportsTheComparison() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let repository = record.repositoryURL("repo")
         let oid = try #require(try await f.service.git.oid("HEAD", at: repository))
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", oid], at: repository)
@@ -120,8 +140,8 @@ struct WorktreeCreationTests {
     }
 
     @Test func cliCreationReportsBranchWarningsWithoutChangingTheSuccessExitCode() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let original = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let base = try await commit(after: original, message: "Base change", at: f.root, git: f.service.git)
         _ = try await f.service.git.run(["update-ref", "refs/heads/main", base], at: f.root)
@@ -143,12 +163,6 @@ struct WorktreeCreationTests {
             }
             #expect(try await f.service.git.oid("HEAD", at: record.groupURL(group)) == original)
         }
-    }
-
-    private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        return try f.service.store.load(f.root)
     }
 
     private func installReferenceHook(at repository: URL, fixture: Fixture, phase: String, rejectDeletion: Bool = false) throws -> (started: URL, release: URL) {

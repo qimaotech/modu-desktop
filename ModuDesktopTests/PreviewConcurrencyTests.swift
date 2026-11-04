@@ -5,7 +5,7 @@ import Testing
 struct PreviewConcurrencyTests {
     @Test(arguments: ["remove-plan", "edit-plan", "remove-execute"])
     func slowRiskScansDoNotHoldTheWorkspaceLock(_ entry: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let scan = try await slowScan(fixture, record: record)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
@@ -39,7 +39,7 @@ struct PreviewConcurrencyTests {
     }
 
     @Test func directExecutionStillRejectsAnUnreadableIndexBeforeDeletingAnything() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let member = record.memberURL("feature", "repo")
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
@@ -57,7 +57,7 @@ struct PreviewConcurrencyTests {
     }
 
     @Test func newlyRequiredRemovalsAfterAnUnlockedPreviewCannotExecuteWithoutConfirmation() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         _ = try await prepare(fixture)
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
@@ -91,7 +91,7 @@ struct PreviewConcurrencyTests {
 
     @Test(arguments: ["remove", "edit"])
     func executionRejectsTargetsChangedDuringTheUnlockedRiskScan(_ operation: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let scan = try await slowScan(fixture, record: record)
         let preview = Task { try await scan.service.previewDelete(.member(group: "feature", repo: "repo"), at: fixture.root) }
@@ -124,8 +124,6 @@ struct PreviewConcurrencyTests {
     }
 
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         try await fixture.prepareGroup("feature", repositories: ["repo"])
         return try fixture.service.store.load(fixture.root)
     }

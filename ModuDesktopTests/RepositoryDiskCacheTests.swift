@@ -4,7 +4,7 @@ import Testing
 
 struct RepositoryDiskCacheTests {
     @Test func successfulDetailsAndHistorySurviveCacheRecreation() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let context = try await prepareContext(f)
         let identity = try RepositoryCacheIdentity(context: context)
         let directory = f.directory.appending(path: "cache")
@@ -29,7 +29,7 @@ struct RepositoryDiskCacheTests {
 
     @Test(arguments: ["corrupt", "unsupported-version"])
     func unreadableCacheEntriesBecomeMisses(_ kind: String) async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let directory = f.directory.appending(path: "cache")
         let cache = RepositoryDiskCache(directory: directory)
@@ -50,7 +50,7 @@ struct RepositoryDiskCacheTests {
     }
 
     @Test func directoryConflictsAndOversizedEntriesDoNotPreventLaterReads() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let conflict = f.directory.appending(path: "cache-conflict")
         try Data("existing file".utf8).write(to: conflict)
@@ -77,7 +77,7 @@ struct RepositoryDiskCacheTests {
     }
 
     @Test func incompleteResultsKeepSuccessfulDataAndRepositoriesWithoutRemotesAreCacheable() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let cache = RepositoryDiskCache(directory: f.directory.appending(path: "cache"))
         let successful = sampleDetail()
@@ -101,7 +101,7 @@ struct RepositoryDiskCacheTests {
     }
 
     @Test func cacheEntriesNeverFollowSymlinksForReadsOrWrites() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let directory = f.directory.appending(path: "cache")
         let cache = RepositoryDiskCache(directory: directory)
@@ -122,7 +122,7 @@ struct RepositoryDiskCacheTests {
     }
 
     @Test func capacityEvictsLeastRecentlyUsedHistoryAcrossCacheInstances() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let directory = f.directory.appending(path: "cache")
         let clock = DiskCacheTestClock()
@@ -152,8 +152,8 @@ struct RepositoryDiskCacheTests {
     }
 
     @Test func invalidationKeepsUnrelatedRepositoryFamiliesAndDetails() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        let other = try await Fixture(createRemote: false); defer { other.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
+        let other = try await Fixture(template: .emptyWorkspace); defer { other.remove() }
         let identity = try RepositoryCacheIdentity(context: await prepareContext(f))
         let otherIdentity = try RepositoryCacheIdentity(context: await prepareContext(other))
         let cache = RepositoryDiskCache(directory: f.directory.appending(path: "cache"))
@@ -176,7 +176,6 @@ struct RepositoryDiskCacheTests {
     }
 
     private func prepareContext(_ f: Fixture) async throws -> ResourceReadContext {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
         try await f.prepareEmptyGroup("cached")
         return try await f.service.prepareResourceRead(.group("cached"), in: f.service.store.load(f.root))
     }

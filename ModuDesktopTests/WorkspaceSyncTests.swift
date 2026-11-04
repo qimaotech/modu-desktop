@@ -5,8 +5,7 @@ import Testing
 
 @MainActor struct WorkspaceSyncTests {
     @Test func recordEventsApplyChangesWithoutRewritingOrRefreshingUnrelatedDetails() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("current")
         let monitor = WorkspaceRecordMonitorStub()
         let trace = fixture.directory.appending(path: "record-events-trace")
@@ -39,8 +38,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func recordEventsWaitForForegroundAndIdle(_ busy: Bool) async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let monitor = WorkspaceRecordMonitorStub()
         let model = try makeModel(fixture, monitor: monitor)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -68,8 +66,7 @@ import Testing
     }
 
     @Test func interruptedRecordEventPreservesPendingRefreshWithoutRevivingCallbacks() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("visible")
         let monitor = WorkspaceRecordMonitorStub()
         let model = try makeModel(fixture, monitor: monitor)
@@ -124,8 +121,7 @@ import Testing
     }
 
     @Test func cancelledDebounceCannotClearItsReplacementAfterTheDelayCompletes() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let monitor = WorkspaceRecordMonitorStub()
         let delay = WorkspaceRecordDebounceGate()
         let model = try makeModel(fixture, monitor: monitor, waitForRecordDebounce: { _ in await delay.wait() })
@@ -160,8 +156,7 @@ import Testing
     }
 
     @Test func oldRecordCallbacksCannotReloadAfterWorkspaceSwitchOrStop() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let next = fixture.directory.appending(path: "next-workspace")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
         #expect(await fixture.service.openWorkspace(next).status == .success)
@@ -198,8 +193,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func activationRecordReadsCoolDownWhileExplicitAndEventRefreshesBypassIt(_ fails: Bool) async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let clock = WorkspaceSyncClock()
         let monitor = WorkspaceRecordMonitorStub()
         let model = try makeModel(fixture, monitor: monitor, now: { clock.now })
@@ -238,8 +232,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func activationRecordReadsJoinInFlightAndCancellationDoesNotStartCooldown(_ cancels: Bool) async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let clock = WorkspaceSyncClock()
         let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -283,8 +276,7 @@ import Testing
     }
 
     @Test func interruptedActivationStartsCooldownWhenItsRetryCompletes() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("visible")
         let clock = WorkspaceSyncClock()
         let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
@@ -343,8 +335,7 @@ import Testing
     }
 
     @Test func activationRecordCooldownResetsAfterSwitchingWorkspaces() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let next = fixture.directory.appending(path: "next-workspace")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
         #expect(await fixture.service.openWorkspace(next).status == .success)
@@ -369,9 +360,7 @@ import Testing
     }
 
     @Test func activationDoesNotReadDetailsAgainAfterUnchangedRecordLoads() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let monitor = WorkspaceRecordMonitorStub()
         let trace = fixture.directory.appending(path: "activation-once-trace")
         let model = try makeModel(fixture, monitor: monitor, trace: trace)
@@ -396,8 +385,7 @@ import Testing
     }
 
     @Test func activationAndExpansionCheckVisibleRowsWithoutAnIdleTimer() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         for name in ["visible", "folded"] { try await fixture.prepareEmptyGroup(name) }
         let clock = WorkspaceSyncClock()
         let monitor = WorkspaceRecordMonitorStub()
@@ -436,8 +424,7 @@ import Testing
     }
 
     @Test func repeatedActivationJoinsAnInFlightSidebarCheck() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("slow")
         let record = try fixture.service.store.load(fixture.root)
         let started = fixture.directory.appending(path: "sidebar-started")

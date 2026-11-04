@@ -42,9 +42,8 @@ import Testing
     @Test func updateInstallerIsReadyBeforeTheFinalQuitAndFailureAllowsAnotherHandoff() async throws {
         let fixture = try AppUpdateFixture()
         defer { fixture.remove() }
-        let browsing = try await Fixture(createRemote: false)
+        let browsing = try await Fixture(template: .emptyWorkspace)
         defer { browsing.remove() }
-        #expect(await browsing.service.openWorkspace(browsing.root).status == .success)
         try await browsing.prepareEmptyGroup("feature")
         let record = try browsing.service.store.load(browsing.root)
         let prepared = try fixture.prepared()
@@ -103,7 +102,7 @@ import Testing
         let fixture = try AppUpdateFixture()
         defer { fixture.remove() }
         let prepared = try fixture.prepared(helper: "#!/bin/sh\nexit 1\n")
-        let updates = AppUpdateModel(preferences: try fixture.preferences(), requestRestart: {})
+        let updates = AppUpdateModel(preferences: try fixture.preferences(), installer: .init(readinessTimeout: 0.05), requestRestart: {})
         let model = try makeModel(fixture, updates: updates)
         var terminationRequests = 0
         let delegate = AppDelegate { _ in terminationRequests += 1 }

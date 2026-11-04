@@ -6,7 +6,7 @@ struct GitSSHTests {
     @Test(arguments: ["global", "local", "command", "executable", "default"])
     func honorsSSHCommandPrecedenceWithoutChangingArguments(_ source: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let probe = try SSHProbe(f, defaultSSH: source == "default")
         var runner = probe.runner
         switch source {
@@ -33,7 +33,7 @@ struct GitSSHTests {
 
     @Test func configuredSSHSupportsRepositoryAdditionAndUpdate() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let probe = try SSHProbe(f)
         let git = Git(runner: probe.runner)
         _ = try await git.run(["config", "--global", "core.sshCommand", probe.command], at: f.root)

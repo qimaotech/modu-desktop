@@ -5,78 +5,93 @@ import Testing
 
 struct RepositoryCacheSchedulingTests {
     @Test func detailChangesShareTheFirstWriteDeadlineAndPersistOnlyTheLatestContent() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let gate = CacheWriteGate()
         let events = CacheDiagnosticEvents()
         let cache = RepositoryDiskCache(directory: f.directory.appending(path: "cache"), diagnostics: events.diagnostics,
                                         waitForWrite: { try await gate.wait() })
-        await cache.saveDetail(snapshot("first"), for: identity)
-        try await eventually { await gate.waits == 1 }
-        await cache.saveDetail(snapshot("second"), for: identity)
-        await cache.saveDetail(snapshot("latest"), for: identity)
-        #expect(await gate.waits == 1)
-        #expect(events.count("cache.encode") == 0 && events.count("cache.write") == 0)
-        await gate.release()
-        try await eventually { events.count("cache.write") == 1 }
-        let directory = await cache.directory
-        let reopened = RepositoryDiskCache(directory: directory)
-        #expect(await reopened.loadDetail(for: identity)?.summary.head == "latest")
-        #expect(events.count("cache.encode") == 1)
-        await reopened.flush(); await cache.flush()
+        do {
+            await cache.saveDetail(snapshot("first"), for: identity)
+            try await eventually { await gate.waits == 1 }
+            await cache.saveDetail(snapshot("second"), for: identity)
+            await cache.saveDetail(snapshot("latest"), for: identity)
+            #expect(await gate.waits == 1)
+            #expect(events.count("cache.encode") == 0 && events.count("cache.write") == 0)
+            await gate.release()
+            try await eventually { events.count("cache.write") == 1 }
+            let directory = await cache.directory
+            let reopened = RepositoryDiskCache(directory: directory)
+            #expect(await reopened.loadDetail(for: identity)?.summary.head == "latest")
+            #expect(events.count("cache.encode") == 1)
+            await reopened.flush(); await cache.flush()
+        } catch {
+            await gate.release(); await cache.flush()
+            throw error
+        }
     }
 
     @Test func unchangedContentSkipsEncodingUntilCheckpointAndFlushPreservesTheLatestObservation() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let clock = SchedulingCacheClock()
         let gate = CacheWriteGate()
         let events = CacheDiagnosticEvents()
         let cache = RepositoryDiskCache(directory: f.directory.appending(path: "cache"), now: { clock.now }, diagnostics: events.diagnostics,
                                         waitForWrite: { try await gate.wait() })
-        await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
-        await cache.flush()
-        #expect(events.count("cache.encode") == 1)
-        clock.advance(59)
-        await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
-        #expect(events.count("cache.encode") == 1 && events.count("cache.write") == 1)
-        clock.advance(1)
-        await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
-        try await eventually { await gate.pending == 1 }
-        await gate.release()
-        try await eventually { events.count("cache.write") == 2 }
-        clock.advance(1)
-        await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
-        await cache.flush()
-        let directory = await cache.directory
-        let reopened = RepositoryDiskCache(directory: directory, now: { clock.now })
-        #expect(await reopened.loadDetail(for: identity)?.observedAt == clock.now)
-        #expect(events.count("cache.write") == 3)
-        await reopened.flush()
+        do {
+            await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
+            await cache.flush()
+            #expect(events.count("cache.encode") == 1)
+            clock.advance(59)
+            await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
+            #expect(events.count("cache.encode") == 1 && events.count("cache.write") == 1)
+            clock.advance(1)
+            await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
+            try await eventually { await gate.pending == 1 }
+            await gate.release()
+            try await eventually { events.count("cache.write") == 2 }
+            clock.advance(1)
+            await cache.saveDetail(snapshot("same", observedAt: clock.now), for: identity)
+            await cache.flush()
+            let directory = await cache.directory
+            let reopened = RepositoryDiskCache(directory: directory, now: { clock.now })
+            #expect(await reopened.loadDetail(for: identity)?.observedAt == clock.now)
+            #expect(events.count("cache.write") == 3)
+            await reopened.flush()
+        } catch {
+            await gate.release(); await cache.flush()
+            throw error
+        }
     }
 
     @Test func invalidationCancelsAcceptedWritesAndAnOldDeadlineCannotReviveThem() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let gate = CacheWriteGate()
         let events = CacheDiagnosticEvents()
         let directory = f.directory.appending(path: "cache")
         let cache = RepositoryDiskCache(directory: directory, diagnostics: events.diagnostics, waitForWrite: { try await gate.wait() })
-        await cache.saveDetail(snapshot("discard"), for: identity)
-        try await eventually { await gate.waits == 1 }
-        await cache.invalidateDetail(for: identity)
-        await gate.release()
-        await cache.flush()
-        #expect(await cache.loadDetail(for: identity) == nil)
-        #expect(events.count("cache.write") == 0 && !PathSafety.exists(directory))
-        await cache.saveDetail(snapshot("replacement"), for: identity)
-        await cache.flush()
-        #expect(await cache.loadDetail(for: identity)?.summary.head == "replacement")
-        await cache.flush()
+        do {
+            await cache.saveDetail(snapshot("discard"), for: identity)
+            try await eventually { await gate.waits == 1 }
+            await cache.invalidateDetail(for: identity)
+            await gate.release()
+            await cache.flush()
+            #expect(await cache.loadDetail(for: identity) == nil)
+            #expect(events.count("cache.write") == 0 && !PathSafety.exists(directory))
+            await cache.saveDetail(snapshot("replacement"), for: identity)
+            await cache.flush()
+            #expect(await cache.loadDetail(for: identity)?.summary.head == "replacement")
+            await cache.flush()
+        } catch {
+            await gate.release(); await cache.flush()
+            throw error
+        }
     }
 
     @Test func flushDoesNotRecreateRemovedWorkspaces() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let directory = f.directory.appending(path: "cache")
         let cache = RepositoryDiskCache(directory: directory)
@@ -88,7 +103,7 @@ struct RepositoryCacheSchedulingTests {
     }
 
     @Test func pendingDetailsUseABoundedLRU() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let first = try await identity(f)
         var identities = [first]
         for group in ["second", "third"] {
@@ -112,7 +127,7 @@ struct RepositoryCacheSchedulingTests {
     }
 
     @Test func flushReleasesPendingDetailsWhenTheCacheIsLocked() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let directory = f.directory.appending(path: "cache")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -128,27 +143,32 @@ struct RepositoryCacheSchedulingTests {
     }
 
     @Test func delayedOlderDetailsCannotReplaceAnotherActorsSnapshot() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let directory = f.directory.appending(path: "cache")
         let gate = CacheWriteGate()
         let first = RepositoryDiskCache(directory: directory, waitForWrite: { try await gate.wait() })
         let second = RepositoryDiskCache(directory: directory)
         let observedAt = Date(timeIntervalSince1970: 1_800_000_000)
-        await first.saveDetail(snapshot("older", observedAt: observedAt), for: identity)
-        try await eventually { await gate.pending == 1 }
-        let newer = observedAt.addingTimeInterval(1)
-        await second.saveDetail(snapshot("newer", observedAt: newer), for: identity)
-        await second.flush()
-        await first.flush()
-        let reopened = RepositoryDiskCache(directory: directory)
-        let restored = try #require(await reopened.loadDetail(for: identity))
-        #expect(restored.summary.head == "newer" && restored.observedAt == newer)
-        await reopened.flush(); await second.flush()
+        do {
+            await first.saveDetail(snapshot("older", observedAt: observedAt), for: identity)
+            try await eventually { await gate.pending == 1 }
+            let newer = observedAt.addingTimeInterval(1)
+            await second.saveDetail(snapshot("newer", observedAt: newer), for: identity)
+            await second.flush()
+            await first.flush()
+            let reopened = RepositoryDiskCache(directory: directory)
+            let restored = try #require(await reopened.loadDetail(for: identity))
+            #expect(restored.summary.head == "newer" && restored.observedAt == newer)
+            await reopened.flush(); await second.flush()
+        } catch {
+            await gate.release(); await first.flush(); await second.flush()
+            throw error
+        }
     }
 
     @Test func externalWritesRevalidateDeduplicationAndObservationTimes() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         let identity = try await identity(f)
         let directory = f.directory.appending(path: "cache")
         let clock = SchedulingCacheClock()
@@ -171,7 +191,6 @@ struct RepositoryCacheSchedulingTests {
     }
 
     private func identity(_ fixture: Fixture) async throws -> RepositoryCacheIdentity {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
         try await fixture.prepareEmptyGroup("cached")
         let record = try fixture.service.store.load(fixture.root)
         let context = try await fixture.service.prepareResourceRead(.group("cached"), in: record)

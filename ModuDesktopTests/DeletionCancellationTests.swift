@@ -6,7 +6,7 @@ import Testing
 @MainActor struct DeletionCancellationTests {
     @Test(arguments: ["group", "repository", "edit", "member", "last"])
     func cancellationFinishesTheCurrentDeletionAndPreservesPendingResources(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let current: Resource = kind == "last" ? .group("feature") : .member("feature", "repo")
         let repository = current.repo.map { record.repositoryURL($0) } ?? fixture.root
@@ -72,7 +72,7 @@ import Testing
 
     @Test(arguments: ["group", "repository", "member"])
     func cancellationAtTheFinalItemKeepsTheSuccessfulOutcome(_ kind: String) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let resource: Resource = kind == "group" ? .group("feature") : kind == "repository" ? .repository("repo") : .member("feature", "repo")
         let request = try #require(DeleteRequest(resource))
@@ -98,8 +98,6 @@ import Testing
     }
 
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         #expect(await fixture.service.addRepository(.init(url: other), at: fixture.root).status == .success)

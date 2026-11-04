@@ -5,9 +5,17 @@ import Darwin
 public struct WorkspaceStore: Sendable {
     public let support: URL
     public let directoryBoundary: URL?
+    private let waitForLockRetry: @Sendable () async throws -> Void
     private let writer: @Sendable (Data, URL) throws -> Void
     public init(support: URL = WorkspaceStore.defaultSupport, directoryBoundary: URL? = nil, writer: @escaping @Sendable (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) {
+        self.init(support: support, directoryBoundary: directoryBoundary,
+                  waitForLockRetry: { try await Task.sleep(for: .milliseconds(500)) }, writer: writer)
+    }
+    public init(support: URL = WorkspaceStore.defaultSupport, directoryBoundary: URL? = nil,
+                waitForLockRetry: @escaping @Sendable () async throws -> Void,
+                writer: @escaping @Sendable (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) {
         self.support = support; self.directoryBoundary = directoryBoundary.map(PathSafety.canonical); self.writer = writer
+        self.waitForLockRetry = waitForLockRetry
     }
     public static var defaultSupport: URL {
         #if DEBUG
@@ -30,7 +38,7 @@ public struct WorkspaceStore: Sendable {
             catch let error as ModuError where error.code == "workspace-busy" {
                 guard retries < 10 else { throw ModuError("workspace-lock-timeout", .workspaceLockTimedOut) }
                 retries += 1
-                do { try await Task.sleep(for: .milliseconds(500)) }
+                do { try await waitForLockRetry() }
                 catch { throw ModuError("cancelled", .operationCancelled) }
             }
         }

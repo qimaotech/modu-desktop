@@ -5,9 +5,7 @@ import Testing
 struct RepositoryUpdateTests {
     @Test(arguments: ["dirty", "staged", "untracked", "detached", "feature", "missing-base", "invalid-base", "origin-mismatch", "missing"])
     func preflightRejectsWithoutFetching(_ scenario: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = f.root.appending(path: "repositories/repo")
         let reason: String
         switch scenario {
@@ -43,10 +41,8 @@ struct RepositoryUpdateTests {
     }
 
     @Test func pullsNamedBaseOnceAndLeavesLinkedWorktreeUntouched() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         let member = f.root.appending(path: "worktrees/feature/repo")
         let original = try #require(await f.service.git.oid("HEAD", at: path))
@@ -74,9 +70,7 @@ struct RepositoryUpdateTests {
     }
 
     @Test func divergentBaseDoesNotMergeOrRebaseLocalHistory() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "local"], at: path)
         let original = try #require(await f.service.git.oid("HEAD", at: path))
@@ -91,9 +85,7 @@ struct RepositoryUpdateTests {
     }
 
     @Test func repositoryReplacedDuringFetchIsNotMergedIntoItsReplacement() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = f.root.appending(path: "repositories/repo")
         let remoteHead = try await advanceRemote(f)
         let replacement = try await replacementRepository(f)
@@ -136,9 +128,7 @@ struct RepositoryUpdateTests {
 
     @Test(arguments: ["origin", "branch", "base", "head", "dirty"])
     func repositoryContextChangesDuringFetchAreRejectedBeforeMerge(_ change: String) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = f.root.appending(path: "repositories/repo")
         let original = try #require(await f.service.git.oid("HEAD", at: path))
         let remoteHead = try await advanceRemote(f)
@@ -269,10 +259,8 @@ private struct UpdateBatch {
     var probe: URL { gate.probe }
 
     init() async throws {
-        let f = try await Fixture()
+        let f = try await Fixture(template: .singleRepository)
         fixture = f
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         let gate = try UpdateGate(f)
         self.gate = gate
         let config = f.directory.appending(path: "gitconfig")

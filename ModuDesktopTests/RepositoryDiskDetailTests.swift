@@ -5,8 +5,8 @@ import Testing
 
 @MainActor struct RepositoryDiskDetailTests {
     @Test func failedCompletePreloadKeepsThePreviousSuccessAndConsumesItsRequest() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let resource = Resource.repository("repo"), path = record.repositoryURL("repo")
@@ -51,8 +51,7 @@ import Testing
 
     @Test(arguments: CompletePreloadCancellation.allCases)
     func cancelledCompletePreloadsCannotPublishOrPersist(_ cancellation: CompletePreloadCancellation) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        _ = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("foreground")
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
@@ -107,8 +106,8 @@ import Testing
     }
 
     @Test func diskSnapshotAppearsBeforeLiveReadAndDoesNotReleaseTheDetailWaiter() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let cache = RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache"))
@@ -150,8 +149,8 @@ import Testing
     }
 
     @Test func preloadedDetailsReuseDiskHistoryWhileReadingFreshChanges() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let directory = fixture.directory.appending(path: "detail-cache")
@@ -185,8 +184,8 @@ import Testing
     }
 
     @Test func failedHistoryKeepsOneCoherentSuccessAndRetryReplacesIt() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let path = record.repositoryURL("repo")
@@ -224,8 +223,8 @@ import Testing
     }
 
     @Test func detailFailuresDeduplicateUntilRecoveryButAllowManualRetries() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let reader = DiskDetailHistoryReader(git: fixture.service.git)
@@ -276,8 +275,8 @@ import Testing
 
     @Test(arguments: [false, true])
     func followUpRefreshSuppressesIntermediateFailureAndKeepsManualIntent(_ manualRetry: Bool) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let reader = DiskDetailHistoryReader(git: fixture.service.git)
@@ -312,8 +311,8 @@ import Testing
     }
 
     @Test func cancelledHydrationCannotPublishOrWriteAndIsDrained() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let path = record.repositoryURL("repo")
@@ -343,8 +342,8 @@ import Testing
     }
 
     @Test func replacedInvalidGitDirectoryClearsThePreviousSuccess() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor())
@@ -362,8 +361,8 @@ import Testing
     }
 
     @Test func shallowHistoryBypassesCachedRanges() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        let record = try await prepare(fixture)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let path = record.repositoryURL("repo")
@@ -405,12 +404,6 @@ import Testing
             details.stop(); await details.waitForReads(); await details.flushCache()
             throw error
         }
-    }
-
-    private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
-        return try fixture.service.store.load(fixture.root)
     }
 
     private func preferences(_ fixture: Fixture) throws -> UserDefaults {

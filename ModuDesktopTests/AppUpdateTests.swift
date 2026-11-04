@@ -112,23 +112,28 @@ struct AppUpdateTests {
         let update = try #require(try service.update(from: release(version: "2.0.0", size: DownloadProtocol.chunk.count * 2), currentVersion: "1.0.0"))
         let progress = DownloadProgressRecorder()
         let download = Task { try await service.download(update, progress: progress.record) }
-        defer { download.cancel() }
-        if cancelled {
-            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-            while progress.values.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-            try #require(!progress.values.isEmpty)
-            download.cancel()
-        }
-
         do {
-            _ = try await download.value
-            Issue.record("Incomplete download succeeded")
+            if cancelled {
+                let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+                while progress.values.isEmpty, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+                try #require(!progress.values.isEmpty)
+                download.cancel()
+            }
+
+            do {
+                _ = try await download.value
+                Issue.record("Incomplete download succeeded")
+            } catch {
+                if cancelled { #expect(error is CancellationError || (error as? URLError)?.code == .cancelled) }
+                else { #expect((error as? URLError)?.code == .networkConnectionLost) }
+            }
+            #expect(!PathSafety.exists(cache))
+            #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })
         } catch {
-            if cancelled { #expect(error is CancellationError || (error as? URLError)?.code == .cancelled) }
-            else { #expect((error as? URLError)?.code == .networkConnectionLost) }
+            download.cancel()
+            _ = try? await download.value
+            throw error
         }
-        #expect(!PathSafety.exists(cache))
-        #expect(!progress.values.contains { if case .verifying = $0 { return true }; return false })
     }
 
     private func downloadSession(hold: Bool = false, fail: Bool = false) -> URLSession {

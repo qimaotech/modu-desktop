@@ -7,9 +7,7 @@ import Testing
 @MainActor struct RepositoryRefreshTests {
     @Test(arguments: [false, true])
     func cancelledBackgroundScanDrainsBeforeStopOrWrites(_ startsWrite: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         var record = try f.service.store.load(f.root)
         for name in ["slow", "cached"] {
             let repository = Repository(url: "https://modu-test.invalid/\(name).git")
@@ -132,9 +130,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func detailsPublishTogetherAfterBothHistoryReads(_ blocksAhead: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
         let base = try #require(await f.service.git.oid("HEAD", at: path))
@@ -192,9 +188,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func cancelledHistoryCannotPublishPartialDetailsOrErrors(_ switchesSelection: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
         let head = try #require(await f.service.git.oid("HEAD", at: path))
@@ -236,9 +230,7 @@ import Testing
     }
 
     @Test func activationRefreshesSelectionWithoutWaitingForBackgroundInspection() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         var record = try f.service.store.load(f.root)
         let slow = Repository(url: "https://modu-test.invalid/slow.git")
         try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL("slow"))
@@ -295,8 +287,7 @@ import Testing
     }
 
     @Test func changesDuringReadAreCoalescedWithoutCancellingTheRunningRead() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         try await f.prepareEmptyGroup("feature")
         let record = try f.service.store.load(f.root)
         let probe = f.directory.appending(path: "refresh-probe")
@@ -346,8 +337,7 @@ import Testing
     }
 
     @Test func inactiveChangesWaitForActivationAndBusyChangesResume() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         try await f.prepareEmptyGroup("feature")
         let record = try f.service.store.load(f.root)
         let monitor = TestResourceMonitor()
@@ -379,8 +369,7 @@ import Testing
     }
 
     @Test func nativeMonitorDeliversWorktreeAndSharedReferenceChangesAndStops() async throws {
-        let f = try await Fixture(createRemote: false); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         try await f.prepareEmptyGroup("feature")
         let record = try f.service.store.load(f.root)
         let context = try await f.service.prepareResourceRead(.group("feature"), in: record)
@@ -408,9 +397,7 @@ import Testing
     }
 
     @Test func nativeMonitorIgnoresSubmoduleContentsAndKeepsParentStructureEvents() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root)
         let path = record.repositoryURL("repo")
         _ = try await f.service.git.run(["submodule", "add", f.remoteURL, "sub"], at: path)
@@ -448,9 +435,7 @@ import Testing
     }
 
     @Test func staleSubmoduleContextDoesNotHideFilesAfterIndexTypeConversion() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root)
         let path = record.repositoryURL("repo")
         _ = try await f.service.git.run(["submodule", "add", f.remoteURL, "sub"], at: path)
@@ -472,9 +457,7 @@ import Testing
     }
 
     @Test func indexChangesRebuildSubmoduleExclusionsWithoutHidingNestedRepositories() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
         let path = record.repositoryURL("repo")
         let monitor = TestResourceMonitor()

@@ -5,8 +5,7 @@ import Testing
 
 @MainActor struct RepositoryReadSchedulingTests {
     @Test func completePreloadsHaveTheirOwnExpansionFreshnessAndActivationDoesNotEnqueueThem() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("cached")
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -54,9 +53,7 @@ import Testing
     }
 
     @Test func completePreloadsWaitForForegroundHistoryAndReadOneResourceAtATime() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         for name in ["first", "second"] { try await fixture.prepareGroup(name, repositories: ["repo"]) }
         let record = try fixture.service.store.load(fixture.root)
         for resource in [Resource.repository("repo"), .member("first", "repo"), .member("second", "repo")] {
@@ -99,8 +96,7 @@ import Testing
     }
 
     @Test func failedStatusReadsWaitForExpiryUnlessPathIdentityChanges() async throws {
-        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         var record = try fixture.service.store.load(fixture.root)
         let resource = Resource.group("missing")
         record.groups["missing"] = WorktreeGroup()
@@ -139,9 +135,7 @@ import Testing
     }
 
     @Test func cancelledFollowupReadKeepsTheResourceInvalidatedForVisibleStatusChecks() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try fixture.service.store.load(fixture.root)
         let resource = Resource.repository("repo"), path = record.repositoryURL("repo")
         let blocked = fixture.directory.appending(path: "followup-blocked")
@@ -201,9 +195,7 @@ import Testing
     }
 
     @Test func unrelatedRegistrationChangesKeepCurrentReadsAndCompleteDetails() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
-        #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }

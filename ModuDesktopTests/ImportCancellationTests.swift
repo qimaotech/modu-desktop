@@ -239,7 +239,7 @@ import Testing
     }
 
     private func prepare(_ fixture: Fixture) async throws -> String {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         return other

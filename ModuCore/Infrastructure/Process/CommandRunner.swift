@@ -11,8 +11,11 @@ public struct CommandOutput: Sendable {
 public struct CommandRunner: Sendable {
     public var environment: [String: String]
     public var diagnostics: RepositoryReadDiagnostics?
-    public init(environment: [String: String] = ProcessInfo.processInfo.environment, diagnostics: RepositoryReadDiagnostics? = nil) {
+    private let terminationGracePeriod: TimeInterval
+    public init(environment: [String: String] = ProcessInfo.processInfo.environment, diagnostics: RepositoryReadDiagnostics? = nil, terminationGracePeriod: TimeInterval = 5) {
+        precondition(terminationGracePeriod.isFinite && terminationGracePeriod >= 0)
         self.environment = environment; self.diagnostics = diagnostics
+        self.terminationGracePeriod = terminationGracePeriod
     }
 
     public func run(_ executable: String, _ arguments: [String], at directory: URL? = nil, timeout: TimeInterval = 60, cancellable: Bool = true, input: Data? = nil) async throws -> CommandOutput {
@@ -108,7 +111,7 @@ public struct CommandRunner: Sendable {
             } else {
                 // Helpers can outlive the parent while remaining in its process group.
                 if parentExited && !processGroupExists(pid) { break }
-                if termination!.duration(to: .now) >= .seconds(5) { kill(-pid, SIGKILL) }
+                if termination!.duration(to: .now) >= .seconds(terminationGracePeriod) { kill(-pid, SIGKILL) }
             }
             usleep(pollInterval)
             pollInterval = min(pollInterval * 2, 20_000)

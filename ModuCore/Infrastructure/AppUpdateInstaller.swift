@@ -27,11 +27,13 @@ public struct PreparedAppUpdate: Codable, Sendable {
 
 public struct AppUpdateInstaller: Sendable {
     private let runner: CommandRunner
+    private let readinessTimeout: TimeInterval
     private let exitTimeout: TimeInterval
     private static let bundleID = "fun.armantang.ModuDesktop"
 
-    public init(runner: CommandRunner = .init(), exitTimeout: TimeInterval = 60) {
+    public init(runner: CommandRunner = .init(), readinessTimeout: TimeInterval = 10, exitTimeout: TimeInterval = 60) {
         self.runner = runner
+        self.readinessTimeout = readinessTimeout
         self.exitTimeout = exitTimeout
     }
 
@@ -82,7 +84,7 @@ public struct AppUpdateInstaller: Sendable {
                                                      "modu-update", update.directory.appending(path: "modu-update").path, update.directory.path, String(parentPID), log.path], cancellable: false)
         guard result.status == 0 else { throw ModuError("update-helper-failed", .couldNotStartUpdateInstaller) }
         do {
-            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            let deadline = ContinuousClock.now.advanced(by: .seconds(readinessTimeout))
             while !FileManager.default.fileExists(atPath: update.ready.path) {
                 guard ContinuousClock.now < deadline else { throw ModuError("update-helper-failed", .updateInstallerDidNotBecomeReadyPleaseTry) }
                 try await Task.sleep(for: .milliseconds(50))

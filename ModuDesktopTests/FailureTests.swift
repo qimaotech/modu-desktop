@@ -8,7 +8,7 @@ struct FailureTests {
     @Test(arguments: ["remote", "clone", "checkout", "save", "save-unknown"])
     func failedRepositoryAdditionDoesNotUpdateIgnore(_ stage: String) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let ignoreFile = f.root.appending(path: ".gitignore")
         let before = try Data(contentsOf: ignoreFile)
         let remote = f.directory.appending(path: "repo.git")
@@ -54,7 +54,7 @@ struct FailureTests {
     @Test(arguments: ["single", "batch"], [false, true])
     func cancelledRepositoryCleanupReportsItsActualOutcome(_ kind: String, _ cleanupFails: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let targetURL = kind == "single" ? f.remoteURL : "https://modu-test.invalid/next.git"
         let targetName = try RepositoryIdentity(targetURL).name
         let started = f.directory.appending(path: "checkout-started"), release = f.directory.appending(path: "checkout-release")
@@ -90,12 +90,19 @@ struct FailureTests {
             if kind == "single" { return await service.addRepository(.init(url: targetURL), at: f.root) }
             return await service.importRepositories([f.remoteURL, targetURL, "https://modu-test.invalid/later.git"], at: f.root)
         }
-        defer { task.cancel(); try? Data().write(to: release) }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while !PathSafety.exists(started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try #require(PathSafety.exists(started))
-        task.cancel()
-        let result = await task.value
+        let result: OperationResult
+        do {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(started), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            try #require(PathSafety.exists(started))
+            task.cancel()
+            result = await task.value
+        } catch {
+            task.cancel()
+            try? Data().write(to: release)
+            _ = await task.value
+            throw error
+        }
         #expect(result.status.rawValue == (cleanupFails ? (kind == "single" ? "failed" : "partial-success") : "cancelled"))
         #expect(result.exitCode == (cleanupFails ? 1 : 130))
         let item = try #require(result.items.first { $0.resource.repo == targetName })
@@ -131,7 +138,7 @@ struct FailureTests {
 
     @Test func repositoryIgnoreIsWrittenAfterSavingAndCompletesDespiteLateCancellation() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let ignoreFile = f.root.appending(path: ".gitignore")
         let before = try Data(contentsOf: ignoreFile)
         let store = WorkspaceStore(support: f.service.store.support) { data, url in
@@ -150,7 +157,7 @@ struct FailureTests {
 
     @Test func ignoreFailureKeepsSuccessfullyAddedRepositoryAndCanBeRetried() async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let file = f.root.appending(path: ".gitignore")
         let original = f.directory.appending(path: "user-ignore")
         try FileManager.default.moveItem(at: file, to: original)
@@ -521,8 +528,8 @@ struct FailureTests {
         }
     }
     @Test func deletingAfterSaveFailureKeepsBranchAndDeclaration() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let failing = WorkspaceStore(support: f.service.store.support) { _, _ in throw ModuError("injected", "save failed") }
         let service = WorkspaceService(store: failing, git: f.service.git)
         let result = await service.remove(.group("feature"), at: f.root, execute: true)
@@ -537,7 +544,8 @@ struct FailureTests {
         #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
     }
     @Test func confirmationDoesNotBypassNewUnmanagedWorktree() async throws {
-        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let preview = try await f.service.previewDelete(.repository("repo"), at: f.root)
         let main = f.root.appending(path: "repositories/repo"), outside = f.directory.appending(path: "outside")
         _ = try await f.service.git.run(["worktree", "add", "-b", "outside", outside.path], at: main)
@@ -549,7 +557,8 @@ struct FailureTests {
     }
     @Test(arguments: [false, true])
     func groupDeletionIncludesUnmanagedRepositories(_ bare: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }; try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let nested = f.root.appending(path: "worktrees/feature/unmanaged.git")
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
         _ = try await f.service.git.run(bare ? ["init", "--bare"] : ["init"], at: nested)
@@ -580,7 +589,7 @@ struct FailureTests {
         """.utf8).write(to: helper)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
         let task = Task {
-            try await CommandRunner().run("/bin/sh", ["-c", "trap 'exit 143' TERM INT; \"$1/helper\" \"$1\" & wait", "modu-process-group-test", directory.path], timeout: reason == "network-timeout" ? 1 : 30)
+            try await CommandRunner(terminationGracePeriod: 0.1).run("/bin/sh", ["-c", "trap 'exit 143' TERM INT; \"$1/helper\" \"$1\" & wait", "modu-process-group-test", directory.path], timeout: reason == "network-timeout" ? 1 : 30)
         }
         var helperPID: pid_t?
         defer {
@@ -608,10 +617,5 @@ struct FailureTests {
             _ = try? await task.value
             throw error
         }
-    }
-    private func prepare(_ f: Fixture) async throws {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
     }
 }

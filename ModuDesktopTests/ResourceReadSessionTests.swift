@@ -4,8 +4,8 @@ import Testing
 
 struct ResourceReadSessionTests {
     @Test func unchangedResourcesAndIndexChangesReuseRepositoryPreparation() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let trace = f.directory.appending(path: "read-session-trace")
         let service = tracedService(f, trace: trace)
         let session = ResourceReadSession(service: service)
@@ -33,8 +33,8 @@ struct ResourceReadSessionTests {
     }
 
     @Test func includedConfigurationChangesAndExplicitRevalidationCannotUseOldPreparation() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let included = f.directory.appending(path: "included.gitconfig")
         try Data("[alias]\n    read-probe = first\n".utf8).write(to: included)
         let global = f.directory.appending(path: "gitconfig")
@@ -64,8 +64,8 @@ struct ResourceReadSessionTests {
     }
 
     @Test func creatingAnIncludedConfigurationRechecksTheOrigin() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let directory = f.directory.appending(path: "configuration")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let parent = directory.appending(path: "parent.gitconfig")
@@ -83,8 +83,8 @@ struct ResourceReadSessionTests {
     }
 
     @Test func replacingGitDirectoryDiscardsPreparedIdentity() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let session = ResourceReadSession(service: f.service)
         let resource = Resource.repository("repo")
         let first = try await session.prepare(resource, in: record)
@@ -97,8 +97,8 @@ struct ResourceReadSessionTests {
     }
 
     @Test func lightweightStatusUsesTheSameVisibilityWithoutExpandingUntrackedDirectories() async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         let path = record.repositoryURL("repo")
         _ = try await f.service.git.run(["mv", "README", "renamed\nfile"], at: path)
         try FileManager.default.createDirectory(at: path.appending(path: "new-directory"), withIntermediateDirectories: false)
@@ -116,12 +116,6 @@ struct ResourceReadSessionTests {
         let commands = try String(contentsOf: trace, encoding: .utf8)
         #expect(commands.contains("--untracked-files=normal"))
         #expect(!commands.contains("ls-files --stage") && !commands.contains("built-in: git log ") && !commands.contains("built-in: git fetch "))
-    }
-
-    private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        return try f.service.store.load(f.root)
     }
 
     private func tracedService(_ f: Fixture, trace: URL) -> WorkspaceService {

@@ -6,7 +6,7 @@ import Testing
 @MainActor struct DetailCacheTests {
     @Test(arguments: [false, true])
     func appSubmoduleFilteringPreservesCLIAndSafetyChecks(_ changesHead: Bool) async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let record = try #require(model.workspace.record)
@@ -71,7 +71,7 @@ import Testing
 
     @Test(arguments: [Resource.group("a"), Resource.member("a", "repo")])
     func deletionKeepsUnaffectedSelectionVisibleAndRefreshesItsGitState(_ selected: Resource) async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -82,7 +82,7 @@ import Testing
             _ = try await fixture.service.git.run(arguments, at: fixture.root)
         }
         for name in ["a", "b"] {
-            #expect(await fixture.service.createGroup(name, repositories: ["repo"], at: fixture.root).status == .success)
+            try await fixture.prepareGroup(name, repositories: ["repo"])
         }
         let record = try fixture.service.store.load(fixture.root)
         let path = try PathSafety.child(selected.path, of: fixture.root, allowMissing: false)
@@ -156,7 +156,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func creationSelectsGroupBeforeSlowGitReadsAndPreservesLaterSelection(_ blocksCreatedGroup: Bool) async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -220,7 +220,7 @@ import Testing
     }
 
     @Test func cachedDetailsAppearImmediatelyAndRefreshExpiredLocalChanges() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         var now = ContinuousClock.now
         let model = try await makeModel(fixture, now: { now })
@@ -269,11 +269,11 @@ import Testing
 
     @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
     func selectionReadsLocalBaseWithoutFetchingAndRefreshesCachedCommits(_ resource: Resource) async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let trace = fixture.directory.appending(path: "selection-trace")
         var runner = fixture.service.git.runner
@@ -336,7 +336,7 @@ import Testing
     }
 
     @Test func behindCommitsLoadAllAndDiscardStaleComparisons() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -377,11 +377,11 @@ import Testing
     }
 
     @Test func reloadPreloadsSidebarSnapshotsWithoutPublishingPartialDetails() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        #expect(await fixture.service.createGroup("feature", repositories: ["repo"], at: fixture.root).status == .success)
+        try await fixture.prepareGroup("feature", repositories: ["repo"])
         let trace = fixture.directory.appending(path: "reload-trace")
         var runner = fixture.service.git.runner
         runner.environment["GIT_TRACE"] = trace.path
@@ -420,9 +420,9 @@ import Testing
     }
 
     @Test func groupDetailsRefreshWhenRemotesAreAddedAndRemoved() async throws {
-        let fixture = try await Fixture(createRemote: false)
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
-        let model = try await makeModel(fixture, repository: false)
+        let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         try await fixture.prepareEmptyGroup("feature")
         model.workspace.record = try fixture.service.store.load(fixture.root)
@@ -463,7 +463,7 @@ import Testing
     }
 
     @Test func commitReadFailureAlertsOnlyForTheCurrentSelection() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -493,7 +493,7 @@ import Testing
     }
 
     @Test func recoveryDiscardsDelayedFailureAndLaterFailureReportsPreservedResults() async throws {
-        let fixture = try await Fixture(); defer { fixture.remove() }
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let path = try #require(model.workspace.record?.repositoryURL("repo"))
@@ -533,7 +533,7 @@ import Testing
 
     @Test func allAheadCommitsAreCachedAcrossSelectionButNotNewHeadsOrWorkspaces() async throws {
         let resource = Resource.repository("repo")
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -577,7 +577,7 @@ import Testing
     }
 
     @Test func selectionAndWorkspaceSwitchCancelPreloading() async throws {
-        let fixture = try await Fixture()
+        let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let model = try await makeModel(fixture)
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -639,11 +639,8 @@ import Testing
         #expect(switching.workspace.detail.changes?.map(\.path) == ["next.txt"])
     }
 
-    private func makeModel(_ fixture: Fixture, repository: Bool = true,
+    private func makeModel(_ fixture: Fixture,
                            now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }) async throws -> AppModel {
-        let skill = try #require(Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "modu-workflow"))
-        #expect(await fixture.service.openWorkspace(fixture.root, skill: skill).status == .success)
-        if repository { #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success) }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defaults.set(fixture.root.path, forKey: "workspace")
         let model = AppModel(defaults: defaults, service: fixture.service, now: now)

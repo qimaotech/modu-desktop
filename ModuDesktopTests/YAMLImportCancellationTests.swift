@@ -56,7 +56,7 @@ struct YAMLImportCancellationTests {
     @Test(arguments: [false, true])
     func lateCancellationDoesNotHideRepositoryFailures(_ completedFirst: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
-        #expect(await f.service.openWorkspace(f.root).status == .success)
+        try await f.prepareWorkspace()
         let urls = (completedFirst ? [f.remoteURL] : []) + ["https://first.invalid/conflict.git", "https://second.invalid/conflict.git"]
         let (result, cancelled) = await Task {
             let result = await f.service.importRepositories(urls, at: f.root) { value in
@@ -76,7 +76,7 @@ struct YAMLImportCancellationTests {
     }
 
     private func prepare(_ fixture: Fixture) async throws -> String {
-        #expect(await fixture.service.openWorkspace(fixture.root).status == .success)
+        try await fixture.prepareWorkspace()
         let other = "https://modu-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         return other

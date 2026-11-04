@@ -5,12 +5,16 @@ import Testing
 struct BranchOccupancyTests {
     @Test(arguments: ["root", "member"], [false, true])
     func creationChecksBranchCaseAliasesBeforeCreatingAnyWorktree(_ kind: String, _ packed: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        let record = try await prepare(f)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
         if kind == "member" { _ = try await f.service.git.run(["branch", "-m", "workspace"], at: f.root) }
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         if packed { _ = try await f.service.git.run(["pack-refs", "--all"], at: repository) }
-        let caseSensitive = try #require(repository.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]).volumeSupportsCaseSensitiveNames)
+        let volume = try repository.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+        guard let caseSensitive = volume.volumeSupportsCaseSensitiveNames else {
+            Issue.record("Volume case sensitivity is unavailable.")
+            return
+        }
         let rootHead = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let repositoryHead = try #require(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")))
         let result = await f.service.createGroup("Main", repositories: ["repo"], at: f.root)
@@ -32,13 +36,16 @@ struct BranchOccupancyTests {
 
     @Test(arguments: ["root", "member"], [false, true])
     func deletionProtectsBranchesCheckedOutUnderCaseAliases(_ kind: String, _ confirmed: Bool) async throws {
-        let f = try await Fixture(); defer { f.remove() }
-        _ = try await prepare(f)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositories: ["repo"])
         let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let worktree = kind == "root" ? record.groupURL("feature") : record.memberURL("feature", "repo")
-        let caseSensitive = try #require(repository.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]).volumeSupportsCaseSensitiveNames)
+        let volume = try repository.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+        guard let caseSensitive = volume.volumeSupportsCaseSensitiveNames else {
+            Issue.record("Volume case sensitivity is unavailable.")
+            return
+        }
         let rootHead = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let repositoryHead = try #require(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")))
         if caseSensitive {
@@ -74,11 +81,5 @@ struct BranchOccupancyTests {
         #expect(try await f.service.git.oid("HEAD", at: f.root) == rootHead)
         #expect(try await f.service.git.oid("refs/heads/main", at: record.repositoryURL("repo")) == repositoryHead)
         #expect(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")) == repositoryHead)
-    }
-
-    private func prepare(_ f: Fixture) async throws -> WorkspaceRecord {
-        #expect(await f.service.openWorkspace(f.root).status == .success)
-        #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
-        return try f.service.store.load(f.root)
     }
 }
