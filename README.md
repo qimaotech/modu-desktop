@@ -1,8 +1,8 @@
-# Modu Desktop
+# MonoDeck
 
-Modu Desktop 是一款专为 macOS 打造的原生客户端，可按任务组织多个仓库的独立工作树，帮助开发者统一管理跨仓库开发工作区。
+MonoDeck 是一款专为 macOS 打造的原生客户端，可按任务组织多个仓库的独立工作树，帮助开发者统一管理跨仓库开发工作区。
 
-![Modu](./.github/assets/modu-mock.png)
+![MonoDeck](./.github/assets/mono-deck-mock.png)
 
 ## 主要功能
 
@@ -10,7 +10,7 @@ Modu Desktop 是一款专为 macOS 打造的原生客户端，可按任务组织
 - 创建、编辑和删除跨仓库的 Worktree Group。
 - 查看工作树更改与提交，在 Agent、编辑器、终端或 Git 工具中打开当前目录。
 - 通过 YAML 导入导出工作区结构，支持中文与英文界面。
-- 使用配套的 `modu-cli` 和工作流 skill 管理工作区。
+- 使用配套的 `mono-deck` 和工作流 skill 管理工作区。
 - 通过可配置的全局快捷键显示或隐藏窗口，默认使用 `⌃⌥Z`。
 
 ## 工作区如何组织
@@ -36,21 +36,23 @@ example-workspace/
 
 ## 开始使用
 
-当前安装包适用于 Apple Silicon Mac。可从 [Releases](https://github.com/qimaotech/modu-desktop/releases) 下载 DMG，也可从 [GitHub Actions](https://github.com/qimaotech/modu-desktop/actions/workflows/ci.yml) 的构建产物获取；打开后将 `Modu.app` 拖入 Applications。系统要求见对应发布说明。
+当前安装包适用于 Apple Silicon Mac。可从 [Releases](https://github.com/qimaotech/mono-deck/releases) 下载 DMG，也可从 [GitHub Actions](https://github.com/qimaotech/mono-deck/actions/workflows/ci.yml) 的构建产物获取；打开后将 `MonoDeck.app` 拖入 Applications。系统要求见对应发布说明。
 
-Modu 默认每天最多自动检查一次正式版本，可在更新窗口关闭。后台无新版或检查失败时不提示，发现新版后等待当前操作结束、App 处于前台时提示。也可通过 **Modu → 检查更新…（Check for Updates…）** 手动检查并查看发布说明。
+MonoDeck 默认每天最多自动检查一次正式版本，可在更新窗口关闭。后台无新版或检查失败时不提示，发现新版后等待当前操作结束、App 处于前台时提示。也可通过 **MonoDeck → 检查更新…（Check for Updates…）** 手动检查并查看发布说明。
 
-自动检查不会下载或安装更新。点击“安装并重启”后，Modu 会下载并校验安装包，完成当前操作的退出处理后替换应用并请求启动新版，同步更新内置 CLI。原应用未能及时退出时，会显示错误并恢复为可重试状态。安装后不会自动回退旧版本；如果新版未能启动，可从原安装位置手动重新打开。应用所在文件夹需要允许当前用户写入。
+自动检查不会下载或安装更新。点击“安装并重启”后，MonoDeck 会下载并校验安装包，完成当前操作的退出处理后替换应用并请求启动新版，同步更新内置 CLI。原应用未能及时退出时，会显示错误并恢复为可重试状态。安装后不会自动回退旧版本；如果新版未能启动，可从原安装位置手动重新打开。应用所在文件夹需要允许当前用户写入。
 
 当前为测试包，采用 ad-hoc 签名，尚未做 Developer ID 签名与 Apple 公证。
 
-若 App 因下载隔离标记而无法打开，确认安装包来源可信后，可在终端运行以下命令移除隔离标记，再重新打开 Modu：
+若 App 因下载隔离标记而无法打开，确认安装包来源可信后，可在终端运行以下命令移除隔离标记，再重新打开 MonoDeck：
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Modu.app
+xattr -dr com.apple.quarantine /Applications/MonoDeck.app
 ```
 
-1. 启动 Modu，按引导安装 CLI 并选择工作区目录，首次使用建议选择专用的新目录。
+MonoDeck 使用独立的工作区登记、偏好和缓存，不自动迁移其他应用的数据。首次启动按全新安装引导配置；磁盘上未登记的现有仓库和工作树不会被自动接管。
+
+1. 启动 MonoDeck，按引导安装 CLI 并选择工作区目录，首次使用建议选择专用的新目录。
 2. 通过仓库 URL 添加 Git 仓库，或在添加窗口的“导入”菜单中选择本地仓库或 YAML 文件，勾选后从远端克隆到工作区。本地导入不迁移原目录中的开发环境或未提交改动；仓库访问沿用本机 Git 认证配置，需提前准备相应访问权限。
 3. 按需更新主仓库，再创建 Worktree Group（工作树分组），填写分组名称并选择本次涉及的仓库。名称须是单个目录名且符合 Git 分支命名规则，例如 `feature-checkout`，不能包含 `/` 或空格。
 4. 选中分组，通过工具栏在已安装的 Agent、编辑器或终端中打开；只处理一个仓库时，选中对应成员。不同任务可保留不同分组，切换目录时保留各自的改动。
@@ -64,11 +66,11 @@ App 根据本地文件变化、重新激活和侧栏展开自动补查。启动�
 
 ## CLI 与 Agent
 
-引导会创建 `~/.local/bin/modu-cli` 符号链接，直接指向当前 App 内置的 CLI，该目录需在登录 shell 的 `PATH` 中。App 路径不变时，更新 App 后 CLI 会自动跟随，无需重新安装；旧版复制安装首次迁移、移动 App 后，需在引导中重新安装以修复链接。在工作区根目录运行，例如：
+引导会创建 `~/.local/bin/mono-deck` 符号链接，直接指向当前 App 内置的 CLI，该目录需在登录 shell 的 `PATH` 中。App 路径不变时，更新 App 后 CLI 会自动跟随，无需重新安装；旧版复制安装首次迁移、移动 App 后，需在引导中重新安装以修复链接。在工作区根目录运行，例如：
 
 ```bash
-modu-cli workspace inspect
-modu-cli worktree create feature-checkout --repo order-service --repo storefront-web
+mono-deck workspace inspect
+mono-deck worktree create feature-checkout --repo order-service --repo storefront-web
 ```
 
 上例需先添加对应仓库。`--repo` 使用仓库 URL 末段去除 `.git` 后缀得到的 ID（主仓库目录名）；自定义显示名称不改变 ID。不同 URL 派生的同名 ID（忽略大小写）不能共存。
@@ -81,27 +83,27 @@ CLI 会从当前目录向父目录查找已登记的工作区；在工作区外�
 
 桌面端和 CLI 可同时使用，App 会同步登记变化，后台或忙碌时延后处理。同一工作区的加锁操作冲突时会等待重试，超时返回 `workspace-lock-timeout`；支持取消的操作在等待时也可取消。查询和仓库更新不获取工作区锁，不同工作区的写操作使用独立锁。
 
-CLI 提供工作区检查、仓库列表/添加/删除、分组列表/创建/编辑/删除；工作区初始化与切换、批量导入、更新主仓库及 YAML 导入导出通过 App 操作。更多用法查看 `modu-cli --help` 及各子命令的 `--help`。
+CLI 提供工作区检查、仓库列表/添加/删除、分组列表/创建/编辑/删除；工作区初始化与切换、批量导入、更新主仓库及 YAML 导入导出通过 App 操作。更多用法查看 `mono-deck --help` 及各子命令的 `--help`。
 
-工作区安装内置工作流 skill 后，可从工作区根目录启动 Codex，默认允许根据任务自动调用，也可通过 `$modu-workflow` 显式调用，协助管理仓库和分组。创建前会确认分组名称和完整仓库列表；删除或移除成员前会检查影响范围与风险。
+工作区安装内置工作流 skill 后，可从工作区根目录启动 Codex，默认允许根据任务自动调用，也可通过 `$mono-deck-workflow` 显式调用，协助管理仓库和分组。创建前会确认分组名称和完整仓库列表；删除或移除成员前会检查影响范围与风险。
 
 ### 工作区文件与自动提交
 
-Modu 会自动修改以下工作区文件，并在内容相对 HEAD 有变化时自动提交到工作区根仓库：
+MonoDeck 会自动修改以下工作区文件，并在内容相对 HEAD 有变化时自动提交到工作区根仓库：
 
 - **`.gitignore`**：初始化、打开或重新加载工作区，以及添加或导入仓库时，按需补充忽略规则。自动提交以整个文件为范围，因此可能一并提交你的手动修改。
-- **内置 skill**：打开或重新加载工作区时，会丢弃 `.agents/skills/modu-workflow/` 下 `SKILL.md` 与 `agents/openai.yaml` 在工作树和暂存区中的未提交改动，同步内置版本并按需提交。请勿修改这两份托管文件。
+- **内置 skill**：打开或重新加载工作区时，会丢弃 `.agents/skills/mono-deck-workflow/` 下 `SKILL.md` 与 `agents/openai.yaml` 在工作树和暂存区中的未提交改动，同步内置版本并按需提交。请勿修改这两份托管文件。
 
-启动恢复、切换工作区和手动重新加载会执行维护；维护不提供取消按钮，退出会等待收尾。登记变化、激活、展开侧栏及管理操作后的自动刷新只读，不执行维护。自动提交附带 `Auto-committed-by: Modu`；请预先配置 Git 提交身份及签名环境。
+启动恢复、切换工作区和手动重新加载会执行维护；维护不提供取消按钮，退出会等待收尾。登记变化、激活、展开侧栏及管理操作后的自动刷新只读，不执行维护。自动提交附带 `Auto-committed-by: MonoDeck`；请预先配置 Git 提交身份及签名环境。
 
-需要自定义流程时，建议在工作区根目录新增 `.agents/skills/modu-workflow-addon/SKILL.md`，通过独立的 `modu-workflow-addon` skill 维护自定义约定与步骤。
+需要自定义流程时，建议在工作区根目录新增 `.agents/skills/mono-deck-workflow-addon/SKILL.md`，通过独立的 `mono-deck-workflow-addon` skill 维护自定义约定与步骤。
 
 ## 使用须知
 
 - **本地扫描**：支持多选目录，跳过依赖、构建产物和符号链接。远端优先使用 `origin`，没有时仅使用唯一远端；无法确定远端、远端不可访问或默认分支无效的仓库不会列出，也不会改试其他远端。
 - **添加与导入**：普通批量导入逐项完成，后续失败不撤销已添加仓库。空工作区 YAML 导入先准备全部仓库，准备失败或取消不登记；正式写入前加锁复核，开始后可能部分成功。清理只处理本次创建的目录，清理失败或保存结果不确定时报告保留路径与实际效果。
-- **工作区记录**：管理记录保存在本机 `~/Library/Application Support/Modu/`，绑定工作区路径，不随工作区 Git 提交分享。直接移动或重命名工作区目录不会自动迁移记录。打开或手动重新加载时会移除目录已消失的资源记录；自动刷新、CLI 查询和 YAML 导出不会清理记录，也不会自动接管磁盘上未登记的仓库或工作树。
-- **Git 浏览缓存**：成功详情与历史保存在本机 `~/Library/Caches/fun.armantang.ModuDesktop/RepositoryCache/v1/`，开发版与正式版隔离。缓存可删除重建，不是备份，也不参与 CLI 查询或操作安全检查；设计见[开发细则](DEVELOPMENT.md#git-读取与缓存)。
+- **工作区记录**：管理记录保存在本机 `~/Library/Application Support/MonoDeck/`，绑定工作区路径，不随工作区 Git 提交分享。直接移动或重命名工作区目录不会自动迁移记录。打开或手动重新加载时会移除目录已消失的资源记录；自动刷新、CLI 查询和 YAML 导出不会清理记录，也不会自动接管磁盘上未登记的仓库或工作树。
+- **Git 浏览缓存**：成功详情与历史保存在本机 `~/Library/Caches/fun.armantang.MonoDeck/RepositoryCache/v1/`，开发版与正式版隔离。缓存可删除重建，不是备份，也不参与 CLI 查询或操作安全检查；设计见[开发细则](DEVELOPMENT.md#git-读取与缓存)。
 - **更新主仓库**：按本地 origin/HEAD 记录的默认分支 fetch，再直接合并对应的远端追踪引用，只允许快进；有本地改动或未处于该分支时会跳过。更新不获取工作区锁，并行操作引起的 Git 锁冲突、路径变化或分叉会按实际结果报错。已有分组的任务分支需自行同步基准。
 - **分享结构**：在“设置 → 配置”中导出 YAML，可在空工作区中导入仓库清单和分组关系。YAML 不包含代码、提交历史、未提交改动或当前分支状态，不能作为备份恢复。
 - **清理任务**：删除成员或整个分组会永久移除对应工作树及其当前本地分支，包括复用的分支和未合并提交；删除主仓库还会移除关联成员，再将主仓库目录移至废纸篓。确认前请核对删除预览。

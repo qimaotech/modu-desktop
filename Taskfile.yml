@@ -37,22 +37,22 @@ tasks:
       - ./script/build_and_run.sh --logs{{.SCRIPT_ARGS}}
 
   telemetry:
-    desc: 构建并验证开发版 App 启动，按本次实例 PID 查看 Modu subsystem 日志
+    desc: 构建并验证开发版 App 启动，按本次实例 PID 查看 MonoDeck subsystem 日志
     cmds:
       - ./script/build_and_run.sh --telemetry{{.SCRIPT_ARGS}}
 
   quit:
-    desc: 正常退出指定的 Modu 实例并等待结束（PID=<进程号>）
+    desc: 正常退出指定的 MonoDeck 实例并等待结束（PID=<进程号>）
     requires:
       vars: [PID]
     cmds:
-      - /usr/bin/swift -module-cache-path "${TMPDIR%/}/modu-verification-module-cache" script/quit_app.swift {{.PID | shellQuote}}
+      - /usr/bin/swift -module-cache-path "${TMPDIR%/}/mono-deck-verification-module-cache" script/quit_app.swift {{.PID | shellQuote}}
 
   test:
     desc: 隔离运行并清理单元测试，零用例失败（TEST_FILTER 筛选）
     silent: true
     cmds:
-      - /usr/bin/python3 script/run_tests.py --filter {{.TEST_FILTER | default "ModuDesktopTests" | shellQuote}} --{{.SCRIPT_ARGS}}
+      - /usr/bin/python3 script/run_tests.py --filter {{.TEST_FILTER | default "MonoDeckTests" | shellQuote}} --{{.SCRIPT_ARGS}}
 
   package:
     desc: 构建、检查并打包 arm64 发布版 DMG，本地完成后自动打开

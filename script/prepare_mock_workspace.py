@@ -120,10 +120,10 @@ def generate(directory, jobs):
     git(root, "init", "--quiet", "-b", "main")
     git(root, "config", "--local", "include.path", str(config))
     write(root / ".gitignore", "/repositories/\n/worktrees/\n" + "".join(f"/{name}/\n" for name in REPOSITORIES))
-    skill = Path(__file__).resolve().parent.parent / "ModuDesktop/Resources/modu-workflow"
-    shutil.copytree(skill, root / ".agents/skills/modu-workflow")
-    commit(root, "chore: initialize Modu workspace")
-    write(root / "README.md", "# Modu sample workspace\n\nThis Debug workspace is temporary. It is deleted when Modu quits.\n")
+    skill = Path(__file__).resolve().parent.parent / "MonoDeck/Resources/mono-deck-workflow"
+    shutil.copytree(skill, root / ".agents/skills/mono-deck-workflow")
+    commit(root, "chore: initialize MonoDeck workspace")
+    write(root / "README.md", "# MonoDeck sample workspace\n\nThis Debug workspace is temporary. It is deleted when MonoDeck quits.\n")
     commit(root, "docs: describe sample workspace")
     for name in REPOSITORIES:
         source = directory / "sources" / name
@@ -131,7 +131,7 @@ def generate(directory, jobs):
         source.mkdir(parents=True)
         remote.parent.mkdir(exist_ok=True)
         git(source, "init", "--quiet", "-b", "main")
-        write(source / "README.md", f"# {name}\n\nSample files for Modu's temporary Debug workspace.\n")
+        write(source / "README.md", f"# {name}\n\nSample files for MonoDeck's temporary Debug workspace.\n")
         for path, contents in baseline_files(name).items():
             write(source / path, contents)
         commit(source, f"chore: initialize {name}")
@@ -203,7 +203,7 @@ def baseline_files(name):
 
 
 def allocate():
-    directory = Path(app_path(Path(tempfile.gettempdir()))) / f"modu-mock-{uuid.uuid4()}"
+    directory = Path(app_path(Path(tempfile.gettempdir()))) / f"mono-deck-mock-{uuid.uuid4()}"
     create_session(directory)
     return directory
 
@@ -231,13 +231,13 @@ def read_session(directory):
 
 
 def checked_identifier(directory):
-    if directory.is_symlink() or not directory.name.startswith("modu-mock-"):
+    if directory.is_symlink() or not directory.name.startswith("mono-deck-mock-"):
         raise ValueError("Expected an owned temporary mock directory.")
     resolved = directory.resolve()
     bases = [Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()]
     if not any(base in resolved.parents for base in bases):
         raise ValueError("Mock data must be inside a temporary directory.")
-    identifier = directory.name.removeprefix("modu-mock-")
+    identifier = directory.name.removeprefix("mono-deck-mock-")
     if str(uuid.UUID(identifier)) != identifier:
         raise ValueError("Invalid mock directory identifier.")
     return identifier

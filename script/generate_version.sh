@@ -10,7 +10,7 @@ fi
 mkdir -p "$(dirname "${SCRIPT_OUTPUT_FILE_0:?}")"
 cat > "$SCRIPT_OUTPUT_FILE_0" <<EOF
 // Generated from Version.xcconfig. Do not edit.
-public enum ModuVersion {
+public enum MonoDeckVersion {
     public static let current = "$MARKETING_VERSION"
     public static let buildNumber = "$CURRENT_PROJECT_VERSION"
 }

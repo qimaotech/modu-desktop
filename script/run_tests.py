@@ -25,7 +25,7 @@ FAILURE_PATTERN = re.compile(r": (?:fatal )?error:|^error:|^ld:|^Undefined symbo
 
 def main():
     parser = argparse.ArgumentParser(description="Run Xcode tests in an isolated, automatically cleaned environment.")
-    parser.add_argument("--filter", default="ModuDesktopTests")
+    parser.add_argument("--filter", default="MonoDeckTests")
     parser.add_argument("--verbose", action="store_true", help="Stream the full test log to the terminal.")
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     arguments = parser.parse_args()
@@ -41,11 +41,11 @@ def main():
 
 def run_tests(test_filter, extra, verbose=False):
     started = time.monotonic()
-    derived = Path(os.environ.get("MODU_DERIVED_DATA_PATH", str(Path(tempfile.gettempdir()) / "modu-desktop-derived-data")))
+    derived = Path(os.environ.get("MONO_DECK_DERIVED_DATA_PATH", str(Path(tempfile.gettempdir()) / "mono-deck-derived-data")))
     # Keep the log outside the disposable test environment, including on failure.
-    log = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="modu-tests-", suffix=".log", delete=False)
-    directory = Path(tempfile.mkdtemp(prefix="modu-test-run-"))
-    suite = f"ModuTests.{uuid.uuid4()}"
+    log = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="mono-deck-tests-", suffix=".log", delete=False)
+    directory = Path(tempfile.mkdtemp(prefix="mono-deck-test-run-"))
+    suite = f"MonoDeckTests.{uuid.uuid4()}"
     jobs = Jobs()
     progress = TestProgress(enabled=not verbose and "-enumerate-tests" not in extra, started=started)
     status = 1
@@ -54,7 +54,7 @@ def run_tests(test_filter, extra, verbose=False):
     try:
         environment = test_environment(directory, suite)
         results, explicit_results = result_path(extra, directory)
-        command = ["xcodebuild", "-project", str(ROOT / "ModuDesktop.xcodeproj"), "-scheme", "ModuDesktop",
+        command = ["xcodebuild", "-project", str(ROOT / "MonoDeck.xcodeproj"), "-scheme", "MonoDeck",
                    "-configuration", "Debug", "-destination", "platform=macOS,arch=arm64",
                    "-derivedDataPath", str(derived), "-onlyUsePackageVersionsFromResolvedFile",
                    f"-only-testing:{test_filter}", "-parallel-testing-enabled", "NO",
@@ -289,17 +289,17 @@ def print_failure_summary(path, reported=()):
 def test_environment(directory, suite):
     environment = dict(os.environ)
     for key in list(environment):
-        if key.startswith(("MODU_TEST_", "TEST_RUNNER_MODU_TEST_")) or key in ("MODU_UNIT_TEST_HOST", "TEST_RUNNER_MODU_UNIT_TEST_HOST"):
+        if key.startswith(("MONO_DECK_TEST_", "TEST_RUNNER_MONO_DECK_TEST_")) or key in ("MONO_DECK_UNIT_TEST_HOST", "TEST_RUNNER_MONO_DECK_UNIT_TEST_HOST"):
             del environment[key]
     for name in ("home", "support", "tmp", "hosts"):
         (directory / name).mkdir()
     shell = directory / "login-shell"
     shell.write_text("#!/bin/sh\nexit 1\n")
     shell.chmod(0o755)
-    values = {"MODU_TEST_DEFAULTS": suite, "MODU_TEST_SUPPORT_DIRECTORY": str(directory / "support"),
-              "MODU_TEST_HOME_DIRECTORY": str(directory / "home"), "MODU_TEST_LOGIN_SHELL": str(shell),
-              "MODU_TEST_SESSION_DIRECTORY": str(directory), "TMPDIR": str(directory / "tmp") + "/",
-              "MODU_UNIT_TEST_HOST": "1"}
+    values = {"MONO_DECK_TEST_DEFAULTS": suite, "MONO_DECK_TEST_SUPPORT_DIRECTORY": str(directory / "support"),
+              "MONO_DECK_TEST_HOME_DIRECTORY": str(directory / "home"), "MONO_DECK_TEST_LOGIN_SHELL": str(shell),
+              "MONO_DECK_TEST_SESSION_DIRECTORY": str(directory), "TMPDIR": str(directory / "tmp") + "/",
+              "MONO_DECK_UNIT_TEST_HOST": "1"}
     for key, value in values.items():
         environment[key] = value
         environment[f"TEST_RUNNER_{key}"] = value

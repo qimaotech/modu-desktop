@@ -6,13 +6,13 @@
 
 | 模型 | 职责 |
 | --- | --- |
-| [WorkspaceModel](ModuDesktop/Features/Workspace/WorkspaceModel.swift) | 工作区加载、侧栏与选择 |
-| [ManagementModel](ModuDesktop/Features/Management/ManagementModel.swift) | 管理表单、预览与增删操作 |
-| [RepositoryDetailModel](ModuDesktop/Features/RepositoryBrowser/RepositoryDetailModel.swift) | Git 详情、状态缓存与后台预加载 |
-| [GlobalShortcutModel](ModuDesktop/Features/Settings/GlobalShortcutModel.swift) | 全局快捷键配置与录制 |
-| [AppUpdateModel](ModuDesktop/Features/Updates/AppUpdateModel.swift) | 更新检查、安装准备与重启交接 |
+| [WorkspaceModel](MonoDeck/Features/Workspace/WorkspaceModel.swift) | 工作区加载、侧栏与选择 |
+| [ManagementModel](MonoDeck/Features/Management/ManagementModel.swift) | 管理表单、预览与增删操作 |
+| [RepositoryDetailModel](MonoDeck/Features/RepositoryBrowser/RepositoryDetailModel.swift) | Git 详情、状态缓存与后台预加载 |
+| [GlobalShortcutModel](MonoDeck/Features/Settings/GlobalShortcutModel.swift) | 全局快捷键配置与录制 |
+| [AppUpdateModel](MonoDeck/Features/Updates/AppUpdateModel.swift) | 更新检查、安装准备与重启交接 |
 
-- 工作区与管理操作复用 [OperationLifecycle](ModuDesktop/App/OperationLifecycle.swift) 和 [OperationPresentation](ModuDesktop/App/OperationPresentation.swift)；详情与更新独立管理任务。异步结果发布前复核操作标识、生命周期和当前上下文。
+- 工作区与管理操作复用 [OperationLifecycle](MonoDeck/App/OperationLifecycle.swift) 和 [OperationPresentation](MonoDeck/App/OperationPresentation.swift)；详情与更新独立管理任务。异步结果发布前复核操作标识、生命周期和当前上下文。
 - 取消请求与等待收尾分开处理；切换、写操作和退出覆盖读取、事件筛选、扫描、只读重载及辅助进程。维护不能等待自身循环；旧后台任务收尾前保留需求，不派发新任务，前台详情可独立启动。
 - 写操作和退出前停止相关监听与防抖，等待读取结束；退出再尽力保存缓存，最后清理 mock。取消或失败按实际效果反馈，不承诺整体回滚。
 
@@ -25,9 +25,9 @@
 - 切换或刷新立即取消后台读取并优先启动当前详情，不等待整个队列。后台、维护、写操作和退出暂停派发并取消、收尾；恢复后只处理仍在范围内的资源。后台成功只更新目标快照、侧栏状态和缓存，失败静默保留旧快照，不修改页面、加载状态、监听或弹窗。
 - 切换资源先回显同一登记身份的成功内存快照，再核对文件身份；身份失效时丢弃旧缓存，仍新鲜且上下文有效的本进程结果可复用。磁盘恢复须先核对登记、仓库及 worktree 文件身份，再继续实时读取，不视为实时成功。每个异步阶段及缓存写入前复核取消、工作区、资源身份与失效代际，防止旧结果回流。
 - 业务操作按共享 Git 仓库族失效并保留成功快照；登记删除或身份变化移除缓存，切换工作区清空内存。历史按仓库实体和 HEAD/base OID 复用；shallow、grafts、replace refs 等改变历史语义时绕过普通缓存，查询前后复核依赖。
-- 磁盘仅保存完整成功详情与两侧完整历史；损坏、版本不符、写入失败静默回退。原子写入、容量淘汰与多实例协调不得让旧观察覆盖新结果；失效移除待写项，切换不强制刷盘。容量、合并写入与清理期限以 [RepositoryDiskCache](ModuCore/Infrastructure/Persistence/RepositoryDiskCache.swift) 为准，历史复用见 [RepositoryHistoryCache](ModuCore/Workflows/RepositoryHistoryCache.swift)。正式启动注入缓存，直接构造模型默认禁用，mock 和测试使用本次临时目录。
-- [ResourceReadSession](ModuCore/Workflows/ResourceReadSession.swift) 只供 App 只读流程复用成功上下文，不跨轮共享可取消任务，也不用于 CLI 或写操作安全检查。登记、文件身份与有效 Git 配置依赖变化须重新验证；无法可靠确认时放弃复用，不修改用户 Git 配置。
-- 文件监听覆盖[当前资源](ModuCore/Infrastructure/FileSystem/ResourceChangeMonitor.swift)和[工作区登记](ModuCore/Infrastructure/FileSystem/WorkspaceRecordChangeMonitor.swift)；后台保留失效，前台恢复处理，监听不可用时补查。普通事件可防抖并按真实 ignore 规则筛选，重要元数据或不确定事件直接刷新。前台失败提示须等待空闲并复核上下文；切换、取消或成功后丢弃，持续相同错误去重，手动刷新允许重试。
+- 磁盘仅保存完整成功详情与两侧完整历史；损坏、版本不符、写入失败静默回退。原子写入、容量淘汰与多实例协调不得让旧观察覆盖新结果；失效移除待写项，切换不强制刷盘。容量、合并写入与清理期限以 [RepositoryDiskCache](MonoDeckCore/Infrastructure/Persistence/RepositoryDiskCache.swift) 为准，历史复用见 [RepositoryHistoryCache](MonoDeckCore/Workflows/RepositoryHistoryCache.swift)。正式启动注入缓存，直接构造模型默认禁用，mock 和测试使用本次临时目录。
+- [ResourceReadSession](MonoDeckCore/Workflows/ResourceReadSession.swift) 只供 App 只读流程复用成功上下文，不跨轮共享可取消任务，也不用于 CLI 或写操作安全检查。登记、文件身份与有效 Git 配置依赖变化须重新验证；无法可靠确认时放弃复用，不修改用户 Git 配置。
+- 文件监听覆盖[当前资源](MonoDeckCore/Infrastructure/FileSystem/ResourceChangeMonitor.swift)和[工作区登记](MonoDeckCore/Infrastructure/FileSystem/WorkspaceRecordChangeMonitor.swift)；后台保留失效，前台恢复处理，监听不可用时补查。普通事件可防抖并按真实 ignore 规则筛选，重要元数据或不确定事件直接刷新。前台失败提示须等待空闲并复核上下文；切换、取消或成功后丢弃，持续相同错误去重，手动刷新允许重试。
 - Git 浏览与 CLI 查询只读本地数据，不 fetch。App 隐藏常规 submodule 内部及指针变化，仍保留 `.gitmodules`、类型转换和冲突；CLI 与业务安全检查读取完整状态，不能把普通嵌套仓库当子模块。
 
 ### 工作区加载与维护
@@ -39,20 +39,20 @@
 
 ### 启动与设置
 
-- [AppModel](ModuDesktop/App/AppModel.swift) 先检查 CLI，再只读恢复工作区与页面；当前首轮完整详情完成、失败或取消后才维护，维护结束且读取允许后再补齐后台队列。PATH 检查不阻塞页面；无当前选择时直接进入维护。
+- [AppModel](MonoDeck/App/AppModel.swift) 先检查 CLI，再只读恢复工作区与页面；当前首轮完整详情完成、失败或取消后才维护，维护结束且读取允许后再补齐后台队列。PATH 检查不阻塞页面；无当前选择时直接进入维护。
 - 维护不提供用户取消入口；启动维护支持内部取消，手动维护期间阻止工作区切换，退出等待收尾。失败保留只读浏览、错误与重试入口，提示等待前台空闲；重试或切换成功清除旧失败。
-- [SetupModel](ModuDesktop/Features/Setup/SetupModel.swift) 展示前完成初始检查，复用启动 CLI 检查结果并绑定工作区路径；切换后重新准备。同次展示避免重复检查，关闭后重开重新检查；准备任务纳入启动取消与退出等待。
+- [SetupModel](MonoDeck/Features/Setup/SetupModel.swift) 展示前完成初始检查，复用启动 CLI 检查结果并绑定工作区路径；切换后重新准备。同次展示避免重复检查，关闭后重开重新检查；准备任务纳入启动取消与退出等待。
 
 ### 自动更新
 
-- [AppUpdateModel](ModuDesktop/Features/Updates/AppUpdateModel.swift) 持久化自动检查开关和尝试时间，手动、失败或取消也计入自动间隔；已有待安装版本或窗口时不重复检查，mock 与测试不发起真实请求。
+- [AppUpdateModel](MonoDeck/Features/Updates/AppUpdateModel.swift) 持久化自动检查开关和尝试时间，手动、失败或取消也计入自动间隔；已有待安装版本或窗口时不重复检查，mock 与测试不发起真实请求。
 - 后台无新版或失败保持静默，新版等待启动就绪、前台且业务及提示结束后展示。手动检查可接替后台请求，关闭自动检查取消后台请求，过期结果不得发布；下载与安装须用户确认。
-- [AppUpdateInstaller](ModuCore/Infrastructure/AppUpdateInstaller.swift) 校验并在应用旁暂存新版，通过独立 CLI 安装进程接管退出后的替换与启动。App 先完成异步收尾、确认安装进程就绪再退出，避免 AppKit 延迟退出阻塞；退出超时回传失败并允许重试。
+- [AppUpdateInstaller](MonoDeckCore/Infrastructure/AppUpdateInstaller.swift) 校验并在应用旁暂存新版，通过独立 CLI 安装进程接管退出后的替换与启动。App 先完成异步收尾、确认安装进程就绪再退出，避免 AppKit 延迟退出阻塞；退出超时回传失败并允许重试。
 - 请求与安装标识隔离取消及回传，不修改工作区数据。成功准备、完整性失败、取消及退出清理本次下载；其他准备失败可保留供重试。替换后不自动回滚，部分失败保留实际效果与诊断；安装要求见[安装包契约](#ci-与安装包契约)。
 
 ## 构建启动与调试
 
-需要完整 Xcode（含命令行工具）和 Task 3，在仓库根目录执行。系统与 SDK 见 [Xcode 工程](ModuDesktop.xcodeproj/project.pbxproj)，工具链见 [CI](.github/workflows/ci.yml)，依赖由 [Package.resolved](ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved) 锁定。完整任务与参数见 [Taskfile.yml](Taskfile.yml) 和 [build_and_run.sh](script/build_and_run.sh)；`task --dry <任务>` 查看命令，`--` 后透传额外参数。
+需要完整 Xcode（含命令行工具）和 Task 3，在仓库根目录执行。系统与 SDK 见 [Xcode 工程](MonoDeck.xcodeproj/project.pbxproj)，工具链见 [CI](.github/workflows/ci.yml)，依赖由 [Package.resolved](MonoDeck.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved) 锁定。完整任务与参数见 [Taskfile.yml](Taskfile.yml) 和 [build_and_run.sh](script/build_and_run.sh)；`task --dry <任务>` 查看命令，`--` 后透传额外参数。
 
 | 任务 | 命令 |
 | --- | --- |
@@ -62,22 +62,22 @@
 | 隔离构建与启动验证，输出 PID 后保持运行 | `task verify -- --mock linked-worktree-selected` |
 | 隔离 LLDB 调试，输入 run 启动 | `task debug -- --mock linked-worktree-selected` |
 | 本次隔离实例的进程日志 | `task logs -- --mock linked-worktree-selected` |
-| 本次隔离实例的 Modu subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
+| 本次隔离实例的 MonoDeck subsystem 日志 | `task telemetry -- --mock linked-worktree-selected` |
 
 - 构建或启动改动优先用 mock verify；它只证明启动完成，不代表工作区加载或界面验证通过。浏览器验证仅在用户明确要求时执行。
-- mock 每次创建新场景，复用开发构建产物；需要独立产物时指定本次专用 `MODU_DERIVED_DATA_PATH`。场景准备见 [prepare_mock_workspace.py](script/prepare_mock_workspace.py)，启动验证见 [verify_app.swift](script/verify_app.swift)，验证后按[临时实例收尾](#临时实例收尾)退出并清理。
+- mock 每次创建新场景，复用开发构建产物；需要独立产物时指定本次专用 `MONO_DECK_DERIVED_DATA_PATH`。场景准备见 [prepare_mock_workspace.py](script/prepare_mock_workspace.py)，启动验证见 [verify_app.swift](script/verify_app.swift)，验证后按[临时实例收尾](#临时实例收尾)退出并清理。
 
 ### 偏好与工作区选择
 
-- Debug 使用 `fun.armantang.ModuDesktop.development` 偏好域，不迁移正式版偏好；`MODU_TEST_DEFAULTS` 与 mock 配置优先。数据、锁和 CLI 的共享风险见 [AGENTS.md](AGENTS.md#关键风险)。
-- 页面选择与展开状态按工作区、文件树折叠按资源保存，临时加载失败不覆盖选择。窗口几何与布局在当前偏好域保存；恢复限制在可用屏幕内，全屏期间不覆盖普通窗口记录。实现见 [AppPreferences](ModuDesktop/App/AppPreferences.swift) 与 [AppDelegate](ModuDesktop/App/AppDelegate.swift)。
-- `--reset` 仅支持不带 mock 的 run，构建成功后只清除工作区选择，保留浏览偏好、CLI 和工作区数据；使用测试偏好域时清除对应键，并取消 `MODU_TEST_WORKSPACE` 覆盖。
+- Debug 使用 `fun.armantang.MonoDeck.development` 偏好域，不迁移正式版偏好；`MONO_DECK_TEST_DEFAULTS` 与 mock 配置优先。数据、锁和 CLI 的共享风险见 [AGENTS.md](AGENTS.md#关键风险)。
+- 页面选择与展开状态按工作区、文件树折叠按资源保存，临时加载失败不覆盖选择。窗口几何与布局在当前偏好域保存；恢复限制在可用屏幕内，全屏期间不覆盖普通窗口记录。实现见 [AppPreferences](MonoDeck/App/AppPreferences.swift) 与 [AppDelegate](MonoDeck/App/AppDelegate.swift)。
+- `--reset` 仅支持不带 mock 的 run，构建成功后只清除工作区选择，保留浏览偏好、CLI 和工作区数据；使用测试偏好域时清除对应键，并取消 `MONO_DECK_TEST_WORKSPACE` 覆盖。
 
 ### 构建与日志诊断
 
 - 启动任务追加 `-- --verbose` 查看完整构建日志，如 `task mock -- --verbose`。
 - logs 与 telemetry 启动验证后按本次 PID 收集，失败不进入日志流，可能遗漏最早启动日志；Ctrl-C 只停止日志，App 继续运行。
-- `MODU_READ_DIAGNOSTICS=1` 向标准错误输出本地 JSON 读取诊断，包含阶段、命令量和缓存统计，不记录命令参数或仓库路径。
+- `MONO_DECK_READ_DIAGNOSTICS=1` 向标准错误输出本地 JSON 读取诊断，包含阶段、命令量和缓存统计，不记录命令参数或仓库路径。
 
 ## 测试执行与诊断
 
@@ -85,17 +85,17 @@
 
 | 任务 | 命令 |
 | --- | --- |
-| 最小范围测试 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>'` |
+| 最小范围测试 | `task test TEST_FILTER='MonoDeckTests/<测试类或方法>'` |
 | 枚举方法标识（Swift Testing 含括号） | `task test -- -enumerate-tests` |
-| 保留结果包 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- -resultBundlePath "/tmp/Modu Tests.xcresult"` |
-| 实时完整日志 | `task test TEST_FILTER='ModuDesktopTests/<测试类或方法>' -- --verbose` |
+| 保留结果包 | `task test TEST_FILTER='MonoDeckTests/<测试类或方法>' -- -resultBundlePath "/tmp/MonoDeck Tests.xcresult"` |
+| 实时完整日志 | `task test TEST_FILTER='MonoDeckTests/<测试类或方法>' -- --verbose` |
 | 明确需要时运行全量测试 | `task test` |
 
 - 沙箱执行前只读核对用户级 SwiftPM 缓存写入权限；已有日志确认需提权时首次即申请，不重复已知失败的普通执行，权限变化后重新评估。
 - 按输出的精确路径读取或删除完整日志，不按目录前缀清理。测试环境隔离，默认删除结果包；退出或清理无法确认时保留环境并返回失败。
 - 零用例或全跳过不算通过，枚举除外；筛选失败先核对方法标识与 `TEST_FILTER`。
-- mock 测试关注场景准备、外部工具目标和隔离；业务行为复用已有测试。读取性能比较按需运行 `MODU_READ_BENCHMARK=1 TEST_RUNNER_MODU_READ_BENCHMARK=1 task test TEST_FILTER='ModuDesktopTests/RepositoryReadPerformanceTests'`；确定性断言使用次数或调度条件，耗时只作比较。
-- Git 夹具复用 [Fixture](ModuDesktopTests/ModuDesktopTests.swift)：已有状态用 `Fixture(template:)`，未初始化目录用 `Fixture(createRemote: false)`；被测初始化、添加与创建流程仍现场执行。模板仅在本轮测试环境内共享，各用例独立复制并重建记录和远端映射；直接从 Xcode 运行不共享模板。
+- mock 测试关注场景准备、外部工具目标和隔离；业务行为复用已有测试。读取性能比较按需运行 `MONO_DECK_READ_BENCHMARK=1 TEST_RUNNER_MONO_DECK_READ_BENCHMARK=1 task test TEST_FILTER='MonoDeckTests/RepositoryReadPerformanceTests'`；确定性断言使用次数或调度条件，耗时只作比较。
+- Git 夹具复用 [Fixture](MonoDeckTests/MonoDeckTests.swift)：已有状态用 `Fixture(template:)`，未初始化目录用 `Fixture(createRemote: false)`；被测初始化、添加与创建流程仍现场执行。模板仅在本轮测试环境内共享，各用例独立复制并重建记录和远端映射；直接从 Xcode 运行不共享模板。
 - 超时与取消测试使用可控等待和可注入时限；观察中间状态时用可取消替身阻塞并显式放行。保留真实文件锁、进程组清理及底层锁超时覆盖，不改变生产默认策略。
 
 ## 临时实例收尾
@@ -109,12 +109,12 @@
 
 ### 版本生成与本地准备
 
-- 版本只改 [Version.xcconfig](Version.xcconfig)，[generate_version.sh](script/generate_version.sh) 生成 App、CLI 共用的 `ModuVersion`。完整版本准备流程仅在显式调用[发布 skill](.agents/skills/release-modu-desktop/SKILL.md)时执行。
+- 版本只改 [Version.xcconfig](Version.xcconfig)，[generate_version.sh](script/generate_version.sh) 生成 App、CLI 共用的 `MonoDeckVersion`。完整版本准备流程仅在显式调用[发布 skill](.agents/skills/release-mono-deck/SKILL.md)时执行。
 - 修改代码或文档不隐含暂存、提交或发布授权。显式请求完整发布流程仅授权 `Version.xcconfig`、`CHANGELOG.md` 暂存、提交及对应本地 tag；推送分支、tag 和创建 GitHub Release 仍需单独授权。推送 `v*` tag 会触发 CI 发布。
 
 | 任务 | 命令 |
 | --- | --- |
-| 修改版本后、提交前核对 App 与 CLI 版本 | `task test TEST_FILTER=ModuDesktopTests/VersionTests` |
+| 修改版本后、提交前核对 App 与 CLI 版本 | `task test TEST_FILTER=MonoDeckTests/VersionTests` |
 | 校验并预览当前版本发布说明 | `python3 script/release_notes.py v<版本号>` |
 | 打包 arm64 发布 DMG，本地完成后自动打开 | `task package` |
 
@@ -123,7 +123,7 @@
 ### CI 与安装包契约
 
 - [CI](.github/workflows/ci.yml) 的 `v*` tag 流程校验版本与 CHANGELOG，打包和串行全量测试均通过后才发布；测试失败时上传结果包。PR 和手动触发仅构建打包，main push 不触发。
-- tag、产品版本、发布说明与 `Modu-<版本号>-arm64.dmg` 必须一致；[更新检查](ModuCore/Infrastructure/AppUpdateService.swift) 只接受更高版本的最新正式 Release。
+- tag、产品版本、发布说明与 `MonoDeck-<版本号>-arm64.dmg` 必须一致；[更新检查](MonoDeckCore/Infrastructure/AppUpdateService.swift) 只接受更高版本的最新正式 Release。
 - 自动安装要求附件元数据提供有效 SHA-256 `digest`，下载后核对文件大小和摘要，缺失或不匹配拒绝安装。
 
 ## 文档与提示词维护
@@ -133,9 +133,9 @@
 
 | 提示词 | 实现核对入口 |
 | --- | --- |
-| [内置工作流](ModuDesktop/Resources/modu-workflow/SKILL.md)、[调用配置](ModuDesktop/Resources/modu-workflow/agents/openai.yaml) | [CLI 命令](ModuCLI/Commands/)与 [Core](ModuCore/Workflows/) 操作结果 |
-| [发布流程](.agents/skills/release-modu-desktop/SKILL.md)、[调用配置](.agents/skills/release-modu-desktop/agents/openai.yaml) | `Version.xcconfig`、[发布说明脚本](script/release_notes.py)与 CI |
-| [手动自检](.agents/skills/check-modu-desktop/SKILL.md)、[调用配置](.agents/skills/check-modu-desktop/agents/openai.yaml) | 检查范围、测试取舍与交付约束 |
+| [内置工作流](MonoDeck/Resources/mono-deck-workflow/SKILL.md)、[调用配置](MonoDeck/Resources/mono-deck-workflow/agents/openai.yaml) | [CLI 命令](MonoDeckCLI/Commands/)与 [Core](MonoDeckCore/Workflows/) 操作结果 |
+| [发布流程](.agents/skills/release-mono-deck/SKILL.md)、[调用配置](.agents/skills/release-mono-deck/agents/openai.yaml) | `Version.xcconfig`、[发布说明脚本](script/release_notes.py)与 CI |
+| [手动自检](.agents/skills/check-mono-deck/SKILL.md)、[调用配置](.agents/skills/check-mono-deck/agents/openai.yaml) | 检查范围、测试取舍与交付约束 |
 
-- 内置工作流在 App 资源目录维护，工作区副本的覆盖与自定义规则见 [README](README.md#工作区文件与自动提交)，同步实现见 [WorkspaceService](ModuCore/Workflows/WorkspaceService.swift)。
+- 内置工作流在 App 资源目录维护，工作区副本的覆盖与自定义规则见 [README](README.md#工作区文件与自动提交)，同步实现见 [WorkspaceService](MonoDeckCore/Workflows/WorkspaceService.swift)。
 - 内置工作流允许自动调用，发布和自检仅手动调用；修改 skill 时同步核对 description、`agents/openai.yaml` 的 default_prompt 与调用策略。

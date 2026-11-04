@@ -13,15 +13,15 @@ func quitApplication() -> Int32 {
     } else if CommandLine.arguments.count == 2, let value = Int32(CommandLine.arguments[1]), value > 0 {
         pid = value; identity = nil
     } else {
-        report("usage: quit_app.swift <Modu PID> | --identity <test-host.json>")
+        report("usage: quit_app.swift <MonoDeck PID> | --identity <test-host.json>")
         return 2
     }
     guard let application = NSRunningApplication(processIdentifier: pid), !application.isTerminated else {
         print("App is not running (PID \(pid)).")
         return 0
     }
-    guard application.bundleIdentifier == "fun.armantang.ModuDesktop" else {
-        report("Refusing to quit a non-Modu process (PID \(pid)).")
+    guard application.bundleIdentifier == "fun.armantang.MonoDeck" else {
+        report("Refusing to quit a non-MonoDeck process (PID \(pid)).")
         return 1
     }
     if let identity {

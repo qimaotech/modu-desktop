@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ICON_DOCUMENT="$ROOT_DIR/ModuDesktop/AppIcon.icon"
-MODU_XCODE_CONTENTS="$(dirname "$(xcode-select -p)")"
-ICON_TOOL="$MODU_XCODE_CONTENTS/Applications/Icon Composer.app/Contents/Executables/ictool"
+ICON_DOCUMENT="$ROOT_DIR/MonoDeck/AppIcon.icon"
+MONO_DECK_XCODE_CONTENTS="$(dirname "$(xcode-select -p)")"
+ICON_TOOL="$MONO_DECK_XCODE_CONTENTS/Applications/Icon Composer.app/Contents/Executables/ictool"
 
 main() {
   if [[ $# -gt 1 ]]; then
@@ -16,7 +16,7 @@ main() {
     exit 1
   fi
 
-  local output_dir="${1:-${TMPDIR%/}/modu-app-icon-previews}"
+  local output_dir="${1:-${TMPDIR%/}/mono-deck-app-icon-previews}"
   local rendition
   mkdir -p "$output_dir"
   for rendition in Default Dark ClearLight ClearDark TintedLight TintedDark; do

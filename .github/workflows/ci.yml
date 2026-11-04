@@ -39,7 +39,7 @@ jobs:
 
       - name: Show toolchain
         run: |
-          echo "MODU_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
+          echo "MONO_DECK_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
           xcodebuild -version
           sw_vers
 
@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with: &package_cache
           path: ${{ runner.temp }}/DerivedData/SourcePackages
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-26.6-swiftpm-${{ hashFiles('ModuDesktop.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-26.6-swiftpm-${{ hashFiles('MonoDeck.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
       - name: Install Task
         uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
@@ -58,7 +58,7 @@ jobs:
       - name: Build and package arm64 app
         id: package
         env:
-          MODU_PACKAGE_DIR: ${{ runner.temp }}/package
+          MONO_DECK_PACKAGE_DIR: ${{ runner.temp }}/package
         run: task package
 
       - name: Save Swift packages
@@ -88,7 +88,7 @@ jobs:
 
       - name: Show toolchain
         run: |
-          echo "MODU_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
+          echo "MONO_DECK_DERIVED_DATA_PATH=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
           xcodebuild -version
           sw_vers
 

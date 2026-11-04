@@ -1,0 +1,7 @@
+interface:
+  display_name: "MonoDeck Workflow"
+  short_description: "Manage MonoDeck repositories and worktree groups"
+  default_prompt: "Use $mono-deck-workflow to inspect this workspace and list its repositories and worktree groups."
+
+policy:
+  allow_implicit_invocation: true

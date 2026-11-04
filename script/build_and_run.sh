@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Modu"
-BUNDLE_ID="fun.armantang.ModuDesktop"
-SCHEME="ModuDesktop"
+APP_NAME="MonoDeck"
+BUNDLE_ID="fun.armantang.MonoDeck"
+SCHEME="MonoDeck"
 CONFIGURATION="Debug"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_PATH="$ROOT_DIR/ModuDesktop.xcodeproj"
-DERIVED_DATA_PATH="${MODU_DERIVED_DATA_PATH:-${TMPDIR%/}/modu-desktop-derived-data}"
+PROJECT_PATH="$ROOT_DIR/MonoDeck.xcodeproj"
+DERIVED_DATA_PATH="${MONO_DECK_DERIVED_DATA_PATH:-${TMPDIR%/}/mono-deck-derived-data}"
 APP_BUNDLE="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 MOCK_SCENARIO=""
@@ -94,11 +94,11 @@ stop_app() {
 }
 
 reset_saved_workspace() {
-  local preferences_domain="${MODU_TEST_DEFAULTS:-$BUNDLE_ID.development}"
+  local preferences_domain="${MONO_DECK_TEST_DEFAULTS:-$BUNDLE_ID.development}"
   if /usr/bin/defaults read "$preferences_domain" workspace >/dev/null 2>&1; then
     /usr/bin/defaults delete "$preferences_domain" workspace
   fi
-  unset MODU_TEST_WORKSPACE
+  unset MONO_DECK_TEST_WORKSPACE
   echo "Cleared saved workspace selection ($preferences_domain)."
 }
 
@@ -132,7 +132,7 @@ open_app() {
   fi
   local arguments=(-n)
   local variable
-  for variable in MODU_TEST_DEFAULTS MODU_TEST_WORKSPACE MODU_TEST_SUPPORT_DIRECTORY MODU_TEST_HOME_DIRECTORY MODU_TEST_LOGIN_SHELL; do
+  for variable in MONO_DECK_TEST_DEFAULTS MONO_DECK_TEST_WORKSPACE MONO_DECK_TEST_SUPPORT_DIRECTORY MONO_DECK_TEST_HOME_DIRECTORY MONO_DECK_TEST_LOGIN_SHELL; do
     if [[ -n "${!variable:-}" ]]; then arguments+=(--env "$variable=${!variable}"); fi
   done
   MOCK_LAUNCH_ATTEMPTED=true
@@ -141,7 +141,7 @@ open_app() {
 }
 
 stream_app_logs() {
-  APP_LAUNCH_LOG="$(mktemp "${TMPDIR%/}/modu-app-launch.XXXXXX")"
+  APP_LAUNCH_LOG="$(mktemp "${TMPDIR%/}/mono-deck-app-launch.XXXXXX")"
   verify_app --activate
   local pid
   pid="$(sed -n 's/^App instance PID: //p' "$APP_LAUNCH_LOG")"

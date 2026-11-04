@@ -3,28 +3,28 @@
 ## 业务边界
 
 - 工作区根目录是 Git 主工作树，Group 根目录及成员分别是工作区仓库和所选业务仓库的 linked worktree。
-- Git Browser 查看更改与提交，业务开发、提交和合并通过外部工具完成；Modu 会按需自动提交工作区的 `.gitignore` 和内置工作流文件。
+- Git Browser 查看更改与提交，业务开发、提交和合并通过外部工具完成；MonoDeck 会按需自动提交工作区的 `.gitignore` 和内置工作流文件。
 - 取消或部分失败可能保留已完成的效果；反馈区分已完成、未完成和保留数据，不承诺整体回滚。
 
 ## 目录结构
 
 | 入口 | 内容 |
 | --- | --- |
-| [ModuCore/](ModuCore/) | App 与 CLI 共享的领域模型、业务流程和基础设施 |
-| [ModuDesktop/](ModuDesktop/) | App 协调、功能模型与界面、平台适配及资源 |
-| [ModuCLI/](ModuCLI/) | CLI 命令与参数解析 |
-| [ModuDesktopTests/](ModuDesktopTests/) | 单元、Git 集成与 CLI 测试及夹具 |
+| [MonoDeckCore/](MonoDeckCore/) | App 与 CLI 共享的领域模型、业务流程和基础设施 |
+| [MonoDeck/](MonoDeck/) | App 协调、功能模型与界面、平台适配及资源 |
+| [MonoDeckCLI/](MonoDeckCLI/) | CLI 命令与参数解析 |
+| [MonoDeckTests/](MonoDeckTests/) | 单元、Git 集成与 CLI 测试及夹具 |
 | [Taskfile.yml](Taskfile.yml)、[script/](script/) | 构建、启动、测试、打包与临时场景入口 |
 
 ## 工程约定
 
 - 修改前阅读相关实现与必要测试；业务规则、数据格式和命令参数以代码为准。
-- `ModuDesktop` 与 `ModuCLI` 复用 `ModuCore`，Core 不依赖界面，业务与副作用放在 Core，View 只渲染状态与转发意图；保持现有 target 边界，不新增 framework/package。
+- `MonoDeck` 与 `MonoDeckCLI` 复用 `MonoDeckCore`，Core 不依赖界面，业务与副作用放在 Core，View 只渲染状态与转发意图；保持现有 target 边界，不新增 framework/package。
 - `AppModel` 负责依赖组装、启动、工作区切换、外部工具与退出协调；功能状态放在 `Features/` 下的模型中。
 - 界面状态运行在 `@MainActor`，异步任务支持取消，发布结果前检查生命周期标识和当前功能上下文。
-- Git 与外部命令复用 [CommandRunner.swift](ModuCore/Infrastructure/Process/CommandRunner.swift)。
+- Git 与外部命令复用 [CommandRunner.swift](MonoDeckCore/Infrastructure/Process/CommandRunner.swift)。
 - 界面沿用现有 SwiftUI/AppKit 组件、系统语义字体和材质；资源维护在 App 资源目录中。
-- 产品版本与构建号只改 `Version.xcconfig`，不修改生成的 `ModuVersion`；工作区 YAML、CLI JSON schema 与依赖版本独立维护。
+- 产品版本与构建号只改 `Version.xcconfig`，不修改生成的 `MonoDeckVersion`；工作区 YAML、CLI JSON schema 与依赖版本独立维护。
 
 ## 验证与交付
 
@@ -38,7 +38,7 @@
 
 ## 关键风险
 
-- 不带 mock 的 run、debug、logs、telemetry 会先停止已有 Modu 实例；Debug 虽有独立偏好，但与正式版共享工作区数据、锁和 CLI，临时验证优先使用 mock 隔离。
+- 不带 mock 的 run、debug、logs、telemetry 会先停止已有 MonoDeck 实例；Debug 虽有独立偏好，但与正式版共享工作区数据、锁和 CLI，临时验证优先使用 mock 隔离。
 - 临时验证须确认本次实例退出并清理本次数据与辅助进程，失败或中断也适用；用户要求保留的实例除外。
 - 只处理确认归属本次验证的进程与数据；禁止按进程名批量退出、按目录前缀清理或清理既有实例、共享缓存与外部工具。
 - 推送 `v*` tag 会触发 CI 发布；授权边界见[版本打包与发布](DEVELOPMENT.md#版本打包与发布)。

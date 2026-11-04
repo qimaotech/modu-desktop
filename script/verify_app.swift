@@ -15,8 +15,8 @@ func verifyApplication() -> Int32 {
     configuration.promptsUserIfNeeded = false
     configuration.arguments = Array(arguments.dropFirst())
     let environment = ProcessInfo.processInfo.environment
-    let keys = ["MODU_TEST_DEFAULTS", "MODU_TEST_WORKSPACE", "MODU_TEST_SUPPORT_DIRECTORY", "MODU_TEST_HOME_DIRECTORY", "MODU_TEST_LOGIN_SHELL",
-                "MODU_UNIT_TEST_HOST", "MODU_TEST_SESSION_DIRECTORY"]
+    let keys = ["MONO_DECK_TEST_DEFAULTS", "MONO_DECK_TEST_WORKSPACE", "MONO_DECK_TEST_SUPPORT_DIRECTORY", "MONO_DECK_TEST_HOME_DIRECTORY", "MONO_DECK_TEST_LOGIN_SHELL",
+                "MONO_DECK_UNIT_TEST_HOST", "MONO_DECK_TEST_SESSION_DIRECTORY"]
     let overrides = environment.filter { keys.contains($0.key) }
     if !overrides.isEmpty { configuration.environment = overrides }
 
