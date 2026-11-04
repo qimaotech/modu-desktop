@@ -364,6 +364,15 @@ import SwiftUI
             await model.workspace.refreshRecord()
             #expect(model.workspace.record == original && model.workspace.blocked == nil)
             #expect(!model.busy && !model.workspace.isReloading && model.workspace.maintenanceState == .failed)
+            let recordURL = fixture.service.store.recordURL(fixture.root)
+            let saved = try Data(contentsOf: recordURL)
+            try Data("invalid".utf8).write(to: recordURL)
+            await model.workspace.refreshRecord()
+            #expect(model.workspace.record == original && model.workspace.notice != nil && !model.workspace.canManage)
+            try saved.write(to: recordURL)
+            await model.workspace.refreshRecord()
+            #expect(model.workspace.record == original && model.workspace.notice == nil)
+            #expect(model.workspace.maintenanceState == .failed && !model.workspace.canManage)
             lease.unlock()
             await model.workspace.maintainWorkspace()
             #expect(model.workspace.record == original && model.workspace.maintenanceState == .ready && model.workspace.canManage)
@@ -594,7 +603,8 @@ import SwiftUI
         await model.activate()
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
         #expect(!PathSafety.exists(fixture.root.appending(path: ".gitignore")))
-        #expect(model.workspace.blocked != nil && model.presentation.result == nil)
+        #expect(model.workspace.record != nil && model.workspace.blocked == nil && model.workspace.notice != nil)
+        #expect(!model.workspace.canManage && model.presentation.result == nil)
 
         await model.workspace.maintainWorkspace()
         let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
@@ -610,6 +620,8 @@ import SwiftUI
         #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
         #expect(try String(contentsOf: skill, encoding: .utf8) == "user edit")
         #expect(try await fixture.service.git.oid("HEAD", at: fixture.root) == head)
+        #expect(model.workspace.canManage && model.workspace.notice == nil)
+        await model.workspace.stopReads()
     }
 
     @Test func queuedMaintenanceReloadWaitsForReadOnlyActivationAndIgnoresCancellation() async throws {
@@ -731,18 +743,22 @@ import SwiftUI
         try FileManager.default.removeItem(at: fixture.root.appending(path: ".git"))
 
         if implicit { await model.activate() } else { await model.workspace.maintainWorkspace() }
+        #expect(model.workspace.record != nil && model.workspace.blocked == nil && !model.workspace.canManage)
+        #expect(model.workspace.notice != nil)
         if implicit {
-            #expect(model.workspace.record == nil && model.workspace.blocked != nil)
+            #expect(model.workspace.maintenanceState == .ready)
         } else {
-            #expect(model.workspace.record != nil && model.workspace.maintenanceState == .failed && !model.workspace.canManage)
-            #expect(model.workspace.notice != nil)
+            #expect(model.workspace.maintenanceState == .failed)
         }
+        await model.workspace.waitForReadCancellation()
+        #expect(!model.workspace.details.hasActiveReads)
         #expect((model.presentation.result == nil) == implicit)
         #expect(model.presentation.isMaintenanceFailure == !implicit && !model.busy && !model.openingWorkspace)
         #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
         #expect(!PathSafety.exists(fixture.root.appending(path: ".agents")))
         if kind == "missing" { #expect(!PathSafety.exists(file)) }
         else { #expect(try Data(contentsOf: file) == Data("broken".utf8)) }
+        await model.workspace.stopReads()
     }
 
     @Test func reloadInitializationFailureReportsRetainedEffectsAndCanRetry() async throws {
@@ -1363,11 +1379,13 @@ import SwiftUI
         await welcome.workspace.stopReads()
     }
 
-    @Test func temporaryReadFailurePreservesTheSavedPageAndFileTreeState() async throws {
-        let fixture = try await Fixture(createRemote: false)
+    @Test(arguments: ["missing", "invalid"], [false, true])
+    func temporaryReadFailurePreservesBrowsingUntilValidationRecovers(_ kind: String, _ implicit: Bool) async throws {
+        let fixture = try await Fixture(template: .emptyWorkspace)
         defer { fixture.remove() }
         var now = ContinuousClock.now
-        let model = try await makeModel(fixture, now: { now })
+        let trace = fixture.directory.appending(path: "paused-read-trace")
+        let model = try await makeModel(fixture, trace: trace, now: { now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         try await fixture.prepareEmptyGroup("feature")
         model.workspace.record = try fixture.service.store.load(fixture.root)
@@ -1377,19 +1395,58 @@ import SwiftUI
         await model.workspace.detailPreloadTask?.value
         let recordURL = fixture.service.store.recordURL(fixture.root)
         let original = try Data(contentsOf: recordURL)
-        try Data("invalid".utf8).write(to: recordURL)
+        let record = try #require(model.workspace.record)
+        let summary = try #require(model.workspace.detail.summary)
+        let changes = try #require(model.workspace.detail.changes)
+        let expanded = model.workspace.expandedGroups
+        do {
+            if kind == "missing" { try FileManager.default.removeItem(at: recordURL) }
+            else { try Data("invalid".utf8).write(to: recordURL) }
 
-        await model.activate()
-        #expect(model.workspace.record == nil && model.workspace.selection == nil && model.workspace.blocked != nil)
-        let saved = try #require(model.defaults.data(forKey: model.workspace.sidebarPreferenceKey("selection")))
-        #expect(try JSONDecoder().decode(Resource.self, from: saved) == .group("feature"))
+            if implicit { await model.activate() } else { await model.workspace.refreshRecord() }
+            await model.workspace.waitForReadCancellation()
+            #expect(model.workspace.record == record && model.workspace.selection == .group("feature"))
+            #expect(model.workspace.blocked == nil && model.workspace.notice != nil && !model.workspace.canManage)
+            #expect(model.workspace.maintenanceState == .ready && !model.workspace.details.hasActiveReads)
+            #expect(model.workspace.detail.summary == summary && model.workspace.detail.changes == changes)
+            #expect(model.workspace.expandedGroups == expanded && model.workspace.details.collapsedPaths == ["Sources"])
+            let saved = try #require(model.defaults.data(forKey: model.workspace.sidebarPreferenceKey("selection")))
+            #expect(try JSONDecoder().decode(Resource.self, from: saved) == .group("feature"))
 
-        try original.write(to: recordURL)
-        now = now.advanced(by: .seconds(10))
-        await model.activate()
-        #expect(model.workspace.blocked == nil && model.workspace.selection == .group("feature"))
-        #expect(model.workspace.details.collapsedPaths == ["Sources"])
-        await model.workspace.detailPreloadTask?.value
+            try Data().write(to: trace)
+            try Data("new change".utf8).write(to: record.groupURL("feature").appending(path: "new.txt"))
+            model.workspace.selection = nil
+            model.workspace.selection = .group("feature")
+            model.workspace.refreshDetail(userInitiated: true)
+            model.workspace.setVisibleResources([.group("feature")], in: record.root)
+            model.workspace.setActive(false)
+            model.workspace.setActive(true)
+            #expect(!model.workspace.details.hasActiveReads)
+            #expect(model.workspace.detail.summary == summary && model.workspace.detail.changes == changes)
+            #expect(try Data(contentsOf: trace).isEmpty)
+
+            try original.write(to: recordURL)
+            let configURL = fixture.root.appending(path: ".git/config")
+            let config = try Data(contentsOf: configURL)
+            try Data("[invalid".utf8).write(to: configURL)
+            now = now.advanced(by: .seconds(10))
+            await model.activate()
+            #expect(model.workspace.record == record && !model.workspace.canManage && model.workspace.notice != nil)
+            #expect(!model.workspace.details.hasActiveReads)
+
+            try config.write(to: configURL)
+            now = now.advanced(by: .seconds(10))
+            await model.activate()
+            await model.workspace.details.detailTask?.value
+            #expect(model.workspace.blocked == nil && model.workspace.notice == nil && model.workspace.noticeDetails == nil)
+            #expect(model.workspace.canManage && model.workspace.selection == .group("feature"))
+            #expect(model.workspace.expandedGroups == expanded && model.workspace.details.collapsedPaths == ["Sources"])
+            #expect(model.workspace.detail.changes?.contains { $0.path == "new.txt" } == true)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
     }
 
     @Test func lockedHistoryDoesNotPreventSwitchingAndIsKept() async throws {

@@ -35,7 +35,7 @@ final class WorkspaceModel {
     private(set) var maintenanceFailure: OperationResult?
     private(set) var maintenanceFailurePending = false
     @ObservationIgnored var onMaintenanceFailure: (() -> Void)?
-    var canManage: Bool { record != nil && maintenanceState == .ready && !busy && !presentation.quitPending }
+    var canManage: Bool { record != nil && readsAllowed && maintenanceState == .ready && !busy && !presentation.quitPending }
     enum MaintenanceTrigger { case startup, manual }
     var hasActiveReads: Bool { details.hasActiveReads || reloadTask != nil }
     var needsReadTermination: Bool { hasActiveReads || recordMonitoring || recordDebounceTask != nil || details.needsCacheTermination }
@@ -340,6 +340,7 @@ final class WorkspaceModel {
             guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
                   !busy || batch.operationID.map(operations.isCurrent) == true else { return }
             let previousSelection = selection
+            if !readsAllowed, !maintainingWorkspace { notice = nil; noticeDetails = nil }
             self.record = record; blocked = nil; blockedDetails = nil
             let contextChanged = recordContextChanged
             if maintainingWorkspace {
@@ -361,28 +362,27 @@ final class WorkspaceModel {
         } catch {
             guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending,
                   !busy || batch.operationID.map(operations.isCurrent) == true else { return }
-            if record?.root == path, maintainingWorkspace || maintenanceState == .failed {
-                maintenanceState = .failed
+            if maintainingWorkspace { maintenanceState = .failed }
+            if record?.root == path {
                 notice = text.message(error); noticeDetails = Git.sanitize(error.localizedDescription)
-                if let actual = try? await service.read(URL(fileURLWithPath: path)) {
+                readsAllowed = false
+                details.pause()
+                if maintainingWorkspace, let actual = try? await service.read(URL(fileURLWithPath: path)) {
                     guard isCurrent(batch, generation: generation), !Task.isCancelled, !presentation.quitPending else { return }
                     self.record = actual
                     readsAllowed = true
                     refreshDetail()
-                } else {
-                    readsAllowed = false
-                    details.pause()
                 }
                 return
             }
-            if maintainingWorkspace { maintenanceState = .failed; notice = nil; noticeDetails = nil }
+            if maintainingWorkspace { notice = nil; noticeDetails = nil }
             record = nil; selection = nil; blocked = text.message(error); blockedDetails = Git.sanitize(error.localizedDescription)
         }
     }
     private func recordForReload(_ root: URL, batch: ReloadBatch, generation: Int) async throws -> WorkspaceRecord? {
         guard let operationID = batch.operationID else {
             let record = try await service.read(root)
-            if batch.intent != .record || record != self.record { try await service.git.checkRepository(root, main: true) }
+            if !readsAllowed || batch.intent != .record || record != self.record { try await service.git.checkRepository(root, main: true) }
             else { try PathSafety.directory(root.appending(path: ".git")) }
             return record
         }

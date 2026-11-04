@@ -65,6 +65,52 @@ import Testing
         }
     }
 
+    @Test func recordEventsKeepSnapshotsAndResumePausedReadsAfterRecovery() async throws {
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
+        for group in ["current", "sidebar"] { try await fixture.prepareEmptyGroup(group) }
+        let clock = WorkspaceSyncClock()
+        let monitor = WorkspaceRecordMonitorStub()
+        let model = try makeModel(fixture, monitor: monitor, now: { clock.now })
+        defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let record = try #require(model.workspace.record)
+        let current = Resource.group("current"), sidebar = Resource.group("sidebar")
+        model.workspace.selection = current
+        model.workspace.setVisibleResources([current, sidebar], in: record.root)
+        do {
+            try await eventually { !model.workspace.detailLoading && model.workspace.detail.summary != nil && model.workspace.state(for: sidebar)?.dirty == false }
+            let summary = model.workspace.detail.summary
+            try Data("invalid".utf8).write(to: fixture.service.store.recordURL(fixture.root))
+            monitor.emit()
+            try await eventually { model.workspace.notice != nil && !model.workspace.details.hasActiveReads }
+            #expect(model.workspace.record == record && model.workspace.selection == current)
+            #expect(model.workspace.detail.summary == summary && model.workspace.state(for: sidebar)?.dirty == false)
+            #expect(model.workspace.blocked == nil && !model.workspace.canManage)
+
+            for group in ["current", "sidebar"] {
+                try Data("new change".utf8).write(to: record.groupURL(group).appending(path: "new.txt"))
+            }
+            clock.now = clock.now.advanced(by: .seconds(31))
+            model.workspace.setVisibleResources([current], in: record.root)
+            model.workspace.setVisibleResources([current, sidebar], in: record.root)
+            model.workspace.refreshDetail(userInitiated: true)
+            #expect(!model.workspace.details.hasActiveReads)
+            #expect(model.workspace.detail.summary == summary && model.workspace.state(for: sidebar)?.dirty == false)
+
+            try fixture.service.store.save(record)
+            monitor.emit()
+            try await eventually {
+                model.workspace.canManage && model.workspace.notice == nil && !model.workspace.detailLoading
+                    && model.workspace.detail.changes?.contains { $0.path == "new.txt" } == true
+                    && model.workspace.state(for: sidebar)?.dirty == true
+            }
+            #expect(model.workspace.record == record && model.workspace.selection == current && model.workspace.blocked == nil)
+            await model.workspace.stopReads()
+        } catch {
+            await model.workspace.stopReads()
+            throw error
+        }
+    }
+
     @Test func interruptedRecordEventPreservesPendingRefreshWithoutRevivingCallbacks() async throws {
         let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         try await fixture.prepareEmptyGroup("visible")
@@ -203,7 +249,8 @@ import Testing
             if fails { try Data("invalid".utf8).write(to: fixture.service.store.recordURL(fixture.root)) }
             await model.activate()
             let previous = model.workspace.record
-            #expect((model.workspace.blocked != nil) == fails)
+            #expect(model.workspace.blocked == nil && (model.workspace.notice != nil) == fails)
+            #expect(model.workspace.canManage == !fails)
             changed.groups["external"] = WorktreeGroup()
             try fixture.service.store.save(changed)
 
@@ -213,6 +260,7 @@ import Testing
             clock.now = clock.now.advanced(by: .milliseconds(1))
             await model.activate()
             #expect(model.workspace.record == changed && model.workspace.blocked == nil)
+            #expect(model.workspace.canManage && model.workspace.notice == nil)
 
             changed.groups["manual"] = WorktreeGroup()
             try fixture.service.store.save(changed)
