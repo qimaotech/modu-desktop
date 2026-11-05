@@ -178,14 +178,28 @@ final class GitBrowserModel {
         else if changed && refresh { activate(selection, in: workspace) }
     }
 
-    func pause() {
+    func pause(keepingMonitoring: Bool = false) {
         suspended = true
+        if keepingMonitoring, monitoring, detailTask == nil, pendingChange == nil,
+           pendingCandidates.isEmpty, eventFilterTask == nil, let selection, let entry = resources[selection],
+           entry.lastDetailAttemptSucceeded, entry.lastSuccessfulDetail != nil, let workspace, let readContext,
+           readContext.isValid(in: workspace) {
+            cancelPreload()
+            debounceTask?.cancel(); debounceTask = nil; changeBurstStart = nil
+            return
+        }
         pendingChange = .structure
         cancelCurrent()
     }
 
     func resume() {
+        if suspended, pendingChange == nil, selection != nil, let workspace,
+           !monitoring || readContext?.isValid(in: workspace) != true {
+            pendingChange = .structure
+            revalidateConfiguration = true
+        }
         suspended = false
+        if !pendingCandidates.isEmpty { scheduleEventFilter() }
         startRefresh()
     }
 
@@ -382,7 +396,7 @@ final class GitBrowserModel {
                 guard valid() else { return }
                 await invalidateDiskDetails()
                 guard valid() else { return }
-                recordDetailAttempt(resource, context: result.context)
+                recordDetailAttempt(resource, context: result.context, detail: result.detail)
                 updateState(resource, changes: result.detail.changes, error: result.detail.changesError)
                 pendingSnapshots.remove(resource)
                 diagnostics?.record("detail.preload.completed")
@@ -451,6 +465,7 @@ final class GitBrowserModel {
                                                    revalidatingConfiguration: revalidatingConfiguration, isValid: valid,
                                                    progress: { progress in
             switch progress {
+            case .restored(let saved): self.detail = saved
             case .prepared(let context, let saved):
                 if self.readContext == nil || !change.intersection([.structure, .index, .configuration]).isEmpty || revalidatingConfiguration {
                     self.stopMonitoring()
@@ -485,7 +500,7 @@ final class GitBrowserModel {
             } else {
                 detail = next
             }
-            if revision == resources[resource]?.detailRevision { recordDetailAttempt(resource, context: result.context) }
+            if revision == resources[resource]?.detailRevision { recordDetailAttempt(resource, context: result.context, detail: next) }
         }
         changesLoading = false; summaryLoading = false
         await invalidateDiskDetails()
@@ -503,6 +518,18 @@ final class GitBrowserModel {
         var result = DetailReadResult(detail: initial)
         var statusRead = false
         do {
+            if resources[resource]?.lastSuccessfulDetail == nil, let diskCache,
+               let identity = try? service.detailCacheIdentity(resource, in: workspace) {
+                let saved = await diskCache.loadDetail(for: identity)
+                guard isValid() else { return nil }
+                if let saved, (try? service.detailCacheIdentity(resource, in: workspace)) == identity {
+                    if let previous = resources[resource]?.identity, previous != identity { pendingDetailInvalidations.insert(previous) }
+                    resources[resource, default: .init()].identity = identity
+                    resources[resource, default: .init()].lastSuccessfulDetail = saved
+                    result.detail = GitBrowserState(saved)
+                    progress(.restored(result.detail))
+                }
+            }
             let started = ContinuousClock.now
             let context = try await readSession.prepare(resource, in: workspace, visibility: .application,
                                                         revalidateConfiguration: revalidatingConfiguration || change.contains(.configuration))
@@ -691,7 +718,7 @@ final class GitBrowserModel {
         let excluded = context.resource.kind == .group ? (context.workspace.groups[context.resource.groupName ?? ""]?.repositoryIDs ?? []).map { context.workspace.memberURL(context.resource.groupName!, $0) } : []
         monitoring = monitor.start(context, excludedDirectories: excluded) { [weak self] event in
             Task { @MainActor [weak self] in
-                guard let self, self.generation == token, !self.suspended else { return }
+                guard let self, self.generation == token else { return }
                 self.received(event)
             }
         }
@@ -899,8 +926,9 @@ final class GitBrowserModel {
         return attempted.duration(to: now()) < .seconds(10)
     }
 
-    private func recordDetailAttempt(_ resource: Resource, context: ResourceReadContext?) {
+    private func recordDetailAttempt(_ resource: Resource, context: ResourceReadContext?, detail: GitBrowserState) {
         resources[resource, default: .init()].lastDetailAttempt = now()
+        resources[resource, default: .init()].lastDetailAttemptSucceeded = detail.successfulSnapshot(observedAt: date()) != nil
         resources[resource, default: .init()].detailContext = context
         resources[resource, default: .init()].detailInvalidated = false
         resources[resource, default: .init()].detailStatusIdentity = statusIdentity(for: resource)
@@ -915,6 +943,7 @@ final class GitBrowserModel {
     }
 
     private enum DetailReadProgress {
+        case restored(GitBrowserState)
         case prepared(ResourceReadContext, GitBrowserState)
         case statusRead, readingSummary, summaryRead
     }
@@ -923,6 +952,7 @@ final class GitBrowserModel {
         var state: ResourceState?
         var lastAttempt: ContinuousClock.Instant?
         var lastDetailAttempt: ContinuousClock.Instant?
+        var lastDetailAttemptSucceeded = false
         var detailContext: ResourceReadContext?
         var detailStatusIdentity: [PathStamp]?
         var detailInvalidated = true

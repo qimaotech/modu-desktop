@@ -18,6 +18,26 @@ extension WorkspaceService {
                                          commonDirectory: URL(fileURLWithPath: repository.commonDirectory), main: repository.path, visibility: visibility)
     }
 
+    public func detailCacheIdentity(_ resource: Resource, in record: WorkspaceRecord) throws -> RepositoryCacheIdentity {
+        try store.checkBoundary(record.rootURL)
+        guard resources(record).contains(resource) else { throw MonoDeckError("target-not-configured", .resourceIsNotConfigured) }
+        let path = try PathSafety.child(resource.path, of: record.rootURL, allowMissing: false)
+        let main = try resource.repositoryID.map { try PathSafety.child("repositories/\($0)", of: record.rootURL, allowMissing: false) } ?? record.rootURL
+        let commonDirectory = main.appending(path: ".git")
+        try PathSafety.directory(commonDirectory)
+        let gitDirectory: URL
+        if resource.kind == .repository { gitDirectory = commonDirectory }
+        else {
+            gitDirectory = try cacheGitPath(at: path.appending(path: ".git"), prefix: "gitdir: ")
+            let common = try cacheGitPath(at: gitDirectory.appending(path: "commondir"))
+            guard PathSafety.identity(common) == PathSafety.identity(commonDirectory) else {
+                throw MonoDeckError("resource-unavailable", .repositorySummaryIsUnavailable)
+            }
+        }
+        return try RepositoryCacheIdentity(resource: resource, workspace: record, path: path,
+                                           gitDirectory: gitDirectory, commonDirectory: commonDirectory)
+    }
+
     func refreshSubmoduleRead(_ context: ResourceReadContext, visibility: GitChangeVisibility) async throws -> ResourceReadContext {
         guard context.isValid(in: context.workspace) else { throw MonoDeckError("resource-unavailable", .repositorySummaryIsUnavailable) }
         return try await makeReadContext(context.resource, record: context.workspace, path: context.path,
@@ -82,5 +102,16 @@ extension WorkspaceService {
         var reader = git
         reader.runner.environment["GIT_OPTIONAL_LOCKS"] = "0"
         return WorkspaceService(store: store, git: reader, trash: trashDirectory)
+    }
+
+    private func cacheGitPath(at file: URL, prefix: String = "") throws -> URL {
+        let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+        guard attributes[.type] as? FileAttributeType == .typeRegular else {
+            throw MonoDeckError("resource-unavailable", .repositorySummaryIsUnavailable)
+        }
+        let contents = try String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .newlines)
+        let path = String(contents.dropFirst(prefix.count))
+        guard contents.hasPrefix(prefix), !path.isEmpty else { throw MonoDeckError("resource-unavailable", .repositorySummaryIsUnavailable) }
+        return PathSafety.canonical(path.hasPrefix("/") ? URL(fileURLWithPath: path) : file.deletingLastPathComponent().appending(path: path))
     }
 }

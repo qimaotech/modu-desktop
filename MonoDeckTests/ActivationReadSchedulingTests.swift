@@ -4,6 +4,83 @@ import Testing
 @testable import MonoDeck
 
 @MainActor struct ActivationReadSchedulingTests {
+    @Test(arguments: [Resource.repository("repo"), Resource.group("feature")], [false, true])
+    func startupMaintenanceOnlyRereadsDetailsAffectedByItsChanges(_ resource: Resource, _ changesWorkspaceGit: Bool) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
+        let installer = try f.makeCLIInstaller()
+        let initial = AppModel(defaults: defaults, service: f.service, installer: installer)
+        defaults.set(record.root, forKey: "workspace")
+        initial.workspace.record = record
+        await initial.workspace.maintainWorkspace()
+        initial.workspace.selection = resource
+        await initial.workspace.details.detailTask?.value
+        await initial.workspace.stopReads()
+        if changesWorkspaceGit { try FileManager.default.removeItem(at: f.root.appending(path: ".gitignore")) }
+
+        let counts = ActivationReadCounts()
+        let reopened = AppModel(defaults: defaults, service: f.service, installer: installer, diagnostics: counts.diagnostics)
+        #expect(await reopened.start() == false)
+        await reopened.workspace.details.detailTask?.value
+        #expect(reopened.workspace.canManage && reopened.workspace.detail.summary != nil)
+        if changesWorkspaceGit && resource.kind == .group {
+            #expect(counts.count("detail.read") >= 2)
+        } else {
+            #expect(counts.count("detail.read") == 1)
+        }
+        await reopened.workspace.stopReads()
+    }
+
+    @Test(arguments: ["none", "event", "candidate", "ignored-candidate", "context", "unavailable", "invalidation"])
+    func maintenancePauseKeepsObservationAndOnlyRefreshesInvalidDetails(_ change: String) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root), resource = Resource.repository("repo")
+        let path = record.repositoryURL("repo")
+        try Data("ignored.txt\n".utf8).write(to: path.appending(path: ".gitignore"))
+        let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
+        let counts = ActivationReadCounts(), monitor = ActivationResourceMonitor(available: change != "unavailable")
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor, diagnostics: counts.diagnostics)
+        details.refresh(resource, in: record)
+        await details.detailTask?.value
+        do {
+            details.pause(keepingMonitoring: true)
+            switch change {
+            case "event":
+                try Data("changed".utf8).write(to: path.appending(path: "new.txt"))
+                monitor.emit(.workingTree)
+                try await eventually { counts.count("detail.request.event") == 1 }
+            case "candidate", "ignored-candidate":
+                let name = change == "candidate" ? "new.txt" : "ignored.txt"
+                try Data("changed".utf8).write(to: path.appending(path: name))
+                monitor.emitCandidates([name])
+                try await eventually { counts.count("events.candidates") == 1 }
+            case "context": _ = try await f.service.git.run(["config", "user.name", "Updated Author"], at: path)
+            case "invalidation": details.invalidate(resources: [resource])
+            default: break
+            }
+            #expect(!details.detailLoading && counts.count("detail.read") == 1)
+            details.resume()
+            if change == "none" || change == "ignored-candidate" {
+                if change == "ignored-candidate" { try await eventually { counts.count("events.ignored") == 1 } }
+                #expect(!details.detailLoading && counts.count("detail.read") == 1)
+                #expect(monitor.monitoredResource == resource)
+            } else {
+                try await eventually { counts.count("detail.read") == 2 && !details.detailLoading }
+                if change == "event" || change == "candidate" {
+                    #expect(details.detail.changes?.contains { $0.path == "new.txt" } == true)
+                }
+            }
+            details.stop(); await details.waitForReads()
+        } catch {
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
     @Test(arguments: [false, true])
     func selectionReusesTenSecondDetailsWithoutExtendingFreshness(_ preloaded: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
@@ -289,10 +366,13 @@ private final class ActivationReadCounts: @unchecked Sendable {
 
 private final class ActivationResourceMonitor: ResourceChangeMonitoring, @unchecked Sendable {
     private let lock = NSLock()
+    private let available: Bool
     private var callback: (@Sendable (ResourceChangeEvent) -> Void)?
     private var resource: Resource?
+    init(available: Bool = true) { self.available = available }
     var monitoredResource: Resource? { lock.withLock { resource } }
     func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChangeEvent) -> Void) -> Bool {
+        guard available else { return false }
         lock.withLock { callback = onChange; resource = context.resource }; return true
     }
     func stop() { lock.withLock { callback = nil; resource = nil } }

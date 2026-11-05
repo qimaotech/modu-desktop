@@ -105,44 +105,49 @@ import Testing
         }
     }
 
-    @Test func diskSnapshotAppearsBeforeLiveReadAndDoesNotReleaseTheDetailWaiter() async throws {
+    @Test(arguments: [Resource.repository("repo"), Resource.group("cached"), Resource.member(groupName: "cached", repositoryID: "repo")])
+    func diskSnapshotAppearsBeforeGitChecksAndDoesNotReleaseTheDetailWaiter(_ resource: Resource) async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        try await fixture.prepareGroup("cached", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try preferences(fixture)
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let cache = RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache"))
         let first = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), cache: cache)
-        first.refresh(.repository("repo"), in: record)
+        first.refresh(resource, in: record)
         await first.detailTask?.value
         let original = try #require(first.detail.summary?.headOID)
         first.stop(); await first.waitForReads(); await first.flushCache()
 
-        let path = record.repositoryURL("repo")
+        let path = record.rootURL.appending(path: resource.path)
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "new head"], at: path)
         let updated = try #require(await fixture.service.git.oid("HEAD", at: path))
         try Data("pending".utf8).write(to: path.appending(path: "pending.txt"))
-        let reader = DiskDetailHistoryReader(git: fixture.service.git)
-        reader.blocked = true
-        let reopened = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
-            try await reader.read(at: path, head: head, base: base)
-        }, cache: RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache")))
-        reopened.refresh(.repository("repo"), in: record)
+        let checks = DiskDetailGitCheckGate()
+        defer { checks.release() }
+        var runner = fixture.service.git.runner
+        runner.diagnostics = checks.diagnostics
+        let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
+        let reopened = GitBrowserModel(service: service, defaults: defaults, monitor: DiskDetailMonitor(),
+                                       cache: RepositoryDiskCache(directory: fixture.directory.appending(path: "detail-cache")))
+        reopened.refresh(resource, in: record)
         var waiterFinished = false
         let waiter = Task { await reopened.waitForDetail(); waiterFinished = true }
         do {
-            try await eventually { reader.calls == 2 }
+            try await eventually { checks.started }
             #expect(reopened.detail.summary?.headOID == original && reopened.detail.changes?.isEmpty == true)
             #expect(reopened.detailLoading && reopened.pendingFailure == nil)
-            #expect(reopened.state(for: .repository("repo")) == nil && !waiterFinished)
-            reader.blocked = false
+            #expect(reopened.state(for: resource) == nil && !waiterFinished)
+            checks.release()
             await reopened.detailTask?.value
             await waiter.value
             #expect(waiterFinished && !reopened.detailLoading)
-            #expect(reopened.detail.summary?.headOID == updated && reopened.detail.uniqueCommits?.map(\.subject) == ["new head"])
+            #expect(reopened.detail.summary?.headOID == updated)
+            if resource.kind != .group { #expect(reopened.detail.uniqueCommits?.map(\.subject) == ["new head"]) }
             #expect(reopened.detail.changes?.map(\.path) == ["pending.txt"])
             reopened.stop(); await reopened.waitForReads()
         } catch {
-            reader.blocked = false; waiter.cancel()
+            checks.release(); waiter.cancel()
             reopened.stop(); await reopened.waitForReads(); await waiter.value
             throw error
         }
@@ -181,6 +186,52 @@ import Testing
         #expect(reader.calls == 0 && reopened.pendingFailure == nil)
         #expect(reopened.detail.changes?.map(\.path) == ["fresh.txt"])
         reopened.stop(); await reopened.waitForReads()
+    }
+
+    @Test(arguments: [1, 2])
+    func failedInitialHistoryRetriesAfterMaintenanceDespiteRestoredDiskSnapshot(_ failures: Int) async throws {
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let directory = fixture.directory.appending(path: "detail-cache")
+        let first = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(),
+                                    cache: RepositoryDiskCache(directory: directory))
+        first.refresh(.repository("repo"), in: record)
+        await first.detailTask?.value
+        let original = try #require(first.detail.summary?.headOID)
+        first.stop(); await first.waitForReads(); await first.flushCache()
+
+        let path = record.repositoryURL("repo")
+        _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "new head"], at: path)
+        let updated = try #require(await fixture.service.git.oid("HEAD", at: path))
+        try Data("new".utf8).write(to: path.appending(path: "new.txt"))
+        let reader = DiskDetailHistoryReader(git: fixture.service.git)
+        reader.failure = MonoDeckError("history-failed", "History temporarily unavailable.")
+        reader.failuresRemaining = failures
+        let reopened = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), readCommits: { path, head, base in
+            try await reader.read(at: path, head: head, base: base)
+        }, cache: RepositoryDiskCache(directory: directory))
+        do {
+            reopened.refresh(.repository("repo"), in: record)
+            await reopened.detailTask?.value
+            #expect(reader.calls == 2 && reopened.detail.summary?.headOID == original)
+            #expect(reopened.failureForPresentation?.keepsPreviousResult == true)
+            reopened.pause(keepingMonitoring: true)
+            reader.failure = nil
+            reopened.resume()
+            let retry = try #require(reopened.detailTask)
+            await retry.value
+            #expect(reader.calls == 2 + failures && reopened.detail.summary?.headOID == updated)
+            #expect(reopened.detail.changes?.map(\.path) == ["new.txt"] && reopened.pendingFailure == nil)
+            reopened.pause(keepingMonitoring: true)
+            reopened.resume()
+            #expect(reopened.detailTask == nil && reader.calls == 2 + failures)
+            reopened.stop(); await reopened.waitForReads()
+        } catch {
+            reopened.stop(); await reopened.waitForReads()
+            throw error
+        }
     }
 
     @Test func failedHistoryKeepsOneCoherentSuccessAndRetryReplacesIt() async throws {
@@ -360,6 +411,37 @@ import Testing
         details.stop(); await details.waitForReads()
     }
 
+    @Test func replacingGitDirectoryDuringHydrationDiscardsTheDiskSnapshot() async throws {
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
+        let defaults = try preferences(fixture)
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let path = record.repositoryURL("repo")
+        let head = try #require(await fixture.service.git.oid("HEAD", at: path))
+        let cache = SuspendedDetailCache(snapshot: .init(summary: .init(head: "main", headOID: head, base: "origin/main", baseOID: head),
+                                                        changes: [], uniqueCommits: [], behindCommits: [], observedAt: Date()))
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: DiskDetailMonitor(), cache: cache)
+        do {
+            details.refresh(.repository("repo"), in: record)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while await !cache.started, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            try #require(await cache.started)
+            let gitDirectory = path.appending(path: ".git")
+            try FileManager.default.moveItem(at: gitDirectory, to: fixture.directory.appending(path: "original-git"))
+            try FileManager.default.createDirectory(at: gitDirectory, withIntermediateDirectories: false)
+            await cache.release()
+            await details.detailTask?.value
+            #expect(details.detail.summary == nil && details.detail.summaryError != nil)
+            #expect(details.failureForPresentation?.keepsPreviousResult == false)
+            #expect(await cache.writes == 0)
+            details.stop(); await details.waitForReads()
+        } catch {
+            await cache.release()
+            details.stop(); await details.waitForReads()
+            throw error
+        }
+    }
+
     @Test func shallowHistoryBypassesCachedRanges() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try fixture.service.store.load(fixture.root)
@@ -444,6 +526,29 @@ enum CompletePreloadCancellation: CaseIterable {
 private final class DiskDetailMonitor: ResourceChangeMonitoring, @unchecked Sendable {
     func start(_ context: ResourceReadContext, excludedDirectories: [URL], onChange: @escaping @Sendable (ResourceChangeEvent) -> Void) -> Bool { true }
     func stop() {}
+}
+
+private final class DiskDetailGitCheckGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var entered = false
+    private var released = false
+    var started: Bool {
+        condition.lock(); defer { condition.unlock() }
+        return entered
+    }
+    var diagnostics: RepositoryReadDiagnostics {
+        .init { [self] event in
+            guard event.name == "command.git.rev-parse" else { return }
+            condition.lock(); defer { condition.unlock() }
+            entered = true
+            while !released { condition.wait() }
+        }
+    }
+    func release() {
+        condition.lock(); defer { condition.unlock() }
+        released = true
+        condition.broadcast()
+    }
 }
 
 private actor SuspendedDetailCache: RepositoryDetailCaching {

@@ -196,7 +196,7 @@ final class WorkspaceModel {
 
     func maintainWorkspace(_ trigger: MaintenanceTrigger = .manual) async {
         if trigger == .manual { presentation.completionMessage = nil }
-        await requestReload(maintenance: MaintenanceOptions(trigger), intent: .all)
+        await requestReload(maintenance: MaintenanceOptions(trigger), intent: trigger == .startup ? [.record, .sidebar] : .all)
     }
 
     func showMaintenanceFailure() {
@@ -344,6 +344,9 @@ final class WorkspaceModel {
             self.record = record; blocked = nil; blockedDetails = nil
             let contextChanged = recordContextChanged
             if maintainingWorkspace {
+                if let outcome = batch.result {
+                    invalidateResources(after: outcome, ignoring: ["save-workspace-record", "create-directory"])
+                }
                 maintenanceState = .ready
                 maintenanceFailure = nil; maintenanceFailurePending = false
             }
@@ -473,7 +476,7 @@ final class WorkspaceModel {
 
     func operationsChanged(_ busy: Bool) {
         if busy {
-            details.pause()
+            details.pause(keepingMonitoring: activeReload?.maintenance != nil && activeReload?.intent.contains(.current) == false)
             if activeReload?.maintenance == nil, let load = reloadTask {
                 let interrupted = activeReload
                 cancelledReload = load.task; load.task.cancel(); refreshGeneration += 1
@@ -585,9 +588,9 @@ final class WorkspaceModel {
         recordDebounceTask?.cancel(); recordDebounceTask = nil; recordBurstStart = nil
     }
 
-    func invalidateResources(after outcome: OperationResult) {
+    func invalidateResources(after outcome: OperationResult, ignoring actions: Set<String> = []) {
         guard let record else { return }
-        let changed = outcome.items.filter { !$0.effects.isEmpty }.map(\.resource)
+        let changed = outcome.items.filter { $0.effects.contains { !actions.contains($0.action) } }.map(\.resource)
         let repositories = Set(changed.compactMap(\.repositoryID))
         let workspaceGitChanged = changed.contains { $0.repositoryID == nil }
         let affected = Set(service.resources(record).filter { resource in

@@ -9,11 +9,16 @@ public struct RepositoryCacheIdentity: Codable, Hashable, Sendable {
     public let gitDirectory: RepositoryCachePathIdentity
 
     public init(context: ResourceReadContext) throws {
-        repository = try RepositoryCacheRepositoryIdentity(context: context)
-        resource = context.resource
-        groupCreatedAt = resource.groupName.flatMap { context.workspace.groups[$0]?.createdAt }
-        worktree = try RepositoryCachePathIdentity(context.path)
-        gitDirectory = try RepositoryCachePathIdentity(context.gitDirectory)
+        try self.init(resource: context.resource, workspace: context.workspace, path: context.path,
+                      gitDirectory: context.gitDirectory, commonDirectory: context.commonDirectory)
+    }
+
+    init(resource: Resource, workspace: WorkspaceRecord, path: URL, gitDirectory: URL, commonDirectory: URL) throws {
+        repository = try RepositoryCacheRepositoryIdentity(resource: resource, workspace: workspace, commonDirectory: commonDirectory)
+        self.resource = resource
+        groupCreatedAt = resource.groupName.flatMap { workspace.groups[$0]?.createdAt }
+        worktree = try RepositoryCachePathIdentity(path)
+        self.gitDirectory = try RepositoryCachePathIdentity(gitDirectory)
     }
 
     public func isCurrent() -> Bool { repository.isCurrent() && worktree.isCurrent() && gitDirectory.isCurrent() }
@@ -27,10 +32,14 @@ public struct RepositoryCacheRepositoryIdentity: Codable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey { case workspace, repositoryURL, commonDirectory; case repositoryID = "repository-id" }
 
     public init(context: ResourceReadContext) throws {
-        workspace = PathSafety.identity(context.workspace.rootURL)
-        repositoryID = context.resource.repositoryID
-        repositoryURL = repositoryID.flatMap { repositoryID in context.workspace.repositories.first { $0.id == repositoryID }?.url }
-        commonDirectory = try RepositoryCachePathIdentity(context.commonDirectory)
+        try self.init(resource: context.resource, workspace: context.workspace, commonDirectory: context.commonDirectory)
+    }
+
+    init(resource: Resource, workspace: WorkspaceRecord, commonDirectory: URL) throws {
+        self.workspace = PathSafety.identity(workspace.rootURL)
+        repositoryID = resource.repositoryID
+        repositoryURL = repositoryID.flatMap { repositoryID in workspace.repositories.first { $0.id == repositoryID }?.url }
+        self.commonDirectory = try RepositoryCachePathIdentity(commonDirectory)
     }
 
     func isCurrent() -> Bool { commonDirectory.isCurrent() }
