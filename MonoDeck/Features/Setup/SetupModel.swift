@@ -7,8 +7,17 @@ final class SetupModel {
     private let model: AppModel
     private var initialCheckCompleted = false
     private var checkedWorkspace: String?
+    private var selectionWorkspace: String?
     var isPreparedForCurrentWorkspace: Bool {
         initialCheckCompleted && checkedWorkspace == model.defaults.string(forKey: "workspace")
+    }
+    var canSelectWorkspace: Bool {
+        (!working || cliActivity == .checking) && !settingUp && !model.busy
+            && !model.presentation.quitPending && model.presentation.result == nil
+    }
+    var canContinueSetup: Bool {
+        canSelectWorkspace && cliReady && cliActivity == nil && !working && selectedWorkspace != nil
+            && selectionWorkspace == model.defaults.string(forKey: "workspace")
     }
     private(set) var cliReady = false
     private(set) var cliPreviouslyInstalled = false
@@ -24,6 +33,7 @@ final class SetupModel {
 
     init(model: AppModel) {
         self.model = model
+        selectionWorkspace = model.defaults.string(forKey: "workspace")
         cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
         if let check = model.startupCLIInstallation {
             applyCLIInstallation(check)
@@ -32,27 +42,25 @@ final class SetupModel {
     }
 
     func check() async {
-        guard !working, !isPreparedForCurrentWorkspace else { return }
+        guard !working, !isPreparedForCurrentWorkspace, !model.presentation.quitPending else { return }
         initialCheckCompleted = false
+        working = true
         defer { cliActivity = nil; working = false }
         while !Task.isCancelled {
             let workspace = model.defaults.string(forKey: "workspace")
-            selectedWorkspace = nil
-            error = nil; errorDetails = nil; skillConflict = false
-            working = true
+            synchronizeSelection()
+            cliActivity = .checking
+            cliReady = false; cliMessage = ""; cliUserMessage = nil
             let check: CLIInstallation
             if let startup = model.takeStartupCLIInstallation() {
                 check = startup
             } else {
-                cliActivity = .checking
                 check = await model.installer.checkCLI()
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, !model.presentation.quitPending else { return }
             applyCLIInstallation(check)
             cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
-            cliActivity = nil
             guard workspace == model.defaults.string(forKey: "workspace") else { continue }
-            restoreSavedSelection()
             checkedWorkspace = workspace
             initialCheckCompleted = true
             return
@@ -62,8 +70,9 @@ final class SetupModel {
     func windowClosed() { initialCheckCompleted = false }
 
     func install() {
-        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil else { return }
-        working = true; cliActivity = .installing; error = nil
+        guard !working, cliActivity == nil, !model.busy, !model.presentation.quitPending, model.presentation.result == nil else { return }
+        working = true; cliActivity = .installing
+        cliReady = false; cliMessage = ""; cliUserMessage = nil
         model.runSetupOperation { [self] in
             var outcome = OperationResult(command: "cli.install", workspace: nil)
             defer {
@@ -75,8 +84,13 @@ final class SetupModel {
                 applyCLIInstallation(check)
                 outcome.status = check.available ? .success : .failed; outcome.message = check.message; outcome.userMessage = check.userMessage
                 cliActivity = nil
-                if check.available { restoreSavedSelection() }
-            } catch { presentError(error); outcome.status = Task.isCancelled ? .cancelled : .failed; outcome.message = error.localizedDescription; outcome.userMessage = MonoDeckError.wrap(error).userMessage }
+                if check.available { synchronizeSelection() }
+            } catch {
+                let failure = MonoDeckError.wrap(error)
+                cliReady = false; cliMessage = Git.sanitize(failure.message); cliUserMessage = failure.userMessage
+                outcome.status = Task.isCancelled ? .cancelled : .failed
+                outcome.message = error.localizedDescription; outcome.userMessage = failure.userMessage
+            }
             if PathSafety.exists(model.installer.commandLink) {
                 var item = ItemResult(.cli(path: model.installer.commandLink.path), status: outcome.status)
                 item.effects = [.init("install-cli", model.installer.commandLink.path, state: cliReady ? "applied" : "unknown")]; outcome.items = [item]
@@ -85,12 +99,13 @@ final class SetupModel {
         }
     }
     func selectWorkspace(_ url: URL) {
-        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil else { return }
+        guard canSelectWorkspace else { return }
+        synchronizeSelection()
         selectedWorkspace = url.standardizedFileURL
-        error = nil; errorDetails = nil; skillConflict = false
+        clearWorkspaceError()
     }
     func continueSetup(onReady: @escaping @MainActor () -> Void) {
-        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil, let root = selectedWorkspace else { return }
+        guard canContinueSetup, let root = selectedWorkspace else { return }
         working = true; settingUp = true; error = nil; errorDetails = nil
         model.runSetupOperation { [self] in
             let skill = skillConflict ? nil : Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "mono-deck-workflow")
@@ -122,9 +137,19 @@ final class SetupModel {
         }
     }
 
-    private func restoreSavedSelection() {
-        guard selectedWorkspace == nil, let path = model.defaults.string(forKey: "workspace") else { return }
+    private func synchronizeSelection() {
+        let workspace = model.defaults.string(forKey: "workspace")
+        if selectionWorkspace != workspace {
+            selectionWorkspace = workspace
+            selectedWorkspace = nil
+            clearWorkspaceError()
+        }
+        guard selectedWorkspace == nil, let path = workspace else { return }
         selectedWorkspace = URL(fileURLWithPath: path).standardizedFileURL
+    }
+
+    private func clearWorkspaceError() {
+        error = nil; errorDetails = nil; skillConflict = false
     }
 
     private func applyCLIInstallation(_ check: CLIInstallation) {

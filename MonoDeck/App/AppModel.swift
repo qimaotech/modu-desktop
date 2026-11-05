@@ -107,16 +107,11 @@ final class AppModel {
             return false
         }
         #endif
+        guard hasSavedWorkspace else { return true }
         let cli = await installer.checkCLIInstallation()
         guard !Task.isCancelled else { return false }
         if !cli.available {
             startupCLIInstallation = cli
-            return true
-        }
-        if !hasSavedWorkspace {
-            let path = await installer.checkCLIPath()
-            guard !Task.isCancelled, !presentation.quitPending else { return false }
-            startupCLIInstallation = path
             return true
         }
         async let pathCheck = installer.checkCLIPath()

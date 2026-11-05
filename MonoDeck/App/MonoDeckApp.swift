@@ -45,10 +45,18 @@ struct MonoDeckApp: App {
             }, onFinished: { needsCLISetup in
                 if needsCLISetup || !model.hasSavedWorkspace {
                     let setup = SetupModel(model: model)
+                    let showsSetupBeforeChecking = !model.hasSavedWorkspace
+                    if showsSetupBeforeChecking {
+                        startupSetup = setup
+                        startupNeedsSetup = true
+                        presentStartupSetup()
+                    }
                     await setup.check()
                     guard !Task.isCancelled, !model.presentation.quitPending else { return }
-                    startupSetup = setup
-                    startupNeedsSetup = true
+                    if !showsSetupBeforeChecking {
+                        startupSetup = setup
+                        startupNeedsSetup = true
+                    }
                 }
                 startupCompleted = true
                 checkForUpdatesAutomatically()
@@ -100,7 +108,7 @@ struct MonoDeckApp: App {
 
     private func presentStartupSetup() {
         guard canPresentStartupSetup else { return }
-        guard startupSetup?.isPreparedForCurrentWorkspace == true else {
+        guard !model.hasSavedWorkspace || startupSetup?.isPreparedForCurrentWorkspace == true else {
             delegate.continueStartup {
                 let setup = SetupModel(model: model)
                 await setup.check()

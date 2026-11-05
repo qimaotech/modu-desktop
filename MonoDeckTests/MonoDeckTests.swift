@@ -295,6 +295,21 @@ struct Fixture: Sendable {
         return try await runner.run(executable.path, arguments, at: directory)
     }
 
+    func makeCLIInstaller(resolved: Bool = true) throws -> InstallationService {
+        let shell = directory.appending(path: "login-shell")
+        try Data("#!/bin/sh\nexec /bin/sh -c \"$2\"\n".utf8).write(to: shell)
+        let executable = directory.appending(path: "MonoDeck.app/Contents/Resources/mono-deck")
+        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("#!/bin/sh\nprintf '\(MonoDeckVersion.current)\\n'\n".utf8).write(to: executable)
+        for file in [shell, executable] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path) }
+        let link = directory.appending(path: ".local/bin/mono-deck")
+        try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if !PathSafety.exists(link) { try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable) }
+        var environment = service.git.runner.environment
+        environment["PATH"] = (resolved ? link.deletingLastPathComponent().path + ":" : "") + "/usr/bin:/bin"
+        return InstallationService(support: service.store.support, executable: executable, runner: .init(environment: environment), home: directory, shell: shell.path)
+    }
+
     func prepareGroup(_ name: String, repositoryIDs: [String]) async throws {
         // Deletion tests need real worktrees without repeating the group creation workflow.
         try await prepareEmptyGroup(name)

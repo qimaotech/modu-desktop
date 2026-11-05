@@ -282,7 +282,7 @@ import SwiftUI
         let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try await retry.wait() })
         let service = WorkspaceService(store: store, git: Git(runner: runner))
         let tools = ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: initial.defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: initial.defaults, service: service, toolService: tools, installer: try fixture.makeCLIInstaller())
         let startup = Task { await model.start() }
         var changing: Task<Void, Never>?
         do {
@@ -521,7 +521,7 @@ import SwiftUI
         let record = try #require(initial.workspace.record)
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "launch history"], at: record.repositoryURL("repo"))
         try Data("on launch".utf8).write(to: record.repositoryURL("repo").appending(path: "new.txt"))
-        let model = AppModel(defaults: initial.defaults, service: fixture.service, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: initial.defaults, service: fixture.service, installer: try fixture.makeCLIInstaller())
         var gate = try ReloadValidationGate(fixture.root)
         defer { try? gate.resume() }
         var readyCount = 0
@@ -870,7 +870,7 @@ import SwiftUI
         runner.environment["MONO_DECK_STARTUP_PROBE"] = probe.path
         let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? probe.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try fixture.makeCLIInstaller())
         var completed = false
         let startup = Task {
             let needsSetup = await model.start(onReady: {
@@ -917,7 +917,7 @@ import SwiftUI
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         defaults.set(saved.root, forKey: "workspace")
         defaults.set(false, forKey: "sidebar.\(saved.root).repositoriesExpanded")
-        let installer = try makeInstaller(fixture)
+        let installer = try fixture.makeCLIInstaller()
         if !cliAvailable { try FileManager.default.removeItem(at: installer.executable) }
         let model = AppModel(defaults: defaults, service: fixture.service, installer: installer)
         var readyCount = 0
@@ -939,24 +939,22 @@ import SwiftUI
         }
     }
 
-    @Test(arguments: ["missing-link", "missing-path", "no-saved-workspace"])
+    @Test(arguments: ["missing-link", "missing-path"])
     func setupUsesStartupCLIResultAndRestoresSavedSelection(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        if kind != "no-saved-workspace" {
-            let record = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
-            try fixture.service.store.save(record)
-            defaults.set(record.root, forKey: "workspace")
-        }
-        let installer = try makeInstaller(fixture, resolved: kind != "missing-path")
+        let record = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
+        try fixture.service.store.save(record)
+        defaults.set(record.root, forKey: "workspace")
+        let installer = try fixture.makeCLIInstaller(resolved: kind != "missing-path")
         if kind == "missing-link" { try FileManager.default.removeItem(at: installer.commandLink) }
         let model = AppModel(defaults: defaults, service: fixture.service, installer: installer)
         #expect(await model.start() == true)
         await model.workspace.detailPreloadTask?.value
         let initial = try #require(model.startupCLIInstallation)
-        #expect(initial.available == (kind == "no-saved-workspace"))
+        #expect(!initial.available)
 
         let file = fixture.service.store.recordURL(fixture.root)
         if kind == "missing-link" { try FileManager.default.removeItem(at: file) }
@@ -972,7 +970,7 @@ import SwiftUI
         await setup.check()
         #expect(setup.cliReady == initial.available && setup.cliMessage == initial.message)
         #expect(setup.cliActivity == nil && !setup.working && model.startupCLIInstallation == nil)
-        #expect(setup.selectedWorkspace?.path == (kind == "no-saved-workspace" ? nil : PathSafety.canonical(fixture.root).path))
+        #expect(setup.selectedWorkspace?.path == PathSafety.canonical(fixture.root).path)
         #expect(setup.error == nil)
         #expect((PathSafety.exists(file) ? try Data(contentsOf: file) : nil) == original)
 
@@ -1021,6 +1019,75 @@ import SwiftUI
         #expect(defaults.string(forKey: "workspace") == original.root)
     }
 
+    @Test(arguments: ["installation", "path"], [false, true])
+    func startupDefersCLIChecksToSetupAndWaitsForQuit(_ stage: String, _ quitting: Bool) async throws {
+        let fixture = try await Fixture(createRemote: false)
+        defer { fixture.remove() }
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let baseInstaller = try fixture.makeCLIInstaller()
+        let probe = fixture.directory.appending(path: "cli-probe")
+        try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
+        let shell = fixture.directory.appending(path: "login-shell")
+        let command = stage == "installation" ? "printf '\(MonoDeckVersion.current)\\n'" : "exec /bin/sh -c \"$2\""
+        try Data("""
+        #!/bin/sh
+        printf 'check\\n' >> "$MONO_DECK_CLI_PROBE/calls"
+        : > "$MONO_DECK_CLI_PROBE/started"
+        trap 'exit 143' TERM INT
+        while [ ! -e "$MONO_DECK_CLI_PROBE/release" ]; do sleep 0.02; done
+        \(command)
+        """.utf8).write(to: stage == "installation" ? baseInstaller.executable : shell)
+        var environment = baseInstaller.runner.environment
+        environment["MONO_DECK_CLI_PROBE"] = probe.path
+        let installer = InstallationService(support: baseInstaller.support, executable: baseInstaller.executable, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
+        let model = AppModel(defaults: defaults, service: fixture.service, installer: installer)
+        defer { model.globalShortcut.stop() }
+        var terminationRequests = 0
+        let delegate = AppDelegate(terminate: { _ in terminationRequests += 1 })
+        var setup: SetupModel?
+        delegate.start(model: model, onReady: { Issue.record("Expected setup without opening the main window.") }, onFinished: { needsSetup in
+            #expect(needsSetup && model.startupCLIInstallation == nil)
+            #expect(!PathSafety.exists(probe.appending(path: "started")))
+            let initialSetup = SetupModel(model: model)
+            setup = initialSetup
+            #expect(initialSetup.cliActivity == .checking && !initialSetup.cliReady)
+            await initialSetup.check()
+        })
+        let startup = try #require(delegate.startupTask)
+        do {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(probe.appending(path: "started")), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            try #require(PathSafety.exists(probe.appending(path: "started")))
+            let setup = try #require(setup)
+            #expect(setup.working && setup.cliActivity == .checking && !setup.cliReady)
+            await setup.check()
+            if quitting {
+                #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
+                await (try #require(delegate.terminationTask)).value
+                #expect(terminationRequests == 1 && startup.isCancelled && model.presentation.quitPending)
+                #expect(!setup.isPreparedForCurrentWorkspace && !setup.cliReady)
+            } else {
+                try Data().write(to: probe.appending(path: "release"))
+                await startup.value
+                #expect(setup.isPreparedForCurrentWorkspace && setup.cliReady)
+                await setup.check()
+            }
+            #expect(!setup.working && setup.cliActivity == nil && delegate.startupTask == nil)
+            #expect(try String(contentsOf: probe.appending(path: "calls"), encoding: .utf8) == "check\n")
+            #expect(!model.hasSavedWorkspace && model.workspace.record == nil && model.startupCLIInstallation == nil)
+            #expect(!PathSafety.exists(fixture.root.appending(path: ".git")))
+        } catch {
+            startup.cancel()
+            try? Data().write(to: probe.appending(path: "release"))
+            await startup.value
+            await delegate.terminationTask?.value
+            throw error
+        }
+    }
+
     @Test(arguments: ["available", "missing-path", "cancelled"])
     func startupPublishesWorkspaceBeforeSlowCLIPathCheck(_ kind: String) async throws {
         let fixture = try await Fixture(template: .emptyWorkspace)
@@ -1030,7 +1097,7 @@ import SwiftUI
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(record.root, forKey: "workspace")
-        let baseInstaller = try makeInstaller(fixture, resolved: kind != "missing-path")
+        let baseInstaller = try fixture.makeCLIInstaller(resolved: kind != "missing-path")
         let probe = fixture.directory.appending(path: "cli-probe")
         try FileManager.default.createDirectory(at: probe, withIntermediateDirectories: false)
         let shell = fixture.directory.appending(path: "login-shell")
@@ -1097,7 +1164,7 @@ import SwiftUI
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
-        let model = AppModel(defaults: defaults, service: fixture.service, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: defaults, service: fixture.service, installer: try fixture.makeCLIInstaller())
 
         #expect(await model.start() == false)
         #expect(model.workspace.record == nil && model.workspace.blocked != nil && !model.busy)
@@ -1128,7 +1195,7 @@ import SwiftUI
         let tools = ExternalTools(applicationURL: { $0 == "com.openai.codex" ? fixture.directory.appending(path: "Codex.app") : nil }, openURL: { _, _ in })
         let store = WorkspaceStore(support: fixture.service.store.support, waitForLockRetry: { try Task.checkCancellation() })
         let service = WorkspaceService(store: store, git: fixture.service.git, trash: fixture.service.trashDirectory)
-        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try fixture.makeCLIInstaller())
         var readyCount = 0
         let needsSetup = await model.start(onReady: {
             readyCount += 1
@@ -1172,7 +1239,7 @@ import SwiftUI
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         defaults.set(fixture.root.path, forKey: "workspace")
         let tools = ExternalTools(applicationURL: { _ in nil }, openURL: { _, _ in })
-        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try makeInstaller(fixture))
+        let model = AppModel(defaults: defaults, service: service, toolService: tools, installer: try fixture.makeCLIInstaller())
         let delegate = AppDelegate()
         var readyCount = 0
         delegate.start(model: model, onReady: {
@@ -1339,7 +1406,7 @@ import SwiftUI
         let saved = try #require(model.workspace.record)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
 
-        let reopened = AppModel(defaults: model.defaults, service: fixture.service, installer: try makeInstaller(fixture))
+        let reopened = AppModel(defaults: model.defaults, service: fixture.service, installer: try fixture.makeCLIInstaller())
         var readySelection: Resource?
         #expect(await reopened.start { readySelection = reopened.workspace.selection } == false)
         #expect(readySelection == .member(groupName: "feature", repositoryID: "repo"))
@@ -1380,7 +1447,7 @@ import SwiftUI
         #expect(PathSafety.exists(fixture.root.appending(path: ".agents/skills/mono-deck-workflow/SKILL.md")))
         reopened.workspace.selection = nil
         await reopened.workspace.stopReads()
-        let welcome = AppModel(defaults: model.defaults, service: fixture.service, installer: try makeInstaller(fixture))
+        let welcome = AppModel(defaults: model.defaults, service: fixture.service, installer: try fixture.makeCLIInstaller())
         #expect(await welcome.start() == false)
         #expect(welcome.workspace.selection == nil)
         await welcome.workspace.stopReads()
@@ -1720,21 +1787,6 @@ import SwiftUI
         model.workspace.record = try fixture.service.store.load(fixture.root)
         defaults.set(model.workspace.record?.root, forKey: "workspace")
         return model
-    }
-
-    private func makeInstaller(_ fixture: Fixture, resolved: Bool = true) throws -> InstallationService {
-        let shell = fixture.directory.appending(path: "login-shell")
-        try Data("#!/bin/sh\nexec /bin/sh -c \"$2\"\n".utf8).write(to: shell)
-        let executable = fixture.directory.appending(path: "MonoDeck.app/Contents/Resources/mono-deck")
-        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data("#!/bin/sh\nprintf '\(MonoDeckVersion.current)\\n'\n".utf8).write(to: executable)
-        for file in [shell, executable] { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path) }
-        let link = fixture.directory.appending(path: ".local/bin/mono-deck")
-        try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if !PathSafety.exists(link) { try FileManager.default.createSymbolicLink(at: link, withDestinationURL: executable) }
-        var environment = fixture.service.git.runner.environment
-        environment["PATH"] = (resolved ? link.deletingLastPathComponent().path + ":" : "") + "/usr/bin:/bin"
-        return InstallationService(support: fixture.service.store.support, executable: executable, runner: .init(environment: environment), home: fixture.directory, shell: shell.path)
     }
 
     private func waitForReadLock(_ fixture: Fixture) async throws {

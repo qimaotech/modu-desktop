@@ -14,7 +14,7 @@ struct SetupView: View {
         self.model = model
         self.canReturnToMainWindow = canReturnToMainWindow
         self.returnToMainWindow = returnToMainWindow
-        if let preparedSetup, preparedSetup.isPreparedForCurrentWorkspace {
+        if let preparedSetup, !model.hasSavedWorkspace || preparedSetup.isPreparedForCurrentWorkspace {
             _setup = State(initialValue: preparedSetup)
         } else {
             _setup = State(initialValue: SetupModel(model: model))
@@ -43,7 +43,7 @@ struct SetupView: View {
                     }.padding(.horizontal, 20).frame(height: 84)
                     Divider().padding(.horizontal, 20)
                     HStack(spacing: 16) {
-                        stepGraphic("DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
+                        stepGraphic("DesignIcons/Finder").opacity(setup.canSelectWorkspace ? 1 : 0.4)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(model.text.string(.uiChooseWorkspace)).fontWeight(.semibold)
                             if let workspace = setup.selectedWorkspace {
@@ -51,8 +51,8 @@ struct SetupView: View {
                             } else {
                                 Text(model.text.string(.uiNoWorkspaceSelected)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             }
-                        }.frame(maxWidth: .infinity, alignment: .leading).opacity(setup.cliReady ? 1 : 0.4)
-                        Button(setup.selectedWorkspace == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { choose() }.disabled(!setup.cliReady || setup.working || model.busy)
+                        }.frame(maxWidth: .infinity, alignment: .leading).opacity(setup.canSelectWorkspace ? 1 : 0.4)
+                        Button(setup.selectedWorkspace == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { choose() }.disabled(!setup.canSelectWorkspace)
                     }.padding(.horizontal, 20).frame(height: 84)
                 }.formPlate()
                 if showsStatus {
@@ -70,13 +70,13 @@ struct SetupView: View {
                 Button(canReturnToMainWindow() ? model.text.string(.uiCancel) : model.text.string(.uiQuit)) {
                     if canReturnToMainWindow() { dismiss(); returnToMainWindow() }
                     else { NSApp.terminate(nil) }
-                }.disabled(setup.working).keyboardShortcut(.cancelAction)
+                }.disabled(setup.working && setup.cliActivity != .checking).keyboardShortcut(.cancelAction)
                 Spacer()
                 Button { setup.continueSetup { openWindow(id: "main"); dismiss() } } label: {
                     continueButtonLabel
                 }
                 .accessibilityLabel(continueButtonTitle)
-                .keyboardShortcut(.defaultAction).disabled(!setup.cliReady || setup.selectedWorkspace == nil || setup.working || model.busy)
+                .keyboardShortcut(.defaultAction).disabled(!setup.canContinueSetup)
             }.padding(.horizontal, 24).frame(height: 54)
         }.font(DialogTypography.body).background(DesignStyle.background)
         .interactiveDismissDisabled(setup.working)
