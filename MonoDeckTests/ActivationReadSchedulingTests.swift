@@ -12,7 +12,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts(), monitor = ActivationResourceMonitor()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor,
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor,
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         do {
             if preloaded {
@@ -33,7 +33,7 @@ import Testing
             clock.now = clock.now.advanced(by: .milliseconds(9_999))
             details.refresh(resource, in: record)
             #expect(details.detailTask == nil && !details.snapshotLoading)
-            #expect(details.detail.summary != nil && details.detail.commits != nil)
+            #expect(details.detail.summary != nil && details.detail.uniqueCommits != nil)
             #expect(counts.count("detail.read") == reads && counts.count("detail.selection.hit") == 1)
             #expect(monitor.monitoredResource == resource)
 
@@ -56,7 +56,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts(), monitor = ActivationResourceMonitor()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor,
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor,
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         do {
             details.refresh(resource, in: record)
@@ -92,7 +92,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         details.refresh(.repository("repo"), in: record)
         await details.detailTask?.value
@@ -119,7 +119,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         let resource = Resource.repository("repo")
         details.setPreloadScope(in: record, including: [resource])
@@ -155,7 +155,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let clock = ActivationReadClock(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: ActivationResourceMonitor(),
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         let resource = Resource.group("missing")
         details.refresh(resource, in: record)
@@ -181,7 +181,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let monitor = ActivationResourceMonitor(), gate = ActivationHistoryGate(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor, readCommits: { _, _, _ in
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor, readCommits: { _, _, _ in
             await gate.read()
             return []
         }, diagnostics: counts.diagnostics)
@@ -210,7 +210,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let monitor = ActivationResourceMonitor(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor, diagnostics: counts.diagnostics)
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor, diagnostics: counts.diagnostics)
         details.refresh(resource, in: record)
         await details.detailTask?.value
         do {
@@ -243,7 +243,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
         let monitor = ActivationResourceMonitor(), counts = ActivationReadCounts()
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor, diagnostics: counts.diagnostics)
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor, diagnostics: counts.diagnostics)
         details.refresh(resource, in: record)
         await details.detailTask?.value
         do {

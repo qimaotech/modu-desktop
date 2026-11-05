@@ -17,7 +17,7 @@ import Testing
             let record = try #require(model.workspace.record)
             #expect(!needsSetup && model.started && model.workspace.blocked == nil)
             #expect(readySelection == mock.initialSelection && model.workspace.selection == mock.initialSelection)
-            #expect(model.workspace.detail.changes?.isEmpty == false && model.workspace.detail.commits?.isEmpty == false)
+            #expect(model.workspace.detail.changes?.isEmpty == false && model.workspace.detail.uniqueCommits?.isEmpty == false)
             #expect(model.workspace.detail.behindCommits?.isEmpty == false)
             let resources = model.service.resources(record)
             #expect(resources.allSatisfy { record.rootURL.appending(path: $0.path).path.hasPrefix(mock.directory.path + "/") })
@@ -38,7 +38,7 @@ import Testing
         defer { mock.remove() }
         let service = mock.fixture.service
         let original = try service.store.load(mock.fixture.root)
-        let removed = await service.remove(.repository("catalog-service"), at: original.rootURL, execute: true)
+        let removed = await service.deleteConfirmed(.repository("catalog-service"), at: original.rootURL)
         #expect(removed.status == .success)
         #expect(!PathSafety.exists(original.repositoryURL("catalog-service")))
         let trashed = try FileManager.default.contentsOfDirectory(at: mock.directory.appending(path: "trash"), includingPropertiesForKeys: nil)
@@ -103,7 +103,7 @@ import Testing
                 #expect(opened.result.items.first?.reasonCode == "unsafe-path")
                 do { try await model.switchTo(target, loaded: original); Issue.record("Outside switch should be rejected.") }
                 catch { #expect((error as? MonoDeckError)?.code == "unsafe-path") }
-                let deletion = await model.service.remove(.repository("catalog-service"), at: target, execute: true)
+                let deletion = await model.service.deleteConfirmed(.repository("catalog-service"), at: target)
                 #expect(deletion.reasonCode == "unsafe-path")
             }
             let similar = mock.directory.appendingPathExtension("outside")

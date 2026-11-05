@@ -15,14 +15,14 @@ extension WorkspaceService {
     }
     public func exportYAML(at root: URL) async throws -> String {
         let record = try await read(root)
-        return try YAMLEncoder().encode(WorkspaceExport(version: 1, repositories: record.repositories, groups: record.groups))
+        return try YAMLEncoder().encode(WorkspaceExport(version: 2, repositories: record.repositories, groups: record.groups))
     }
     public func importRepositories(_ urls: [String], at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
-        var result = OperationResult(command: "repo.import-yaml", workspace: root.path)
+        var result = OperationResult(command: "repo.import", workspace: root.path)
         var staging: RepositoryStaging?
         do {
             guard !urls.isEmpty else { throw MonoDeckError("invalid-input", .noCompleteSupportedGitRepositoryURLsWereFound) }
-            let identities = try Dictionary(grouping: Set(urls), by: { try RepositoryIdentity($0).name.lowercased() })
+            let identities = try Dictionary(grouping: Set(urls), by: { try RepositoryIdentity($0).id.lowercased() })
             _ = try store.load(root)
             var seen = Set<String>()
             var stopped = false
@@ -31,7 +31,7 @@ extension WorkspaceService {
                 var item = ItemResult(.repository(repo.id))
                 if stopped || Task.isCancelled { item = .notProcessed(item.resource); stopped = true }
                 else if !seen.insert(url).inserted { item.status = .skipped; item.reasonCode = "duplicate-url"; item.message = "Duplicate URL."; item.userMessage = .duplicateURL }
-                else if identities[repo.id.lowercased()]!.count > 1 { item.status = .failed; item.reasonCode = "repository-conflict"; item.message = "Different URLs derive the same repository name: \(repo.id)"; item.userMessage = .repositoryNameCollision(repo.id) }
+                else if identities[repo.id.lowercased()]!.count > 1 { item.status = .failed; item.reasonCode = "repository-conflict"; item.message = "Different URLs derive the same repository ID: \(repo.id)"; item.userMessage = .repositoryIDCollision(repo.id) }
                 else {
                     progress(.init(repo.id, .importingRepositories, completed: index, total: urls.count))
                     let counts = importCounts(result.items)
@@ -39,7 +39,7 @@ extension WorkspaceService {
                     do { item = try await add(repo, at: root, staging: &staging, progress: report) }
                     catch { fail(&item, error); stopped = true }
                     if item.status == .success, item.data?["disposition"] == "already-exists" { item.status = .skipped; item.reasonCode = "already-exists" }
-                    if ["workspace-unavailable", "ignore-unavailable", "ignore-write-failed", "workspace-commit-failed", "configuration-write-failed", "save-outcome-unknown", "cleanup-failed", "cancelled"].contains(item.reasonCode ?? "") { stopped = true }
+                    if ["workspace-unavailable", "ignore-unavailable", "ignore-write-failed", "workspace-commit-failed", "workspace-record-write-failed", "save-outcome-unknown", "cleanup-failed", "cancelled"].contains(item.reasonCode ?? "") { stopped = true }
                 }
                 result.items.append(item)
                 if item.reasonCode != "not-processed" { progress(.init(repo.id, .importingRepositories, completed: index + 1, total: urls.count, counts: importCounts(result.items))) }
@@ -83,15 +83,18 @@ extension WorkspaceService {
         return result
     }
     public func importWorkspaceYAML(_ text: String, at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
-        var result = OperationResult(command: "workspace.import-yaml", workspace: root.path)
+        var result = OperationResult(command: "workspace.configuration.import", workspace: root.path)
         var desired = WorkspaceRecord(root: root.path)
         var staging: RepositoryStaging?
         var prepared: [PreparedRepository] = []
         do {
-            try ConfigValidation.validateDocument(text, workspace: false)
+            try WorkspaceDocumentValidation.validateConfigurationDocument(text)
             let document = try YAMLDecoder().decode(WorkspaceExport.self, from: text)
             desired.version = document.version; desired.repositories = document.repositories; desired.groups = document.groups
-            try store.validate(desired)
+            do { try store.validate(desired) }
+            catch let failure as MonoDeckError where failure.code == "invalid-workspace-record" {
+                throw MonoDeckError("invalid-workspace-configuration", failure.userMessage)
+            }
             staging = try await beginWorkspaceImport(desired, at: root)
             var failure: ItemResult?
             if let staging {
@@ -134,7 +137,7 @@ extension WorkspaceService {
         try checkWorkspaceImportDestination(record, staging: nil)
         try await git.checkRepository(root, main: true)
         for group in desired.groups.keys.sorted() {
-            try await validateMembers(group, repositories: desired.groups[group]!.repositories, record: desired)
+            try await validateMembers(group, repositoryIDs: desired.groups[group]!.repositoryIDs, record: desired)
         }
         for name in ["repositories", "worktrees"] { try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true) }
         return desired.repositories.isEmpty ? nil : try RepositoryStaging(at: root)
@@ -146,7 +149,7 @@ extension WorkspaceService {
         var record = try store.load(root)
         try checkWorkspaceImportDestination(record, staging: staging)
         try await git.checkRepository(root, main: true)
-        var result = OperationResult(command: "workspace.import-yaml", workspace: root.path)
+        var result = OperationResult(command: "workspace.configuration.import", workspace: root.path)
         var stopped = false
         for repository in prepared {
             if stopped || Task.isCancelled {
@@ -166,11 +169,11 @@ extension WorkspaceService {
         if Task.isCancelled && !desired.groups.isEmpty { stopped = true }
         for name in desired.groups.keys.sorted() {
             let group = desired.groups[name]!
-            let resources = [Resource.group(name)] + group.repositories.map { Resource.member(name, $0) }
+            let resources = [Resource.group(name)] + group.repositoryIDs.map { Resource.member(groupName: name, repositoryID: $0) }
             if stopped { result.items += resources.map(ItemResult.notProcessed); continue }
             do {
                 progress(.init(Resource.group(name).path, .checkingRepository))
-                let plans = try await creationPlans(name, members: group.repositories, record: record)
+                let plans = try await creationPlans(name, members: group.repositoryIDs, record: record)
                 for plan in plans {
                     if stopped { result.items.append(.notProcessed(plan.resource)); continue }
                     let item = await create(plan, record: &record, createdAt: group.createdAt, progress: progress)
@@ -193,7 +196,7 @@ extension WorkspaceService {
 
     private func pendingWorkspaceImportItems(_ desired: WorkspaceRecord) -> [ItemResult] {
         desired.repositories.map { .notProcessed(.repository($0.id)) } + desired.groups.keys.sorted().flatMap { name in
-            [ItemResult.notProcessed(.group(name))] + desired.groups[name]!.repositories.map { .notProcessed(.member(name, $0)) }
+            [ItemResult.notProcessed(.group(name))] + desired.groups[name]!.repositoryIDs.map { .notProcessed(.member(groupName: name, repositoryID: $0)) }
         }
     }
 

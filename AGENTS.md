@@ -2,8 +2,8 @@
 
 ## 业务边界
 
-- 工作区根目录是 Git 主工作树，Group 根目录及成员分别是工作区仓库和所选业务仓库的 linked worktree。
-- Git Browser 查看更改与提交，业务开发、提交和合并通过外部工具完成；MonoDeck 会按需自动提交工作区的 `.gitignore` 和内置工作流文件。
+- 工作区根目录是工作区仓库的主工作树；分组根工作树和成员工作树分别是工作区仓库和所选业务仓库的关联工作树。
+- Git Browser 查看本地更改、独有提交和落后提交，业务开发、提交和合并通过外部工具完成；MonoDeck 会按需自动提交工作区的 `.gitignore` 和内置工作流文件。
 - 取消或部分失败可能保留已完成的效果；反馈区分已完成、未完成和保留数据，不承诺整体回滚。
 
 ## 目录结构
@@ -18,6 +18,7 @@
 
 ## 工程约定
 
+- Before implementing business logic, consult [GLOSSARY.md](GLOSSARY.md) for domain terminology and semantics. If a new business concept is introduced, propose an update to GLOSSARY.md.
 - 修改前阅读相关实现与必要测试；业务规则、数据格式和命令参数以代码为准。
 - `MonoDeck` 与 `MonoDeckCLI` 复用 `MonoDeckCore`，Core 不依赖界面，业务与副作用放在 Core，View 只渲染状态与转发意图；保持现有 target 边界，不新增 framework/package。
 - `AppModel` 负责依赖组装、启动、工作区切换、外部工具与退出协调；功能状态放在 `Features/` 下的模型中。

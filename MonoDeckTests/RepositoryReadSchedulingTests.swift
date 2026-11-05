@@ -11,7 +11,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let clock = RepositoryReadClock(), counts = SchedulingReadCounts()
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(),
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(),
                                            now: { clock.now }, diagnostics: counts.diagnostics)
         let resource = Resource.group("cached")
         do {
@@ -54,15 +54,15 @@ import Testing
 
     @Test func completePreloadsWaitForForegroundHistoryAndReadOneResourceAtATime() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        for name in ["first", "second"] { try await fixture.prepareGroup(name, repositories: ["repo"]) }
+        for name in ["first", "second"] { try await fixture.prepareGroup(name, repositoryIDs: ["repo"]) }
         let record = try fixture.service.store.load(fixture.root)
-        for resource in [Resource.repository("repo"), .member("first", "repo"), .member("second", "repo")] {
+        for resource in [Resource.repository("repo"), .member(groupName: "first", repositoryID: "repo"), .member(groupName: "second", repositoryID: "repo")] {
             _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", resource.id], at: record.rootURL.appending(path: resource.path))
         }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let history = SchedulingHistoryReader(git: fixture.service.git, blocked: true)
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
             try await history.read(at: path, head: head, base: base)
         })
         do {
@@ -70,7 +70,7 @@ import Testing
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
             while await history.started < 2, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
             try #require(await history.started == 2)
-            let resources: Set<Resource> = [.repository("repo"), .member("first", "repo"), .member("second", "repo")]
+            let resources: Set<Resource> = [.repository("repo"), .member(groupName: "first", repositoryID: "repo"), .member(groupName: "second", repositoryID: "repo")]
             details.setPreloadScope(in: record, including: resources)
             details.drainPreload()
             #expect(details.detailLoading && !details.snapshotLoading)
@@ -85,8 +85,8 @@ import Testing
             #expect(await history.started == 6)
             #expect(await history.maximumConcurrentResources == 1)
             #expect(details.detail.summary?.headOID == selectedHead && details.pendingFailure == nil)
-            details.refresh(.member("second", "repo"), in: record)
-            #expect(details.detail.commits?.first?.subject == Resource.member("second", "repo").id)
+            details.refresh(.member(groupName: "second", repositoryID: "repo"), in: record)
+            #expect(details.detail.uniqueCommits?.first?.subject == Resource.member(groupName: "second", repositoryID: "repo").id)
             details.stop(); await details.waitForReads()
         } catch {
             await history.release()
@@ -104,7 +104,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let clock = RepositoryReadClock()
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), now: { clock.now })
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), now: { clock.now })
         do {
             details.setPreloadScope(in: record, including: [resource])
             details.drainPreload()
@@ -158,7 +158,7 @@ import Testing
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let clock = RepositoryReadClock()
         let history = SchedulingHistoryReader(git: fixture.service.git, blocked: true)
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
             try await history.read(at: path, head: head, base: base)
         }, now: { clock.now })
         do {
@@ -200,7 +200,7 @@ import Testing
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let history = SchedulingHistoryReader(git: fixture.service.git, blocked: true)
-        let details = RepositoryDetailModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
+        let details = GitBrowserModel(service: fixture.service, defaults: defaults, monitor: SchedulingResourceMonitor(), readCommits: { path, head, base in
             try await history.read(at: path, head: head, base: base)
         })
         details.refresh(.repository("repo"), in: record)
@@ -219,7 +219,7 @@ import Testing
             details.invalidate(resources: [.group("unrelated")])
             details.refresh(nil, in: updated)
             details.refresh(.repository("repo"), in: updated)
-            #expect(details.detail.summary?.headOID == head && details.detail.commits != nil)
+            #expect(details.detail.summary?.headOID == head && details.detail.uniqueCommits != nil)
             await details.detailTask?.value
             details.stop(); await details.waitForReads()
         } catch {

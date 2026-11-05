@@ -71,7 +71,7 @@ struct WorkspaceTreeTests {
         } catch {
             let failure = try #require(error as? MonoDeckError)
             #expect(failure.code != "cancelled")
-            if kind == "record" { #expect(failure.code == "invalid-configuration") }
+            if kind == "record" { #expect(failure.code == "invalid-workspace-record") }
         }
     }
 
@@ -121,9 +121,9 @@ struct WorkspaceTreeTests {
 
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
         var record = try fixture.service.store.load(fixture.root)
-        record.repositories[0].name = "Display name"
+        record.repositories[0].displayNameOverride = "Display name"
         try fixture.service.store.save(record)
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         return try fixture.service.store.load(fixture.root)
     }
 }

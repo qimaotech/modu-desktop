@@ -11,7 +11,7 @@ public struct WorkspaceService: Sendable {
         let root = PathSafety.canonical(url)
         try store.checkBoundary(root)
         let existing = PathSafety.exists(store.recordURL(root))
-        guard existing || !requireExistingRecord else { throw MonoDeckError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
+        guard existing || !requireExistingRecord else { throw MonoDeckError("workspace-record-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
         if existing { _ = try store.load(root) }
         _ = try await checkCandidate(root, hasRecord: existing, recoverUnregisteredResources: recoverUnregisteredResources)
         return root
@@ -30,7 +30,7 @@ public struct WorkspaceService: Sendable {
         do {
             let lease = try await store.lock(root); defer { lease.unlock() }
             let existing = PathSafety.exists(store.recordURL(root))
-            guard existing || !requireExistingRecord else { throw MonoDeckError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
+            guard existing || !requireExistingRecord else { throw MonoDeckError("workspace-record-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
             var record = existing ? try store.load(root) : WorkspaceRecord(root: root.path)
             var stash: String?
             var pendingCommitPaths: [String] = []
@@ -48,7 +48,7 @@ public struct WorkspaceService: Sendable {
                     try checkCancellation()
                     progress(.init(root.path, .saving, cancellable: false))
                     try persist(recovered, into: &record)
-                    item.effects.append(.init("save-configuration", store.recordURL(root).path))
+                    item.effects.append(.init("save-workspace-record", store.recordURL(root).path))
                 }
                 var updatingSkill = false
                 if let skill {
@@ -66,7 +66,7 @@ public struct WorkspaceService: Sendable {
                     }
                 }
                 if updatingSkill {
-                    if try await validateAndClean(&record) { item.effects.append(.init("save-configuration", store.recordURL(root).path)) }
+                    if try await validateAndClean(&record) { item.effects.append(.init("save-workspace-record", store.recordURL(root).path)) }
                     progress(.init(root.path, .saving, cancellable: false))
                     stash = try await git.stashWorkspaceChanges(at: root)
                     if let stash { item.effects.append(.init("stash-workspace", stash)) }
@@ -77,12 +77,12 @@ public struct WorkspaceService: Sendable {
                     if !PathSafety.exists(directory) { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false); item.effects.append(.init("create-directory", directory.path)) }
                 }
                 if !updatingSkill {
-                    if try await validateAndClean(&record) { item.effects.append(.init("save-configuration", store.recordURL(root).path)) }
+                    if try await validateAndClean(&record) { item.effects.append(.init("save-workspace-record", store.recordURL(root).path)) }
                 }
                 if !existing && recovered == nil {
                     progress(.init(root.path, .saving, cancellable: false))
                     try persist(record, into: &record)
-                    item.effects.append(.init("save-configuration", store.recordURL(root).path))
+                    item.effects.append(.init("save-workspace-record", store.recordURL(root).path))
                 }
                 progress(.init(root.path, .saving, cancellable: false))
                 var paths = [".gitignore"]
@@ -149,7 +149,7 @@ public struct WorkspaceService: Sendable {
     }
     public func resources(_ record: WorkspaceRecord) -> [Resource] {
         record.repositories.map { .repository($0.id) } + record.groups.keys.sorted().flatMap { name in
-            [Resource.group(name)] + record.groups[name]!.repositories.map { .member(name, $0) }
+            [Resource.group(name)] + record.groups[name]!.repositoryIDs.map { .member(groupName: name, repositoryID: $0) }
         }
     }
     public func checked(_ resource: Resource, in record: WorkspaceRecord) async throws -> URL {
@@ -163,7 +163,7 @@ public struct WorkspaceService: Sendable {
         guard resources(record).contains(resource) else { throw MonoDeckError("target-not-configured", .resourceIsNotConfigured) }
         let main: URL
         let origin: String?
-        if let repo = resource.repo {
+        if let repo = resource.repositoryID {
             guard let repository = record.repositories.first(where: { $0.id == repo }) else { throw MonoDeckError("target-not-configured", .repositoryIsNotConfigured) }
             main = try PathSafety.child("repositories/\(repo)", of: record.rootURL, allowMissing: false)
             origin = repository.url
@@ -181,13 +181,13 @@ public struct WorkspaceService: Sendable {
     }
     func checkWorktree(_ resource: Resource, at path: URL, repository: RepositoryInspection, validateHEAD: Bool = true) async throws {
         guard repository.registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else {
-            throw MonoDeckError("resource-unavailable", resource.repo == nil ? .groupRootRegistrationIsMissing : .worktreeRegistrationIsMissing(path.path))
+            throw MonoDeckError("resource-unavailable", resource.repositoryID == nil ? .groupRootRegistrationIsMissing : .worktreeRegistrationIsMissing(path.path))
         }
         if resource.kind != .repository {
             try await git.checkRepository(path, origin: repository.origin)
             let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
             guard PathSafety.identity(URL(fileURLWithPath: repository.commonDirectory)) == PathSafety.identity(URL(fileURLWithPath: actual)) else {
-                throw MonoDeckError("resource-unavailable", resource.repo == nil ? .groupRootBelongsAnotherRepository : .worktreeBelongsAnotherRepository)
+                throw MonoDeckError("resource-unavailable", resource.repositoryID == nil ? .groupRootBelongsAnotherRepository : .worktreeBelongsAnotherRepository)
             }
         }
         if validateHEAD {
@@ -232,7 +232,7 @@ public struct WorkspaceService: Sendable {
         let repositories = Set(candidate.repositories.map(\.id))
         for (name, group) in record.groups {
             if !exists(.group(name)) { candidate.groups.removeValue(forKey: name) }
-            else { candidate.groups[name]?.repositories = group.repositories.filter { repositories.contains($0) && exists(.member(name, $0)) } }
+            else { candidate.groups[name]?.repositoryIDs = group.repositoryIDs.filter { repositories.contains($0) && exists(.member(groupName: name, repositoryID: $0)) } }
         }
         guard candidate != record else { return false }
         try persist(candidate, into: &record)
@@ -243,7 +243,7 @@ public struct WorkspaceService: Sendable {
         catch {
             let actual: WorkspaceRecord
             do { actual = try store.load(candidate.rootURL) }
-            catch { throw MonoDeckError("save-outcome-unknown", .configurationSaveAndVerificationFailedResourcesWereKept) }
+            catch { throw MonoDeckError("save-outcome-unknown", .workspaceRecordSaveAndVerificationFailedResourcesWereKept) }
             record = actual
             if actual != candidate { throw error }
         }

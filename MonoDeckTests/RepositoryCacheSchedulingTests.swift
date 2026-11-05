@@ -199,7 +199,7 @@ struct RepositoryCacheSchedulingTests {
 
     private func snapshot(_ head: String, observedAt: Date = Date()) -> RepositoryDetailSnapshot {
         .init(summary: .init(head: head, headOID: String(repeating: "a", count: 40), hasRemotes: false),
-              changes: [], commits: [], behindCommits: nil, observedAt: observedAt)
+              changes: [], uniqueCommits: [], behindCommits: nil, observedAt: observedAt)
     }
 
     private func eventually(_ condition: () async -> Bool) async throws {

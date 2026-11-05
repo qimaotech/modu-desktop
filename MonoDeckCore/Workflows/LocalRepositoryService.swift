@@ -67,7 +67,7 @@ extension WorkspaceService {
 
     private func checkedLocalRepositoryURLs(_ urls: [String], at root: URL, progress: ProgressHandler) async throws -> [String] {
         guard !urls.isEmpty else { return [] }
-        progress(.init(try RepositoryIdentity(urls[0]).name, .checkingRepository, total: urls.count))
+        progress(.init(try RepositoryIdentity(urls[0]).id, .checkingRepository, total: urls.count))
         try checkCancellation()
         return try await withThrowingTaskGroup(of: (Int, Bool).self) { group in
             var available = Array(repeating: false, count: urls.count)
@@ -82,7 +82,7 @@ extension WorkspaceService {
                 try checkCancellation()
                 available[index] = valid
                 completed += 1
-                progress(.init(try RepositoryIdentity(urls[index]).name, .checkingRepository, completed: completed, total: urls.count))
+                progress(.init(try RepositoryIdentity(urls[index]).id, .checkingRepository, completed: completed, total: urls.count))
                 try checkCancellation()
                 if next < urls.count {
                     let index = next

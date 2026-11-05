@@ -32,7 +32,7 @@ import Testing
             try await waitForDetail(model)
             #expect(model.workspace.detail.changes?.isEmpty == true && model.workspace.state(for: resource)?.dirty == false)
             #expect(model.workspace.detail.summary?.headOID == head)
-            #expect(model.workspace.detail.commits?.map(\.subject) == ["add submodule"])
+            #expect(model.workspace.detail.uniqueCommits?.map(\.subject) == ["add submodule"])
 
             let inspection = await fixture.service.inspect(fixture.root)
             let inspected = try #require(inspection.items.first { $0.resource == resource })
@@ -69,7 +69,7 @@ import Testing
         }
     }
 
-    @Test(arguments: [Resource.group("a"), Resource.member("a", "repo")])
+    @Test(arguments: [Resource.group("a"), Resource.member(groupName: "a", repositoryID: "repo")])
     func deletionKeepsUnaffectedSelectionVisibleAndRefreshesItsGitState(_ selected: Resource) async throws {
         let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
@@ -82,7 +82,7 @@ import Testing
             _ = try await fixture.service.git.run(arguments, at: fixture.root)
         }
         for name in ["a", "b"] {
-            try await fixture.prepareGroup(name, repositories: ["repo"])
+            try await fixture.prepareGroup(name, repositoryIDs: ["repo"])
         }
         let record = try fixture.service.store.load(fixture.root)
         let path = try PathSafety.child(selected.path, of: fixture.root, allowMissing: false)
@@ -99,8 +99,8 @@ import Testing
         model.workspace.selection = selected
         try await waitForDetail(model)
         let head = try #require(model.workspace.detail.summary?.headOID)
-        let commitIDs = try #require(model.workspace.detail.commits?.map(\.id))
-        #expect(model.workspace.detail.summary?.head == selected.group && commitIDs.count == 1)
+        let commitIDs = try #require(model.workspace.detail.uniqueCommits?.map(\.id))
+        #expect(model.workspace.detail.summary?.head == selected.groupName && commitIDs.count == 1)
         #expect(model.workspace.detail.changes?.map(\.path) == ["pending.txt"])
         let authorization = try await service.previewDelete(.group("b"), at: fixture.root)
 
@@ -115,13 +115,13 @@ import Testing
         printf 'test-token\\000/\\000'
         """.utf8).write(to: monitor)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: monitor.path)
-        let repository = selected.repo.map { record.repositoryURL($0) } ?? record.rootURL
+        let repository = selected.repositoryID.map { record.repositoryURL($0) } ?? record.rootURL
         for arguments in [["config", "core.fsmonitor", monitor.path], ["config", "core.fsmonitorHookVersion", "2"]] {
             _ = try await service.git.run(arguments, at: repository)
         }
         model.management.sheet = .delete
         model.management.run { service, root, progress in
-            let outcome = await service.remove(.group("b"), at: root, authorization: authorization, progress: progress)
+            let outcome = await service.delete(.group("b"), at: root, authorization: authorization, progress: progress)
             // Simulate a local edit before the post-deletion refresh.
             _ = try? await service.git.run(["commit", "--allow-empty", "-m", "after deletion"], at: path)
             try? Data("new".utf8).write(to: path.appending(path: "after.txt"))
@@ -136,7 +136,7 @@ import Testing
             #expect(model.workspace.detailLoading)
             #expect(model.workspace.selection == selected)
             #expect(model.workspace.detail.summary?.head == "a" && model.workspace.detail.summary?.headOID == head)
-            #expect(model.workspace.detail.commits?.map(\.id) == commitIDs)
+            #expect(model.workspace.detail.uniqueCommits?.map(\.id) == commitIDs)
             #expect(model.workspace.detail.changes?.map(\.path) == ["pending.txt"])
             try Data().write(to: probe.appending(path: "release"))
             await operation.value
@@ -144,7 +144,7 @@ import Testing
             await model.workspace.detailPreloadTask?.value
             #expect(model.workspace.detail.summary?.head == "a")
             #expect(model.workspace.detail.summary?.headOID != head)
-            #expect(model.workspace.detail.commits?.first?.subject == "after deletion")
+            #expect(model.workspace.detail.uniqueCommits?.first?.subject == "after deletion")
             #expect(model.workspace.detail.changes?.map(\.path) == ["after.txt", "pending.txt"])
         } catch {
             try? Data().write(to: probe.appending(path: "release"))
@@ -191,7 +191,7 @@ import Testing
         model.management.sheet = .create
         // Checkout also invokes fsmonitor; only block the reads after creation.
         model.management.run({ service, root, progress in
-            let outcome = await service.createGroup("feature", repositories: ["repo"], at: root, progress: progress)
+            let outcome = await service.createGroup("feature", repositoryIDs: ["repo"], at: root, progress: progress)
             try? Data().write(to: probe.appending(path: "completed"))
             return outcome
         }, select: .group("feature"))
@@ -199,7 +199,7 @@ import Testing
         do {
             try await waitForProbe(probe.appending(path: "started"))
             #expect(!model.busy && model.management.sheet == nil && model.presentation.result == nil)
-            #expect(model.workspace.record?.groups["feature"]?.repositories == ["repo"])
+            #expect(model.workspace.record?.groups["feature"]?.repositoryIDs == ["repo"])
             #expect(model.workspace.selection == .group("feature") && model.workspace.expandedGroups.contains("feature"))
             #expect(model.workspace.currentURL == record.groupURL("feature"))
             if blocksCreatedGroup { #expect(model.workspace.detailLoading) }
@@ -233,7 +233,7 @@ import Testing
         try await waitForDetail(model)
         let head = try #require(model.workspace.detail.summary?.headOID)
         #expect(model.workspace.detail.changes?.isEmpty == true)
-        #expect(model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true)
 
         model.workspace.selection = nil
         #expect(model.workspace.currentURL == model.workspace.record?.rootURL)
@@ -244,7 +244,7 @@ import Testing
         #expect(model.workspace.detailLoading)
         #expect(model.workspace.detail.summary?.headOID == head)
         #expect(model.workspace.detail.changes?.isEmpty == true)
-        #expect(model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true)
         try await waitForDetail(model)
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
 
@@ -253,7 +253,7 @@ import Testing
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.summary?.baseError == nil)
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true && model.workspace.detail.uniqueCommitsError == nil)
         #expect(model.workspace.details.pendingFailure?.error.code == "base-unavailable" && model.workspace.details.pendingFailure?.keepsPreviousResult == true)
         #expect(model.workspace.detail.changes?.map(\.path) == ["new.txt"])
 
@@ -262,18 +262,18 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary == nil && model.workspace.detail.summaryError != nil)
         #expect(model.workspace.detail.changes == nil && model.workspace.detail.changesError != nil)
-        #expect(model.workspace.detail.commits == nil && model.workspace.detail.commitsError != nil)
+        #expect(model.workspace.detail.uniqueCommits == nil && model.workspace.detail.uniqueCommitsError != nil)
         #expect(model.workspace.state(for: repository)?.available == false)
         #expect(model.workspace.state(for: repository)?.dirty == nil)
     }
 
-    @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
+    @Test(arguments: [Resource.repository("repo"), Resource.member(groupName: "feature", repositoryID: "repo")])
     func selectionReadsLocalBaseWithoutFetchingAndRefreshesCachedCommits(_ resource: Resource) async throws {
         let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let trace = fixture.directory.appending(path: "selection-trace")
         var runner = fixture.service.git.runner
@@ -290,7 +290,7 @@ import Testing
         try Data("pending".utf8).write(to: path.appending(path: "pending.txt"))
         model.workspace.selection = resource
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.uniqueCommits?.map(\.id) == [head, first])
         #expect(model.workspace.detail.behindCommits?.count == 0)
         model.workspace.selection = nil
         await model.workspace.detailPreloadTask?.value
@@ -306,14 +306,14 @@ import Testing
         model.workspace.selection = resource
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID == base)
-        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.uniqueCommits?.map(\.id) == [head, first])
         #expect(model.workspace.detail.behindCommits?.isEmpty == true)
 
         _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID == remote)
-        #expect(model.workspace.detail.commits?.map(\.id) == [head])
+        #expect(model.workspace.detail.uniqueCommits?.map(\.id) == [head])
         #expect(model.workspace.detail.behindCommits?.count == 1)
         #expect(model.workspace.detail.behindCommits?.map(\.id) == [remote])
         #expect(model.workspace.detail.changes?.map(\.path) == ["pending.txt"])
@@ -326,8 +326,8 @@ import Testing
         model.workspace.selection = resource
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID == base)
-        #expect(model.workspace.detail.commits?.map(\.id) == [head, first])
-        #expect(model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.uniqueCommits?.map(\.id) == [head, first])
+        #expect(model.workspace.detail.uniqueCommitsError == nil)
         #expect(model.workspace.detail.behindCommits?.count == 0)
         model.workspace.selection = nil
         await model.workspace.detailPreloadTask?.value
@@ -350,7 +350,7 @@ import Testing
         _ = try await fixture.service.git.run(["fetch", "origin"], at: path)
         model.workspace.selection = .repository("repo")
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true)
         #expect(model.workspace.detail.behindCommits?.count == 31)
         model.workspace.selection = nil
         model.workspace.selection = .repository("repo")
@@ -381,7 +381,7 @@ import Testing
         defer { fixture.remove() }
         let initial = try await makeModel(fixture)
         defer { initial.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let trace = fixture.directory.appending(path: "reload-trace")
         var runner = fixture.service.git.runner
         runner.environment["GIT_TRACE"] = trace.path
@@ -406,7 +406,7 @@ import Testing
         for (resource, file, head) in [
             (Resource.repository("repo"), "main.txt", "main"),
             (.group("feature"), "group.txt", "feature"),
-            (.member("feature", "repo"), "member.txt", "feature")
+            (.member(groupName: "feature", repositoryID: "repo"), "member.txt", "feature")
         ] {
             model.workspace.selection = resource
             #expect(model.workspace.detail.summary?.head == head)
@@ -434,7 +434,7 @@ import Testing
         let head = try #require(model.workspace.detail.summary?.headOID)
         #expect(model.workspace.detail.summary?.hasRemotes == false)
         #expect(model.workspace.detail.summary?.baseError == nil)
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true && model.workspace.detail.uniqueCommitsError == nil)
 
         _ = try await fixture.service.git.run(["init", "--bare", "--initial-branch=main", fixture.directory.appending(path: "repo.git").path], at: fixture.directory)
         _ = try await fixture.service.git.run(["remote", "add", "origin", fixture.remoteURL], at: fixture.root)
@@ -450,14 +450,14 @@ import Testing
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")
-        #expect(model.workspace.detail.commits?.map(\.subject) == ["group change"])
+        #expect(model.workspace.detail.uniqueCommits?.map(\.subject) == ["group change"])
 
         _ = try await fixture.service.git.run(["remote", "remove", "origin"], at: fixture.root)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.hasRemotes == false && model.workspace.detail.summary?.baseError == nil)
         #expect(model.workspace.detail.summary?.base == nil)
-        #expect(model.workspace.detail.commits?.isEmpty == true && model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true && model.workspace.detail.uniqueCommitsError == nil)
         #expect(model.workspace.detail.summary?.head == "feature" && model.workspace.detail.summary?.headOID == head)
         #expect(model.workspace.detail.changes?.map(\.path) == ["group.txt"])
     }
@@ -477,7 +477,7 @@ import Testing
         model.workspace.selection = .repository("repo")
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.baseOID != nil && model.workspace.detail.changesError == nil)
-        #expect(model.workspace.detail.commitsError != nil)
+        #expect(model.workspace.detail.uniqueCommitsError != nil)
         model.presentDetailFailureIfPossible()
         #expect(model.presentation.messageTitle == model.text.string(.uiGitDetailsRefreshFailed))
         #expect(model.presentation.message?.contains("invalid-date-format") == true)
@@ -544,23 +544,23 @@ import Testing
         model.workspace.selection = resource
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")
-        #expect(model.workspace.detail.commits?.map(\.subject) == (0..<31).reversed().map { "change \($0)" })
-        let detailView = RepositoryDetailView(workspace: model.workspace, preferences: model.preferences, tools: [], preferredToolIDs: [:], openTool: { _ in })
-        #expect(detailView.showsCommits)
+        #expect(model.workspace.detail.uniqueCommits?.map(\.subject) == (0..<31).reversed().map { "change \($0)" })
+        let detailView = GitBrowserView(workspace: model.workspace, preferences: model.preferences, tools: [], preferredToolIDs: [:], openTool: { _ in })
+        #expect(detailView.showsUniqueCommits)
         _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
         model.workspace.selection = nil
         model.workspace.selection = resource
-        #expect(model.workspace.detail.commits?.count == 31)
+        #expect(model.workspace.detail.uniqueCommits?.count == 31)
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 31 && model.workspace.detail.commitsError == nil)
+        #expect(model.workspace.detail.uniqueCommits?.count == 31 && model.workspace.detail.uniqueCommitsError == nil)
         #expect(model.presentation.message == nil)
 
         _ = try await fixture.service.git.run(["config", "--unset", "log.date"], at: path)
         _ = try await fixture.service.git.run(["commit", "--allow-empty", "-m", "new head"], at: path)
         model.workspace.refreshDetail()
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.count == 32)
-        #expect(model.workspace.detail.commits?.first?.subject == "new head")
+        #expect(model.workspace.detail.uniqueCommits?.count == 32)
+        #expect(model.workspace.detail.uniqueCommits?.first?.subject == "new head")
 
         let next = fixture.directory.appending(path: "next-workspace")
         try FileManager.default.createDirectory(at: next, withIntermediateDirectories: false)
@@ -570,9 +570,9 @@ import Testing
         try await model.switchTo(next)
         #expect(model.workspace.selection == nil && model.workspace.detail.summary == nil)
         model.workspace.selection = .repository("repo")
-        #expect(model.workspace.detail.commits == nil || model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.uniqueCommits == nil || model.workspace.detail.uniqueCommits?.isEmpty == true)
         try await waitForDetail(model)
-        #expect(model.workspace.detail.commits?.isEmpty == true)
+        #expect(model.workspace.detail.uniqueCommits?.isEmpty == true)
         #expect(model.workspace.detail.summary?.head == "main")
     }
 

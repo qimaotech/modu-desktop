@@ -262,7 +262,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         for change in value.changes {
             for string in [change.path, change.originalPath, change.index, change.workingTree] { cost = Self.addingCost(cost, stringCost(string)) }
         }
-        for commits in [value.commits, value.behindCommits] {
+        for commits in [value.uniqueCommits, value.behindCommits] {
             guard let commits else { continue }
             cost = Self.addingCost(cost, Self.multiplyingCost(commits.count, MemoryLayout<GitCommit>.stride))
             for commit in commits {
@@ -298,7 +298,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
             }
             let data = try read(file)
             let entry = try JSONDecoder().decode(Entry<Value>.self, from: data)
-            guard entry.version == 1, entry.key == key, entry.repository == repository, !Task.isCancelled else {
+            guard entry.version == 2, entry.key == key, entry.repository == repository, !Task.isCancelled else {
                 if kind == "detail", !Task.isCancelled { forgetDetail(key) }
                 return nil
             }
@@ -355,7 +355,7 @@ public actor RepositoryDiskCache: RepositoryDetailCaching {
         do {
             let start = ContinuousClock.now
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-            let bytes = try encoder.encode(Entry(version: 1, repository: repository, key: key, value: value))
+            let bytes = try encoder.encode(Entry(version: 2, repository: repository, key: key, value: value))
             diagnostics?.record("cache.encode", duration: start.duration(to: .now), bytes: bytes.count)
             guard !Task.isCancelled, bytes.count <= maximumEntryBytes, bytes.count <= maximumBytes else { return false }
             let file = entryURL(key: key, kind: kind)

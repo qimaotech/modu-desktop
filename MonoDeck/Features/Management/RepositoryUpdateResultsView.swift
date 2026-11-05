@@ -31,7 +31,7 @@ struct RepositoryUpdateResultRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(repositoryName).font(DialogTypography.body.monospaced())
+                Text(repositoryID).font(DialogTypography.body.monospaced())
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                     .help(fullPath)
@@ -70,7 +70,7 @@ struct RepositoryUpdateResultRow: View {
         }.padding(.vertical, 4)
     }
 
-    var repositoryName: String { item.resource.repo ?? (item.resource.path as NSString).lastPathComponent }
+    var repositoryID: String { item.resource.repositoryID ?? (item.resource.path as NSString).lastPathComponent }
     var fullPath: String { workspace.map { URL(fileURLWithPath: $0).appending(path: item.resource.path).path } ?? item.resource.path }
     var status: RepositoryUpdateResultStatus { .init(item) }
     var statusLabel: String { text.resultStatus(item) }

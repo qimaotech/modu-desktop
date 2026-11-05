@@ -11,7 +11,7 @@ public struct RepositoryCacheIdentity: Codable, Hashable, Sendable {
     public init(context: ResourceReadContext) throws {
         repository = try RepositoryCacheRepositoryIdentity(context: context)
         resource = context.resource
-        groupCreatedAt = resource.group.flatMap { context.workspace.groups[$0]?.createdAt }
+        groupCreatedAt = resource.groupName.flatMap { context.workspace.groups[$0]?.createdAt }
         worktree = try RepositoryCachePathIdentity(context.path)
         gitDirectory = try RepositoryCachePathIdentity(context.gitDirectory)
     }
@@ -21,14 +21,15 @@ public struct RepositoryCacheIdentity: Codable, Hashable, Sendable {
 
 public struct RepositoryCacheRepositoryIdentity: Codable, Hashable, Sendable {
     public let workspace: String
-    public let repository: String?
+    public let repositoryID: String?
     public let repositoryURL: String?
     public let commonDirectory: RepositoryCachePathIdentity
+    enum CodingKeys: String, CodingKey { case workspace, repositoryURL, commonDirectory; case repositoryID = "repository-id" }
 
     public init(context: ResourceReadContext) throws {
         workspace = PathSafety.identity(context.workspace.rootURL)
-        repository = context.resource.repo
-        repositoryURL = repository.flatMap { name in context.workspace.repositories.first { $0.id == name }?.url }
+        repositoryID = context.resource.repositoryID
+        repositoryURL = repositoryID.flatMap { repositoryID in context.workspace.repositories.first { $0.id == repositoryID }?.url }
         commonDirectory = try RepositoryCachePathIdentity(context.commonDirectory)
     }
 
@@ -56,32 +57,32 @@ public struct RepositoryCachePathIdentity: Codable, Hashable, Sendable {
 public struct RepositoryDetailSnapshot: Codable, Sendable {
     public let summary: GitSummary
     public let changes: [FileChange]
-    public let commits: [GitCommit]?
+    public let uniqueCommits: [GitCommit]?
     public let behindCommits: [GitCommit]?
     public let observedAt: Date
 
-    public init(summary: GitSummary, changes: [FileChange], commits: [GitCommit]?, behindCommits: [GitCommit]?, observedAt: Date) {
-        self.summary = summary; self.changes = changes; self.commits = commits
+    public init(summary: GitSummary, changes: [FileChange], uniqueCommits: [GitCommit]?, behindCommits: [GitCommit]?, observedAt: Date) {
+        self.summary = summary; self.changes = changes; self.uniqueCommits = uniqueCommits
         self.behindCommits = behindCommits; self.observedAt = observedAt
     }
 
     func hasSameContent(as other: Self) -> Bool {
-        summary == other.summary && changes == other.changes && commits == other.commits && behindCommits == other.behindCommits
+        summary == other.summary && changes == other.changes && uniqueCommits == other.uniqueCommits && behindCommits == other.behindCommits
     }
 
     var isComplete: Bool {
         guard summary.baseError == nil, summary.baseMessage == nil else { return false }
-        if summary.hasRemotes { return summary.base != nil && summary.baseOID != nil && commits != nil && behindCommits != nil }
-        return commits != nil
+        if summary.hasRemotes { return summary.base != nil && summary.baseOID != nil && uniqueCommits != nil && behindCommits != nil }
+        return uniqueCommits != nil
     }
 
-    private enum CodingKeys: String, CodingKey { case summary, changes, commits, behindCommits, observedAt }
+    private enum CodingKeys: String, CodingKey { case summary, changes, behindCommits, observedAt; case uniqueCommits = "unique-commits" }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         summary = try container.decode(Summary.self, forKey: .summary).value
         changes = try container.decode([FileChange].self, forKey: .changes)
-        commits = try container.decodeIfPresent([GitCommit].self, forKey: .commits)
+        uniqueCommits = try container.decodeIfPresent([GitCommit].self, forKey: .uniqueCommits)
         behindCommits = try container.decodeIfPresent([GitCommit].self, forKey: .behindCommits)
         observedAt = try container.decode(Date.self, forKey: .observedAt)
     }
@@ -90,7 +91,7 @@ public struct RepositoryDetailSnapshot: Codable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(Summary(summary), forKey: .summary)
         try container.encode(changes, forKey: .changes)
-        try container.encodeIfPresent(commits, forKey: .commits)
+        try container.encodeIfPresent(uniqueCommits, forKey: .uniqueCommits)
         try container.encodeIfPresent(behindCommits, forKey: .behindCommits)
         try container.encode(observedAt, forKey: .observedAt)
     }

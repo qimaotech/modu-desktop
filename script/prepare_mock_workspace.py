@@ -150,8 +150,8 @@ def generate(directory, jobs):
     order_base_updates(directory, git)
     write(root / "worktrees/feature-store-pickup/storefront-web/src/pickup.ts",
           "export function pickupMessage(location: string): string {\n  return `Ready for pickup at ${location}`;\n}\n")
-    record = {"version": 1, "root": str(root), "repositories": [{"url": f"https://example.invalid/{name}.git"} for name in REPOSITORIES],
-              "groups": {name: {"created-at": "2026-08-30T00:00:00Z", "repositories": members} for name, members in GROUPS.items()}}
+    record = {"version": 2, "root": str(root), "repositories": [{"url": f"https://example.invalid/{name}.git"} for name in REPOSITORIES],
+              "groups": {name: {"created-at": "2026-08-30T00:00:00Z", "repository-ids": members} for name, members in GROUPS.items()}}
     identity = unicodedata.normalize("NFC", str(root))
     alternate = root.with_name(root.name.swapcase())
     if alternate.exists() and os.path.samefile(root, alternate):

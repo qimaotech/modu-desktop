@@ -21,14 +21,14 @@ struct YAMLPreparationCancellationTests {
         let foreign = fixture.root.appending(path: "repositories/user-notes")
         let foreignData = Data("User data".utf8)
         let yaml = """
-        version: 1
+        version: 2
         repositories:
           - url: \(fixture.remoteURL)
           - url: \(other)
         groups:
           feature:
             created-at: '2026-01-01T00:00:00Z'
-            repositories: [repo, other]
+            repository-ids: [repo, other]
         """
         let outcome = await Task {
             await service.importWorkspaceYAML(yaml, at: fixture.root) { progress in

@@ -2,9 +2,18 @@ import Foundation
 import Testing
 @testable import MonoDeckCore
 
+extension WorkspaceService {
+    func deleteConfirmed(_ request: DeleteRequest, at root: URL, authorization: [DeletionTarget]? = nil, progress: ProgressHandler = { _ in }) async -> OperationResult {
+        if let authorization { return await delete(request, at: root, authorization: authorization, progress: progress) }
+        let preview = await delete(request, at: root)
+        guard preview.status == .confirmationRequired, let plan = preview.plan else { return preview }
+        return await delete(request, at: root, authorization: plan.deletions, progress: progress)
+    }
+}
+
 struct MonoDeckCoreTests {
     @Test func urlAndStatusParsing() throws {
-        for url in ["https://example.test/team/service.git", "ssh://git@example.test/team/service", "git@example.test:team/service.git"] { #expect(try RepositoryIdentity(url).name == "service") }
+        for url in ["https://example.test/team/service.git", "ssh://git@example.test/team/service", "git@example.test:team/service.git"] { #expect(try RepositoryIdentity(url).id == "service") }
         for url in ["/tmp/repo", "file:///tmp/repo", "https://token@example.test/team/a", "https://u:p@example.test/a", "ssh://git@example.test/../..", "git@example.test:x/../../"] { #expect(throws: MonoDeckError.self) { try RepositoryIdentity(url) } }
         let status = Data("AD file\0R  new\npath\0old\tpath\0?? untracked\0UU conflict\0".utf8)
         let changes = try Git.parseChanges(status)
@@ -20,8 +29,8 @@ struct MonoDeckCoreTests {
         #expect(changes.first { $0.path == "conflict" }?.conflict == true)
     }
     @Test func configurationAndYAMLValidation() throws {
-        #expect(throws: (any Error).self) { try ConfigValidation.validateDocument("{\"version\":1,\"version\":1}", workspace: true) }
-        #expect(throws: (any Error).self) { try ConfigValidation.validateDocument("version: 1\nunknown: true", workspace: false) }
+        #expect(throws: (any Error).self) { try WorkspaceDocumentValidation.validateRecordDocument("{\"version\":2,\"version\":2}") }
+        #expect(throws: (any Error).self) { try WorkspaceDocumentValidation.validateConfigurationDocument("version: 2\nunknown: true") }
         #expect(throws: (any Error).self) { try WorkspaceService.repositoryURLs(in: "items: [oops") }
         let urls = try WorkspaceService.repositoryURLs(in: "a:\n  - https://example.test/a.git\n  - nested: git@example.test:b\n  - echo https://example.test/c\nhttps://example.test/key: ignored")
         #expect(urls == ["https://example.test/a.git", "git@example.test:b"])
@@ -90,7 +99,7 @@ struct MonoDeckCoreTests {
         case "invalid": try Data("invalid".utf8).write(to: file)
         case "unsupported-version":
             var record = try fixture.service.store.load(fixture.root)
-            record.version = 2
+            record.version = 1
             try JSONEncoder().encode(record).write(to: file)
         case "missing-root": try FileManager.default.removeItem(at: fixture.root)
         default: break
@@ -101,10 +110,10 @@ struct MonoDeckCoreTests {
             #expect(kind == "valid" && candidate == PathSafety.canonical(fixture.root))
         } catch {
             #expect(kind != "valid")
-            if kind == "missing" { #expect((error as? MonoDeckError)?.code == "configuration-missing") }
+            if kind == "missing" { #expect((error as? MonoDeckError)?.code == "workspace-record-missing") }
             if kind == "invalid" || kind == "unsupported-version" {
                 let failure = MonoDeckError.wrap(error)
-                #expect(failure.code == "invalid-configuration")
+                #expect(failure.code == "invalid-workspace-record")
                 #expect(failure.message.contains(file.path))
             }
         }
@@ -159,19 +168,19 @@ struct MonoDeckCoreTests {
         #expect(try Data(contentsOf: ignoreFile) == ignoreContents)
         #expect(await fixture.service.addRepository(.init(url: fixture.remoteURL), at: fixture.root).status == .success)
         #expect(try Data(contentsOf: ignoreFile) == ignoreContents)
-        let created = await fixture.service.createGroup("feature-test", repositories: ["repo"], at: fixture.root)
+        let created = await fixture.service.createGroup("feature-test", repositoryIDs: ["repo"], at: fixture.root)
         #expect(created.status == .success, "\(created.items) \(created.message ?? "")")
         let record = try await fixture.service.load(fixture.root)
-        #expect(record.groups["feature-test"]?.repositories == ["repo"])
+        #expect(record.groups["feature-test"]?.repositoryIDs == ["repo"])
         #expect(try await fixture.service.git.registrations(at: fixture.root).count == 2)
         #expect(try await fixture.service.git.registrations(at: record.repositoryURL("repo")).count == 2)
-        let preview = try await fixture.service.previewDelete(.member(group: "feature-test", repo: "repo"), at: fixture.root)
+        let preview = try await fixture.service.previewDelete(.member(groupName: "feature-test", repositoryID: "repo"), at: fixture.root)
         #expect(preview[0].branch == "feature-test")
-        #expect(await fixture.service.editGroup("feature-test", repositories: [], at: fixture.root).status == .confirmationRequired)
-        let removed = await fixture.service.remove(.member(group: "feature-test", repo: "repo"), at: fixture.root, authorization: preview)
+        #expect(await fixture.service.editGroup("feature-test", repositoryIDs: [], at: fixture.root).status == .confirmationRequired)
+        let removed = await fixture.service.delete(.member(groupName: "feature-test", repositoryID: "repo"), at: fixture.root, authorization: preview)
         #expect(removed.status == .success, "\(removed.items)")
-        #expect(try await fixture.service.load(fixture.root).groups["feature-test"]?.repositories == [])
-        let deleted = await fixture.service.remove(.group("feature-test"), at: fixture.root, execute: true)
+        #expect(try await fixture.service.load(fixture.root).groups["feature-test"]?.repositoryIDs == [])
+        let deleted = await fixture.service.deleteConfirmed(.group("feature-test"), at: fixture.root)
         #expect(deleted.status == .success, "\(deleted.items) \(deleted.message ?? "")")
         #expect(try await fixture.service.load(fixture.root).groups.isEmpty)
     }
@@ -218,7 +227,7 @@ struct MonoDeckCoreTests {
         lease.unlock()
         let main = f.root.appending(path: "repositories/repo")
         _ = try await f.service.git.run(["worktree", "add", "-b", "outside", f.directory.appending(path: "outside").path], at: main)
-        let result = await f.service.remove(.repository("repo"), at: f.root, execute: true)
+        let result = await f.service.deleteConfirmed(.repository("repo"), at: f.root)
         #expect(result.reasonCode == "unmanaged-worktree")
         #expect(PathSafety.exists(main))
         #expect(try await f.service.load(f.root).repositories.count == 1)
@@ -278,15 +287,23 @@ struct Fixture: Sendable {
             return target
         })
     }
-    func prepareGroup(_ name: String, repositories: [String]) async throws {
+    func runCLI(_ arguments: [String], environment: [String: String] = [:]) async throws -> CommandOutput {
+        let executable = try #require(Bundle.main.url(forResource: "mono-deck", withExtension: nil))
+        var runner = service.git.runner
+        runner.environment["MONO_DECK_TEST_SUPPORT_DIRECTORY"] = service.store.support.path
+        runner.environment.merge(environment) { _, value in value }
+        return try await runner.run(executable.path, arguments, at: directory)
+    }
+
+    func prepareGroup(_ name: String, repositoryIDs: [String]) async throws {
         // Deletion tests need real worktrees without repeating the group creation workflow.
         try await prepareEmptyGroup(name)
         var record = try service.store.load(root)
-        for repository in repositories {
+        for repository in repositoryIDs {
             _ = try await service.git.run(["worktree", "add", "--no-track", "-b", name,
                                            record.memberURL(name, repository).path, "origin/main"], at: record.repositoryURL(repository))
         }
-        record.groups[name]?.repositories = repositories
+        record.groups[name]?.repositoryIDs = repositoryIDs
         try service.store.save(record)
     }
     func prepareEmptyGroup(_ name: String) async throws {

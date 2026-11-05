@@ -2,13 +2,13 @@ import SwiftUI
 import AppKit
 import MonoDeckCore
 
-struct RepositoryDetailView: View {
+struct GitBrowserView: View {
     @Bindable var workspace: WorkspaceModel
     var preferences: AppPreferences
     var tools: [ExternalTool]
     var preferredToolIDs: [String: String]
     var openTool: (ExternalTool) -> Void
-    private var presentation: RepositoryDetailPresentation { workspace.details.presentationCache }
+    private var presentation: GitBrowserPresentation { workspace.details.presentationCache }
 
     var body: some View {
         GeometryReader { geometry in
@@ -18,9 +18,9 @@ struct RepositoryDetailView: View {
                     .textSelection(.disabled)
                 VStack(spacing: 12) {
                     summary(compact: geometry.size.width < 760)
-                    if showsChanges && showsCommits { GitSplitView(upper: changesSection, lower: commitsSection, defaults: preferences.defaults) }
-                    else if showsChanges { changesSection }
-                    else if showsCommits { commitsSection }
+                    if showsLocalChanges && showsUniqueCommits { GitSplitView(upper: localChangesSection, lower: uniqueCommitsSection, defaults: preferences.defaults) }
+                    else if showsLocalChanges { localChangesSection }
+                    else if showsUniqueCommits { uniqueCommitsSection }
                     else { Spacer() }
                 }
             }.padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -28,18 +28,18 @@ struct RepositoryDetailView: View {
             VStack(spacing: 0) {
                 if workspace.detailLoading, workspace.detail.changes == nil, workspace.detail.changesError == nil {
                     Color.clear.frame(width: 1, height: 1).accessibilityElement()
-                        .accessibilityLabel(preferences.text.string(.uiLoadingChanges))
+                        .accessibilityLabel(preferences.text.string(.uiLoadingLocalChanges))
                 }
-                if workspace.detailLoading, workspace.detail.commits == nil, workspace.detail.commitsError == nil {
+                if workspace.detailLoading, workspace.detail.uniqueCommits == nil, workspace.detail.uniqueCommitsError == nil {
                     Color.clear.frame(width: 1, height: 1).accessibilityElement()
-                        .accessibilityLabel(preferences.text.string(.uiLoadingCommits))
+                        .accessibilityLabel(preferences.text.string(.uiLoadingUniqueCommits))
                 }
             }.allowsHitTesting(false)
         }.textSelection(.enabled)
     }
 
-    var showsChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
-    var showsCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.commits?.isEmpty == false }
+    var showsLocalChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
+    var showsUniqueCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.uniqueCommits?.isEmpty == false }
 
     private func summary(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -86,9 +86,9 @@ struct RepositoryDetailView: View {
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading).detailCard()
     }
 
-    private var changesSection: some View {
+    private var localChangesSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(preferences.text.string(.uiChanges)).font(.system(size: 13)).frame(height: 22)
+            Text(preferences.text.string(.uiLocalChanges)).font(.system(size: 13)).frame(height: 22)
             if let error = workspace.detail.changesError { unavailable(error) }
             else if let changes = workspace.detail.changes {
                 let rows = presentation.changeRows(changes, collapsed: workspace.details.collapsedPaths)
@@ -134,10 +134,10 @@ struct RepositoryDetailView: View {
         }
     }
 
-    private var commitsSection: some View {
+    private var uniqueCommitsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(preferences.text.string(.uiCommits)).font(.system(size: 13)).frame(height: 22)
-            if let commits = workspace.detail.commits {
+            Text(preferences.text.string(.uiUniqueCommits)).font(.system(size: 13)).frame(height: 22)
+            if let commits = workspace.detail.uniqueCommits {
                 let contentHeight = CGFloat(commits.count) * 22
                 let content = presentation.commitRows(commits, locale: preferences.activeLocale)
                 GeometryReader { geometry in

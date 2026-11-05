@@ -17,9 +17,9 @@ struct YAMLImportCancellationTests {
         #expect(cancelled)
         #expect(result.status == .success && result.exitCode == 0)
         #expect(result.reasonCode == nil && result.message == nil)
-        #expect(result.items.map(\.resource.repo) == ["repo", "other"])
+        #expect(result.items.map(\.resource.repositoryID) == ["repo", "other"])
         #expect(result.items.allSatisfy { $0.status == .success && $0.reasonCode == nil && $0.data?["disposition"] == "added" })
-        #expect(result.items.allSatisfy { $0.effects.contains { $0.action == "save-configuration" } && $0.effects.contains { $0.action == "commit-workspace-files" } })
+        #expect(result.items.allSatisfy { $0.effects.contains { $0.action == "save-workspace-record" } && $0.effects.contains { $0.action == "commit-workspace-files" } })
         let record = try f.service.store.load(f.root)
         #expect(record.repositories.map(\.id) == ["repo", "other"])
         for repo in record.repositories { try await f.service.git.checkRepository(record.repositoryURL(repo.id), origin: repo.url, main: true) }

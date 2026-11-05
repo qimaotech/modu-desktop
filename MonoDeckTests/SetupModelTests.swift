@@ -43,7 +43,7 @@ import Testing
     @Test(arguments: [false, true])
     func continueUsesCurrentResourcesOrExistingRegistration(_ recordAppeared: Bool) async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let suite = fixture.directory.lastPathComponent
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }

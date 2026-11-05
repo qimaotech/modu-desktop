@@ -4,7 +4,7 @@ import MonoDeckCore
 import Darwin
 
 struct MonoDeck: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "mono-deck", abstract: "Manage MonoDeck workspaces and worktree groups.", version: MonoDeckVersion.current, subcommands: [Workspace.self, Repo.self, Worktree.self])
+    static let configuration = CommandConfiguration(commandName: "mono-deck", abstract: "Manage MonoDeck workspaces, repositories, and worktree groups.", version: MonoDeckVersion.current, subcommands: [Workspace.self, Repo.self, Group.self])
 }
 let original = Array(CommandLine.arguments.dropFirst())
 let task = Task {
@@ -29,9 +29,10 @@ let task = Task {
         else { try command.run() }
     } catch {
         if MonoDeck.exitCode(for: error) == .success { MonoDeck.exit(withError: error) }
-        if original.contains("--json") || error is MonoDeckError {
+        let json = original.prefix { $0 != "--" }.contains("--json")
+        if json || error is MonoDeckError {
             let failure = (error as? MonoDeckError) ?? MonoDeckError("invalid-input", Git.sanitize(MonoDeck.message(for: error)))
-            finish(.init(command: normalizedArguments(original).prefix(2).joined(separator: "."), workspace: nil, status: .failed, error: failure), json: original.contains("--json"))
+            finish(.init(command: requestedCommand(original), workspace: nil, status: .failed, error: failure), json: json)
         }
         MonoDeck.exit(withError: error)
     }

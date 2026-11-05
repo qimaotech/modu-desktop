@@ -65,7 +65,7 @@ struct MonoDeckApp: App {
         }
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(model: model, startupWindowReady: startupWindowReady) }
-        Window(model.text.string(.uiSetUpWorkspace), id: "setup") {
+        Window(model.text.string(.uiMonoDeckSetup), id: "setup") {
             SetupView(model: model, preparedSetup: startupSetup, canReturnToMainWindow: { delegate.mainWindowIsOpen }, returnToMainWindow: delegate.returnToMainWindow)
                 .id(model.workspace.record?.root ?? model.defaults.string(forKey: "workspace"))
                 .environment(\.locale, model.preferences.activeLocale.locale)

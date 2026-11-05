@@ -233,7 +233,7 @@ final class AppModel {
 
     func presentDetailFailureIfPossible() {
         guard detailFailurePresentationID != nil, let failure = workspace.details.takeFailureForPresentation() else { return }
-        let resource = failure.resource.repo ?? failure.resource.group ?? failure.resource.path
+        let resource = failure.resource.repositoryID ?? failure.resource.groupName ?? failure.resource.path
         let overview = Git.sanitize(text.message(failure.error)).trimmingCharacters(in: .whitespacesAndNewlines)
         let diagnostic = failure.signature.diagnostic.trimmingCharacters(in: .whitespacesAndNewlines)
         var message = resource + ": " + overview

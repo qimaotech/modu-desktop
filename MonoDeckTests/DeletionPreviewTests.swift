@@ -33,7 +33,7 @@ import Testing
 
     @Test func unreadableRepositoryStatusBlocksDeletionAndPreservesResources() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let repository = Resource.repository("repo")
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -55,8 +55,8 @@ import Testing
 
     @Test func editPreflightDiscardsCancelledRequestsWithoutHoldingTheWorkspaceLock() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
-        try await fixture.prepareGroup("other", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
+        try await fixture.prepareGroup("other", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         for action in ["complete", "cancel", "reopen", "replace", "workspace", "selection", "delete", "operation"] {
             for name in ["edit-preflight-started", "edit-preflight-release"] {
@@ -95,7 +95,7 @@ import Testing
                 case "replace": model.management.edit("other", members: [])
                 case "workspace": model.workspace.record = nil
                 case "selection": model.workspace.selection = .group("other")
-                case "delete": model.management.prepareDelete(.member(group: "other", repo: "repo"))
+                case "delete": model.management.prepareDelete(.member(groupName: "other", repositoryID: "repo"))
                 case "operation":
                     model.management.run { service, root, _ in
                         do { _ = try await service.load(root); return .init(command: "workspace.inspect", workspace: root.path) }
@@ -114,10 +114,10 @@ import Testing
                 case "complete", "replace":
                     let group = action == "complete" ? "feature" : "other"
                     #expect(model.management.sheet == .delete && model.management.pendingEdit?.0 == group && model.management.pendingEdit?.1 == [])
-                    #expect(model.management.deletion.map(\.resource) == [.member(group, "repo")])
+                    #expect(model.management.deletion.map(\.resource) == [.member(groupName: group, repositoryID: "repo")])
                 case "delete":
                     #expect(model.management.sheet == .delete && model.management.pendingEdit == nil)
-                    #expect(model.management.deletion.map(\.resource) == [.member("other", "repo")])
+                    #expect(model.management.deletion.map(\.resource) == [.member(groupName: "other", repositoryID: "repo")])
                 default:
                     #expect(model.management.sheet == (action == "cancel" || action == "operation" ? nil : .edit))
                     #expect(model.management.pendingEdit == nil && model.management.deletion.isEmpty)
@@ -146,8 +146,8 @@ import Testing
 
     @Test func reopeningEditDoesNotSubmitCancelledAdditions() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
-        #expect(await fixture.service.remove(.member(group: "feature", repo: "repo"), at: fixture.root, execute: true).status == .success)
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
+        #expect(await fixture.service.deleteConfirmed(.member(groupName: "feature", repositoryID: "repo"), at: fixture.root).status == .success)
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -166,7 +166,7 @@ import Testing
     @Test(arguments: ["success", "partial-success", "cancelled"])
     func deletionUpdatesSidebarOnlyAfterOperationEnds(_ status: String) async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         try await fixture.prepareEmptyGroup("other")
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -175,7 +175,7 @@ import Testing
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = record
         model.workspace.expandedGroups = ["feature", "other"]
-        let member = Resource.member("feature", "repo")
+        let member = Resource.member(groupName: "feature", repositoryID: "repo")
         let selected = status == "success" ? Resource.group("feature") : member
         model.workspace.selection = selected
         let visibleResources = model.workspace.visibleResources
@@ -183,7 +183,7 @@ import Testing
         let release = fixture.directory.appending(path: "continue-group-deletion")
         model.management.sheet = .delete
         model.management.run { service, root, progress in
-            var outcome = await service.remove(.member(group: "feature", repo: "repo"), at: root,
+            var outcome = await service.delete(.member(groupName: "feature", repositoryID: "repo"), at: root,
                                                authorization: targets.filter { $0.resource == member }, progress: progress)
             guard outcome.status == .success else { return outcome }
             // Hold between actual member and root deletion to inspect the visible inventory.
@@ -192,7 +192,7 @@ import Testing
                 try? await Task.sleep(for: .milliseconds(20))
             }
             if status == "success" {
-                let remaining = await service.remove(.group("feature"), at: root,
+                let remaining = await service.delete(.group("feature"), at: root,
                                                      authorization: targets.filter { $0.resource.kind == .group }, progress: progress)
                 outcome.items += remaining.items
             } else {
@@ -206,12 +206,12 @@ import Testing
         let operation = try #require(model.operation)
         do {
             let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-            while model.progress?.snapshot?.groups["feature"]?.repositories.isEmpty != true, ContinuousClock.now < deadline {
+            while model.progress?.snapshot?.groups["feature"]?.repositoryIDs.isEmpty != true, ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(20))
             }
-            try #require(model.progress?.snapshot?.groups["feature"]?.repositories == [])
+            try #require(model.progress?.snapshot?.groups["feature"]?.repositoryIDs == [])
             #expect(model.busy && model.management.sheet == .delete && model.management.progressPresentation?.progress?.phase == .deleted)
-            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == [])
+            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositoryIDs == [])
             #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
             #expect(model.workspace.record == record && model.workspace.visibleResources == visibleResources)
             #expect(model.workspace.selection == selected && model.workspace.expandedGroups == ["feature", "other"])
@@ -220,14 +220,14 @@ import Testing
             await model.workspace.detailPreloadTask?.value
             #expect(!model.busy && model.management.sheet == nil && model.workspace.selection == nil)
             #expect(model.workspace.currentURL == record.rootURL && !model.workspace.detailLoading)
-            #expect(model.workspace.detail.summary == nil && model.workspace.detail.changes == nil && model.workspace.detail.commits == nil)
+            #expect(model.workspace.detail.summary == nil && model.workspace.detail.changes == nil && model.workspace.detail.uniqueCommits == nil)
             #expect(model.workspace.record == (try fixture.service.store.load(fixture.root)))
             #expect(!model.workspace.visibleResources.contains(member) && model.workspace.record?.groups["other"] != nil)
             if status == "success" {
                 #expect(model.presentation.result == nil && model.workspace.record?.groups["feature"] == nil)
                 #expect(!model.workspace.visibleResources.contains(.group("feature")))
             } else {
-                #expect(model.presentation.result?.status.rawValue == status && model.workspace.record?.groups["feature"]?.repositories == [])
+                #expect(model.presentation.result?.status.rawValue == status && model.workspace.record?.groups["feature"]?.repositoryIDs == [])
                 #expect(model.workspace.visibleResources.contains(.group("feature")) && PathSafety.exists(record.groupURL("feature")))
             }
         } catch {
@@ -240,7 +240,7 @@ import Testing
 
     @Test func deletionOpensBeforePreflightAndDiscardsObsoleteResults() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         for action in ["complete", "cancel", "replace", "reopen", "workspace", "failure"] {
             try? FileManager.default.removeItem(at: fixture.directory.appending(path: "delete-preview-probe"))
@@ -266,7 +266,7 @@ import Testing
             defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
             let model = AppModel(defaults: defaults, service: service)
             model.workspace.record = record
-            let member = Resource.member("feature", "repo")
+            let member = Resource.member(groupName: "feature", repositoryID: "repo")
             try Data("changed".utf8).write(to: record.memberURL("feature", "repo").appending(path: "README"))
             model.workspace.details.cache(.init(resource: member, available: true, dirty: false))
             model.management.prepareDelete(.group("feature"))
@@ -289,8 +289,8 @@ import Testing
                 let lease = try service.store.tryLock(fixture.root); lease.unlock()
                 switch action {
                 case "cancel": model.management.sheet = nil
-                case "replace": model.management.prepareDelete(.member(group: "feature", repo: "repo"))
-                case "reopen": model.management.sheet = nil; model.management.prepareDelete(.member(group: "feature", repo: "repo"))
+                case "replace": model.management.prepareDelete(.member(groupName: "feature", repositoryID: "repo"))
+                case "reopen": model.management.sheet = nil; model.management.prepareDelete(.member(groupName: "feature", repositoryID: "repo"))
                 case "workspace": model.workspace.record = nil
                 case "failure": try Data().write(to: probe.appending(path: "fail"))
                 default: break
@@ -311,7 +311,7 @@ import Testing
                     #expect(model.operation == nil && !model.busy)
                 } else {
                     #expect(model.management.sheet == .delete && model.management.canConfirmDelete)
-                    let expected: [Resource] = action == "replace" || action == "reopen" ? [.member("feature", "repo")] : [.member("feature", "repo"), .group("feature")]
+                    let expected: [Resource] = action == "replace" || action == "reopen" ? [.member(groupName: "feature", repositoryID: "repo")] : [.member(groupName: "feature", repositoryID: "repo"), .group("feature")]
                     #expect(model.management.deletion.map(\.resource) == expected)
                     #expect(model.management.deletion.allSatisfy { $0.branch == "feature" })
                     let target = try #require(model.management.deletion.first { $0.resource == member })
@@ -332,7 +332,7 @@ import Testing
     @Test(arguments: [false, true])
     func failedPreflightStaysInSheetAndCannotDelete(_ locked: Bool) async throws {
         let fixture = try await Fixture(template: locked ? .singleRepository : .emptyWorkspace); defer { fixture.remove() }
-        if locked { try await fixture.prepareGroup("feature", repositories: ["repo"]) }
+        if locked { try await fixture.prepareGroup("feature", repositoryIDs: ["repo"]) }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
@@ -351,7 +351,7 @@ import Testing
 
     @Test func editingMembersDiscardsACancelledDeletionRequest() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -368,18 +368,18 @@ import Testing
         try #require(model.management.sheet == .delete && model.management.canConfirmDelete)
         #expect(model.management.deleteRequest == nil)
         #expect(model.management.pendingEdit?.0 == "feature" && model.management.pendingEdit?.1 == [])
-        #expect(model.management.deletionResources == [.member("feature", "repo")])
+        #expect(model.management.deletionResources == [.member(groupName: "feature", repositoryID: "repo")])
         model.management.confirmDelete()
         await model.operation?.value
         #expect(model.presentation.result == nil && !model.busy)
-        #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == [])
+        #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositoryIDs == [])
         #expect(PathSafety.exists(record.groupURL("feature")) && PathSafety.exists(record.repositoryURL("repo")))
         #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
     }
 
     @Test func changedDeletionSafetyStopsBeforeAnyEffects() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
         let member = record.memberURL("feature", "repo")
@@ -397,10 +397,10 @@ import Testing
                 try Data("gitdir: \(other.appending(path: ".git").path)\n".utf8).write(to: metadata)
                 reason = "resource-unavailable"
             }
-            let result = await fixture.service.remove(.group("feature"), at: fixture.root, authorization: targets)
+            let result = await fixture.service.delete(.group("feature"), at: fixture.root, authorization: targets)
             #expect(result.reasonCode == reason && result.items.allSatisfy { $0.effects.isEmpty })
             #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
-            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == ["repo"])
+            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositoryIDs == ["repo"])
             switch change {
             case "lock": _ = try await fixture.service.git.run(["worktree", "unlock", member.path], at: record.repositoryURL("repo"))
             default: try originalMetadata.write(to: metadata)

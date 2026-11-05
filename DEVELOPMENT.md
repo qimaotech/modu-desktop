@@ -8,24 +8,24 @@
 | --- | --- |
 | [WorkspaceModel](MonoDeck/Features/Workspace/WorkspaceModel.swift) | 工作区加载、侧栏与选择 |
 | [ManagementModel](MonoDeck/Features/Management/ManagementModel.swift) | 管理表单、预览与增删操作 |
-| [RepositoryDetailModel](MonoDeck/Features/RepositoryBrowser/RepositoryDetailModel.swift) | Git 详情、状态缓存与后台预加载 |
+| [GitBrowserModel](MonoDeck/Features/GitBrowser/GitBrowserModel.swift) | Git 详情、状态缓存与后台预加载 |
 | [GlobalShortcutModel](MonoDeck/Features/Settings/GlobalShortcutModel.swift) | 全局快捷键配置与录制 |
 | [AppUpdateModel](MonoDeck/Features/Updates/AppUpdateModel.swift) | 更新检查、安装准备与重启交接 |
 
 - 工作区与管理操作复用 [OperationLifecycle](MonoDeck/App/OperationLifecycle.swift) 和 [OperationPresentation](MonoDeck/App/OperationPresentation.swift)；详情与更新独立管理任务。异步结果发布前复核操作标识、生命周期和当前上下文。
-- 取消请求与等待收尾分开处理；切换、写操作和退出覆盖读取、事件筛选、扫描、只读重载及辅助进程。维护不能等待自身循环；旧后台任务收尾前保留需求，不派发新任务，前台详情可独立启动。
+- 取消请求与等待收尾分开处理；切换、写操作和退出覆盖读取、事件筛选、扫描、只读登记刷新及辅助进程。维护不能等待自身循环；旧后台任务收尾前保留需求，不派发新任务，前台详情可独立启动。
 - 写操作和退出前停止相关监听与防抖，等待读取结束；退出再尽力保存缓存，最后清理 mock。取消或失败按实际效果反馈，不承诺整体回滚。
 
 ### Git 读取与缓存
 
-- 前台与后台共享读取流程，与页面发布分离。完整详情包含更改、分支与基准摘要及两侧提交历史，统一发布成功快照；刷新失败保留仍有效的旧成功结果，不用部分结果覆盖。
+- 前台与后台共享读取流程，与页面发布分离。完整详情包含本地更改、分支与基准摘要、独有提交（`base..HEAD`）和落后提交（`HEAD..base`），统一发布成功快照；刷新失败保留仍有效的旧成功结果，不用部分结果覆盖。
 - 侧栏查询已展开的主仓库、分组根和成员，排除当前资源，不受滚动位置影响，有界并发 **4**；完整详情低优先级、串行预加载。顺序固定为当前完整详情（含历史）→ 本轮侧栏查询 → 后台完整详情。
 - 启动维护结束、新展开和明确失效产生完整预加载需求；激活与空闲回调不新增完整预加载需求。侧栏查询与完整预加载无周期轮询。先补没有成功快照的资源，同级按资源 ID 排序并合并重复请求；收起移除需求并取消对应读取。
 - 轻量状态与完整详情独立维护新鲜度、尝试时间和失效代际；轻量成功不解除详情失效。展开按各自尝试时间判断，明确失效绕过期限。成功或失败消费本轮需求，失败等待后续触发，取消不计时；读取中新失效需求仍须补齐。
 - 切换或刷新立即取消后台读取并优先启动当前详情，不等待整个队列。后台、维护、写操作和退出暂停派发并取消、收尾；恢复后只处理仍在范围内的资源。后台成功只更新目标快照、侧栏状态和缓存，失败静默保留旧快照，不修改页面、加载状态、监听或弹窗。
 - 切换资源先回显同一登记身份的成功内存快照，再核对文件身份；身份失效时丢弃旧缓存，仍新鲜且上下文有效的本进程结果可复用。磁盘恢复须先核对登记、仓库及 worktree 文件身份，再继续实时读取，不视为实时成功。每个异步阶段及缓存写入前复核取消、工作区、资源身份与失效代际，防止旧结果回流。
 - 业务操作按共享 Git 仓库族失效并保留成功快照；登记删除或身份变化移除缓存，切换工作区清空内存。历史按仓库实体和 HEAD/base OID 复用；shallow、grafts、replace refs 等改变历史语义时绕过普通缓存，查询前后复核依赖。
-- 磁盘仅保存完整成功详情与两侧完整历史；损坏、版本不符、写入失败静默回退。原子写入、容量淘汰与多实例协调不得让旧观察覆盖新结果；失效移除待写项，切换不强制刷盘。容量、合并写入与清理期限以 [RepositoryDiskCache](MonoDeckCore/Infrastructure/Persistence/RepositoryDiskCache.swift) 为准，历史复用见 [RepositoryHistoryCache](MonoDeckCore/Workflows/RepositoryHistoryCache.swift)。正式启动注入缓存，直接构造模型默认禁用，mock 和测试使用本次临时目录。
+- 磁盘仅保存完整成功详情与完整的独有提交与落后提交列表；损坏、版本不符、写入失败静默回退。原子写入、容量淘汰与多实例协调不得让旧观察覆盖新结果；失效移除待写项，切换不强制刷盘。容量、合并写入与清理期限以 [RepositoryDiskCache](MonoDeckCore/Infrastructure/Persistence/RepositoryDiskCache.swift) 为准，历史复用见 [RepositoryHistoryCache](MonoDeckCore/Workflows/RepositoryHistoryCache.swift)。正式启动注入缓存，直接构造模型默认禁用，mock 和测试使用本次临时目录。
 - [ResourceReadSession](MonoDeckCore/Workflows/ResourceReadSession.swift) 只供 App 只读流程复用成功上下文，不跨轮共享可取消任务，也不用于 CLI 或写操作安全检查。登记、文件身份与有效 Git 配置依赖变化须重新验证；无法可靠确认时放弃复用，不修改用户 Git 配置。
 - 文件监听覆盖[当前资源](MonoDeckCore/Infrastructure/FileSystem/ResourceChangeMonitor.swift)和[工作区登记](MonoDeckCore/Infrastructure/FileSystem/WorkspaceRecordChangeMonitor.swift)；后台保留失效，前台恢复处理，监听不可用时补查。普通事件可防抖并按真实 ignore 规则筛选，重要元数据或不确定事件直接刷新。前台失败提示须等待空闲并复核上下文；切换、取消或成功后丢弃，持续相同错误去重，手动刷新允许重试。
 - Git 浏览与 CLI 查询只读本地数据，不 fetch。App 隐藏常规 submodule 内部及指针变化，仍保留 `.gitmodules`、类型转换和冲突；CLI 与业务安全检查读取完整状态，不能把普通嵌套仓库当子模块。
@@ -34,15 +34,15 @@
 
 - `refreshRecord` 只读同步，`maintainWorkspace` 执行目录修复、登记清理和内置工作流同步；自动刷新不得升级为维护。维护的用户影响见 [工作区文件与自动提交](README.md#工作区文件与自动提交)。
 - 单个加载循环合并请求，当前批次与待处理批次分离；登记应用统一处理资源差异、选择、展开和缓存。等待者只等待所属批次，取消等待不取消共享任务；忙碌时保留请求。
-- 写操作打断只读重载时保留刷新意图，不重放旧回调；普通刷新不能降级维护。同一维护请求合并并保留已确定的选项；切换失败或取消继续原工作区需求，切换成功或退出清理旧需求。
-- 登记监听覆盖原子替换；无关或内容未变的通知不重复读取 Git。激活按现有冷却规则合并，文件事件与手动刷新不受冷却限制。切换成功才重绑监听，记录缺失或损坏不自动初始化。同一工作区已有成功快照时，登记验证失败保留浏览内容，暂停 Git 读取并禁用管理操作；登记监听与重试仍可用，重新验证登记与工作区仓库成功后恢复读取和管理，独立的维护失败仍须维护成功才能解除。没有同一工作区快照时显示阻断错误。
+- 写操作打断只读登记刷新时保留刷新意图，不重放旧回调；普通刷新不能降级维护。同一维护请求合并并保留已确定的选项；切换失败或取消继续原工作区需求，切换成功或退出清理旧需求。
+- 登记监听覆盖原子替换；无关或内容未变的通知不重复读取 Git。激活按现有冷却规则合并，文件事件与手动刷新不受冷却限制。切换成功才重绑监听，登记缺失或损坏不自动初始化。同一工作区已有成功快照时，登记验证失败保留浏览内容，暂停 Git 读取并禁用管理操作；登记监听与重试仍可用，重新验证登记与工作区仓库成功后恢复读取和管理，独立的维护失败仍须维护成功才能解除。没有同一工作区快照时显示阻断错误。
 
 ### 启动与设置
 
 - [AppModel](MonoDeck/App/AppModel.swift) 先检查 CLI，再只读恢复工作区与页面；当前首轮完整详情完成、失败或取消后才维护，维护结束且读取允许后再补齐后台队列。PATH 检查不阻塞页面；无当前选择时直接进入维护。
 - 维护不提供用户取消入口；启动维护支持内部取消，手动维护期间阻止工作区切换，退出等待收尾。失败保留只读浏览、错误与重试入口，提示等待前台空闲；重试或切换成功清除旧失败。
 - [SetupModel](MonoDeck/Features/Setup/SetupModel.swift) 展示前检查 CLI，复用启动检查结果并绑定工作区路径；回填旧路径不读取工作区登记或 Git。切换后重新准备，同次展示避免重复检查，关闭后重开重新检查；准备任务纳入启动取消与退出等待。
-- Setup 选择目录仅记录路径，点击“继续”后加锁检查并使用原登记，或在登记缺失时初始化或扫描恢复工作区，再执行原有维护。恢复策略及元数据限制见 [开始使用](README.md#开始使用)；启动自动加载、自动刷新和普通切换不启用接管。
+- 初始设置选择目录仅记录路径，点击“继续”后加锁检查并使用原登记，或在登记缺失时初始化或扫描恢复工作区，再执行原有维护。恢复策略及元数据限制见 [开始使用](README.md#开始使用)；启动自动加载、自动刷新和普通切换不启用接管。
 - 恢复扫描依次检查主仓库、分组根和成员，每阶段最多并发 4 个资源，按目录顺序汇总结果；仓库上下文仅在本轮复用。取消停止派发并等待在途 Git 命令收尾后释放锁，扫描未完成不写登记。可选读取诊断包含 `recovery.scan`、各阶段耗时及有效资源数量。
 
 ### 自动更新
@@ -51,6 +51,13 @@
 - 后台无新版或失败保持静默，新版等待启动就绪、前台且业务及提示结束后展示。手动检查可接替后台请求，关闭自动检查取消后台请求，过期结果不得发布；下载与安装须用户确认。
 - [AppUpdateInstaller](MonoDeckCore/Infrastructure/AppUpdateInstaller.swift) 校验并在应用旁暂存新版，通过独立 CLI 安装进程接管退出后的替换与启动。App 先完成异步收尾、确认安装进程就绪再退出，避免 AppKit 延迟退出阻塞；退出超时回传失败并允许重试。
 - 请求与安装标识隔离取消及回传，不修改工作区数据。成功准备、完整性失败、取消及退出清理本次下载；其他准备失败可保留供重试。替换后不自动回滚，部分失败保留实际效果与诊断；安装要求见[安装包契约](#ci-与安装包契约)。
+
+### CLI 与领域契约
+
+- CLI 仅解析参数、输出和交互确认；预览、成员变更、锁内复核及副作用放在 Core。`group create` 只创建新分组，`group member add` 扩展已有分组，`group edit` 替换完整成员集合。
+- 所有写命令先生成计划，`--dry-run` 在任何工作区变更前返回；仅计划存在删除目标时请求确认，非交互执行通过 `--yes` 确认本次计划。创建计划和删除授权使用同一结果模型，计划动作与已发生的效果分开报告。
+- 工作区登记、YAML 和 CLI JSON schema 均为版本 2，缓存条目及目录也为 v2，不提供旧命令、旧字段或旧格式解析。格式版本与 `Version.xcconfig` 的产品版本独立维护。
+- CLI JSON 始终使用 `OperationResult`；目录树位于 `data.tree`，计划为 `plan.actions` 与 `plan.deletions`。新增命令须同步内置工作流、使用文档与实际 CLI 契约测试。
 
 ## 构建启动与调试
 
@@ -72,7 +79,7 @@
 ### 偏好与工作区选择
 
 - Debug 使用 `fun.armantang.MonoDeck.development` 偏好域，不迁移正式版偏好；`MONO_DECK_TEST_DEFAULTS` 与 mock 配置优先。数据、锁和 CLI 的共享风险见 [AGENTS.md](AGENTS.md#关键风险)。
-- 页面选择与展开状态按工作区、文件树折叠按资源保存，临时加载失败不覆盖选择。窗口几何与布局在当前偏好域保存；恢复限制在可用屏幕内，全屏期间不覆盖普通窗口记录。实现见 [AppPreferences](MonoDeck/App/AppPreferences.swift) 与 [AppDelegate](MonoDeck/App/AppDelegate.swift)。
+- 页面选择与展开状态按工作区、本地更改树折叠按资源保存，临时加载失败不覆盖选择。窗口几何与布局在当前偏好域保存；恢复限制在可用屏幕内，全屏期间不覆盖普通窗口记录。实现见 [AppPreferences](MonoDeck/App/AppPreferences.swift) 与 [AppDelegate](MonoDeck/App/AppDelegate.swift)。
 - `--reset` 仅支持不带 mock 的 run，构建成功后只清除工作区选择，保留浏览偏好、CLI 和工作区数据；使用测试偏好域时清除对应键，并取消 `MONO_DECK_TEST_WORKSPACE` 覆盖。
 
 ### 构建与日志诊断

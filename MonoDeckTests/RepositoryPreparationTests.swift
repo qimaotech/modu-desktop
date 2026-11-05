@@ -141,7 +141,7 @@ struct RepositoryPreparationTests {
     }
 
     private func workspaceYAML(_ urls: [String]) -> String {
-        "version: 1\nrepositories:\n" + urls.map { "  - url: \($0)\n" }.joined() + "groups: {}\n"
+        "version: 2\nrepositories:\n" + urls.map { "  - url: \($0)\n" }.joined() + "groups: {}\n"
     }
 }
 

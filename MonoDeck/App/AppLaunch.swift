@@ -44,6 +44,6 @@ extension AppModel {
         #else
         let configuration = "production"
         #endif
-        return RepositoryDiskCache(directory: URL.cachesDirectory.appending(path: "fun.armantang.MonoDeck/RepositoryCache/v1/\(configuration)"), diagnostics: diagnostics)
+        return RepositoryDiskCache(directory: URL.cachesDirectory.appending(path: "fun.armantang.MonoDeck/RepositoryCache/v2/\(configuration)"), diagnostics: diagnostics)
     }
 }

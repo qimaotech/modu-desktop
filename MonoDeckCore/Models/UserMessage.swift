@@ -2,7 +2,7 @@ import Foundation
 
 public indirect enum UserMessage: Sendable, Equatable {
     case duplicateURL
-    case repositoryNameCollision(String)
+    case repositoryIDCollision(String)
     case branchReuseComparisonUnavailable(String, String, UserMessage, isWorkspace: Bool)
     case branchReuseBehind(String, Int, String, isWorkspace: Bool)
     case unmanagedWorktrees([String])
@@ -11,7 +11,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case diagnostic(String)
     case joined([UserMessage], separator: String)
     case workspaceRepositoryIsUnavailable(UserMessage)
-    case repositoryNameIsAlreadyRegistered(String)
+    case repositoryIDIsAlreadyRegistered(String)
     case repositoryTargetAlreadyExists(String)
     case remoteDefaultBranchDoesNotIdentifyCommit
     case repositoryTargetIsOccupied
@@ -67,7 +67,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case worktreeHEADIsUnavailable
     case workspaceIsNotWritable(String)
     case chooseOrdinaryGitMainWorktreeOrDirectoryOutside
-    case configurationSaveAndVerificationFailedResourcesWereKept
+    case workspaceRecordSaveAndVerificationFailedResourcesWereKept
     case operationCancelledCompletedResourcesWereKept
     case useHTTPSSSHOrSCPStyleGitURL
     case notProcessedBecauseOperationStopped
@@ -125,15 +125,17 @@ public indirect enum UserMessage: Sendable, Equatable {
     case noRegisteredWorkspaceContainsCurrentDirectoryUseWorkspace
     case workspacesCanTBeNested(String)
     case invalidVersionOrCanonicalRootPath
-    case duplicateRepositoryIdentity(String)
+    case duplicateRepositoryID(String)
     case invalidGroup(String)
     case couldNotOpenWorkspaceLock
     case expectedOneConfigurationDocument
+    case expectedOneWorkspaceRecordDocument
     case repositoriesMustBeList
     case repositoryMustBeMapping
     case groupsMustBeMapping
     case groupMustBeMapping
     case unknownOrDuplicateConfigurationField
+    case unknownOrDuplicateWorkspaceRecordField
     case gitReturnedNoWorktreeRegistrations
     case branchIsAlreadyCheckedOut(String)
     case notRepositoryRoot2(String)
@@ -181,13 +183,13 @@ public indirect enum UserMessage: Sendable, Equatable {
     case couldNotAcquireWorkspaceLock
     case workspaceLockTimedOut
     case mainRepositoryWillBeMovedTrash
-    case onlyRepositoryDeclarationWillBeRemoved
+    case onlyRepositoryRecordEntryWillBeRemoved
     case workingTreeIsClean
     case changedPathsWillBeMovedTrash(Int)
     case changedPathsWillBePermanentlyDeleted(Int)
     case detachedHEADNoBranchDelete
     case currentLocalBranchWillBePermanentlyDeletedIncluding(String)
-    case directoryAndRegistrationAreMissingOnlyDeclarationWill
+    case missingWorktreeRemovesOnlyRecordEntry
     case cleanupFailed(UserMessage)
     case branchTargetCompletedEffectsAreRetained(String)
 
@@ -197,14 +199,14 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .workspaceChangesWereRestored: return "Workspace changes were restored."
         case .workspaceChangeCancelled: return "Workspace change cancelled."
         case .branchReuseBehind(let branch, let count, let base, _): return "Reused branch '\(branch)' is \(count) \(count == 1 ? "commit" : "commits") behind '\(base)'. Its commits were kept."
-        case .unmanagedWorktrees(let paths): return "Repository is still used by worktrees outside MonoDeck’s configuration. Resolve them outside MonoDeck first. No resources were changed.\n" + paths.joined(separator: "\n")
+        case .unmanagedWorktrees(let paths): return "Repository is still used by worktrees outside MonoDeck’s workspace record. Resolve them outside MonoDeck first. No resources were changed.\n" + paths.joined(separator: "\n")
         case .branchReuseComparisonUnavailable(let arg1, let arg2, let arg3, _): return "Reused branch '\(arg1)', but its comparison with '\(arg2)' is unavailable. \(arg3.englishDescription)"
-        case .repositoryNameCollision(let arg1): return "Different URLs derive the same repository name: \(arg1)"
+        case .repositoryIDCollision(let arg1): return "Different URLs derive the same repository ID: \(arg1)"
         case .duplicateURL: return "Duplicate URL."
         case .diagnostic(let value): return value
         case .joined(let values, let separator): return values.map(\.englishDescription).joined(separator: separator)
         case .workspaceRepositoryIsUnavailable(let arg1): return "Workspace repository is unavailable: \(arg1.englishDescription)"
-        case .repositoryNameIsAlreadyRegistered(let arg1): return "Repository name is already registered: \(arg1)"
+        case .repositoryIDIsAlreadyRegistered(let arg1): return "Repository ID is already registered: \(arg1)"
         case .repositoryTargetAlreadyExists(let arg1): return "Repository target already exists: \(arg1)"
         case .remoteDefaultBranchDoesNotIdentifyCommit: return "Remote default branch does not identify a commit."
         case .repositoryTargetIsOccupied: return "Repository target is occupied."
@@ -225,7 +227,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .groupIsNotConfigured: return "Group is not configured."
         case .memberIsNotConfigured: return "Member is not configured."
         case .missingRepositoryStillHasConfiguredMembers: return "Missing repository still has configured members."
-        case .existingDirectoryHasNoMatchingGitRegistration(let arg1): return "Existing directory has no matching Git registration: \(arg1)"
+        case .existingDirectoryHasNoMatchingGitRegistration(let arg1): return "Existing directory has no matching Git worktree registration: \(arg1)"
         case .worktreeIsLocked(let arg1): return "Worktree is locked: \(arg1)"
         case .registeredWorktreeHEADIsUnreadable(let arg1): return "Registered worktree HEAD is unreadable: \(arg1)"
         case .repositoryMembersMustBeRemovedFirst: return "Repository members must be removed first."
@@ -238,7 +240,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .groupRootHEADIsUnavailable: return "Group root HEAD is unavailable."
         case .linkedWorktreesForRepositoriesContainingSubmodulesAreNot(let arg1): return "Linked worktrees for repositories containing submodules are not supported: \(arg1)"
         case .worktreePathAlreadyExists(let arg1): return "Worktree path already exists: \(arg1)"
-        case .worktreePathIsAlreadyRegistered: return "Worktree path is already registered."
+        case .worktreePathIsAlreadyRegistered: return "Worktree path is already registered with Git."
         case .noLocalStartingCommitUpdateMainRepositoryFirst(let arg1): return "No local starting commit. Update the main repository first: \(arg1)"
         case .couldNotVerifyNewBranch(let arg1): return "Could not verify the new branch: \(arg1)"
         case .newBranchChangedDuringCreationAndWasKept(let arg1): return "The new branch changed during creation and was kept: \(arg1)"
@@ -253,14 +255,14 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .workspaceTracksRepositoriesOrWorktreesRemovePathsFrom: return "Workspace tracks repositories/ or worktrees/. Remove those paths from Git outside MonoDeck first."
         case .repositorySummaryIsUnavailable: return "Repository summary is unavailable."
         case .resourceIsNotConfigured: return "Resource is not configured."
-        case .worktreeRegistrationIsMissing(let arg1): return "Worktree registration is missing: \(arg1)"
+        case .worktreeRegistrationIsMissing(let arg1): return "Git worktree registration is missing: \(arg1)"
         case .worktreeBelongsAnotherRepository: return "Worktree belongs to another repository."
-        case .groupRootRegistrationIsMissing: return "Group root registration is missing."
+        case .groupRootRegistrationIsMissing: return "Group root Git worktree registration is missing."
         case .groupRootBelongsAnotherRepository: return "Group root belongs to another repository."
         case .worktreeHEADIsUnavailable: return "Worktree HEAD is unavailable."
         case .workspaceIsNotWritable(let arg1): return "Workspace is not writable: \(arg1)"
         case .chooseOrdinaryGitMainWorktreeOrDirectoryOutside: return "Choose an ordinary Git main worktree or a directory outside another repository."
-        case .configurationSaveAndVerificationFailedResourcesWereKept: return "Configuration save and verification failed. Resources were kept; inspect the workspace record before retrying."
+        case .workspaceRecordSaveAndVerificationFailedResourcesWereKept: return "Workspace record save and verification failed. Resources were kept; inspect the workspace record before retrying."
         case .operationCancelledCompletedResourcesWereKept: return "Operation cancelled; completed resources were kept."
         case .useHTTPSSSHOrSCPStyleGitURL: return "Use an HTTPS, SSH, or SCP-style Git URL without embedded credentials."
         case .notProcessedBecauseOperationStopped: return "Not processed because the operation stopped."
@@ -318,15 +320,17 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .noRegisteredWorkspaceContainsCurrentDirectoryUseWorkspace: return "No registered workspace contains the current directory. Use --workspace <root>."
         case .workspacesCanTBeNested(let arg1): return "Workspaces can’t be nested: \(arg1)"
         case .invalidVersionOrCanonicalRootPath: return "Invalid version or canonical root path."
-        case .duplicateRepositoryIdentity(let arg1): return "Duplicate repository identity: \(arg1)"
+        case .duplicateRepositoryID(let arg1): return "Duplicate repository ID: \(arg1)"
         case .invalidGroup(let arg1): return "Invalid group: \(arg1)"
         case .couldNotOpenWorkspaceLock: return "Could not open workspace lock."
         case .expectedOneConfigurationDocument: return "Expected one configuration document."
+        case .expectedOneWorkspaceRecordDocument: return "Expected one workspace record document."
         case .repositoriesMustBeList: return "repositories must be a list."
         case .repositoryMustBeMapping: return "Repository must be a mapping."
         case .groupsMustBeMapping: return "groups must be a mapping."
         case .groupMustBeMapping: return "Group must be a mapping."
         case .unknownOrDuplicateConfigurationField: return "Unknown or duplicate configuration field."
+        case .unknownOrDuplicateWorkspaceRecordField: return "Unknown or duplicate workspace record field."
         case .gitReturnedNoWorktreeRegistrations: return "Git returned no worktree registrations."
         case .branchIsAlreadyCheckedOut(let arg1): return "Branch is already checked out: \(arg1)"
         case .notRepositoryRoot2(let arg1): return "Not a repository root: \(arg1)"
@@ -374,13 +378,13 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .couldNotAcquireWorkspaceLock: return "Could not acquire workspace lock."
         case .workspaceLockTimedOut: return "Timed out acquiring the workspace lock after 10 retries. Try again after the other MonoDeck operation finishes."
         case .mainRepositoryWillBeMovedTrash: return "Main repository will be moved to Trash."
-        case .onlyRepositoryDeclarationWillBeRemoved: return "Only the repository declaration will be removed."
+        case .onlyRepositoryRecordEntryWillBeRemoved: return "Only the repository entry in the workspace record will be removed."
         case .workingTreeIsClean: return "Working tree is clean."
         case .changedPathsWillBeMovedTrash(let arg1): return "\(arg1) changed paths will be moved to Trash."
         case .changedPathsWillBePermanentlyDeleted(let arg1): return "\(arg1) changed paths will be permanently deleted."
         case .detachedHEADNoBranchDelete: return "Detached HEAD — no branch to delete."
         case .currentLocalBranchWillBePermanentlyDeletedIncluding(let arg1): return "Current local branch '\(arg1)' will be permanently deleted, including unmerged commits."
-        case .directoryAndRegistrationAreMissingOnlyDeclarationWill: return "Directory and registration are missing; only the declaration will be removed. No branch will be deleted."
+        case .missingWorktreeRemovesOnlyRecordEntry: return "The worktree directory and Git registration are missing; only the workspace record entry will be removed. No branch will be deleted."
         case .cleanupFailed(let arg1): return "Cleanup failed: \(arg1.englishDescription)"
         case .branchTargetCompletedEffectsAreRetained(let arg1): return "Branch target: \(arg1). Completed effects are retained."
         }

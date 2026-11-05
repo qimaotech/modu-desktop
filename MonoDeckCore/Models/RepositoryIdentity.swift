@@ -1,7 +1,7 @@
 import Foundation
 
 public struct RepositoryIdentity: Sendable {
-    public let name: String
+    public let id: String
     public init(_ raw: String) throws {
         let fail = MonoDeckError("invalid-input", .useHTTPSSSHOrSCPStyleGitURL)
         guard raw == raw.trimmingCharacters(in: .whitespacesAndNewlines), !raw.contains(where: { $0.isWhitespace || $0.isNewline || $0.asciiValue == 0 }) else { throw fail }
@@ -19,10 +19,10 @@ public struct RepositoryIdentity: Sendable {
             guard host.count == 2, !host[0].isEmpty, !host[1].isEmpty else { throw fail }
             path = String(raw[raw.index(after: colon)...]).components(separatedBy: "?")[0].components(separatedBy: "#")[0]
         }
-        var n = path.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? ""
-        if n.hasSuffix(".git") { n.removeLast(4) }
-        guard n.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) != nil, n != ".", n != ".." else { throw fail }
-        name = n
+        var repositoryID = path.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? ""
+        if repositoryID.hasSuffix(".git") { repositoryID.removeLast(4) }
+        guard repositoryID.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) != nil, repositoryID != ".", repositoryID != ".." else { throw fail }
+        id = repositoryID
     }
     private static func sensitiveQuery(_ query: String) -> Bool {
         query.lowercased().contains("token") || query.lowercased().contains("password") || query.lowercased().contains("secret") || query.lowercased().contains("authorization")

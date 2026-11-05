@@ -11,11 +11,11 @@ extension WorkspaceService {
                 let path = try PathSafety.child("repositories/\(entry.lastPathComponent)", of: root, allowMissing: false)
                 let origin = try await git.run(["config", "--get", "remote.origin.url"], at: path).text
                 let identity = try RepositoryIdentity(origin)
-                let expected = try PathSafety.child("repositories/\(identity.name)", of: root, allowMissing: false)
+                let expected = try PathSafety.child("repositories/\(identity.id)", of: root, allowMissing: false)
                 guard PathSafety.identity(path) == PathSafety.identity(expected) else { return nil }
                 var inspection = try await inspectMainRepository(path)
                 inspection.origin = origin
-                try await checkWorktree(.repository(identity.name), at: path, repository: inspection)
+                try await checkWorktree(.repository(identity.id), at: path, repository: inspection)
                 return .init(repository: Repository(url: origin), inspection: inspection)
             } catch { try checkCancellation(); return nil }
         }
@@ -34,21 +34,21 @@ extension WorkspaceService {
             } catch { try checkCancellation(); return nil }
         }
         let groups = groupCandidates.compactMap { $0 }
-        for name in groups { record.groups[name] = WorktreeGroup(createdAt: createdAt, repositories: []) }
+        for name in groups { record.groups[name] = WorktreeGroup(createdAt: createdAt, repositoryIDs: []) }
         git.runner.diagnostics?.record("recovery.groups.accepted", count: groups.count)
         let memberCandidates = groups.flatMap { name in
-            repositories.map { RecoveryMember(group: name, repository: $0.repository.id, inspection: $0.inspection) }
+            repositories.map { RecoveryMember(groupName: name, repository: $0.repository.id, inspection: $0.inspection) }
         }
         let members = try await recoverResources(memberCandidates, phase: "members") { member -> RecoveryMember? in
             do {
-                let resource = Resource.member(member.group, member.repository)
+                let resource = Resource.member(groupName: member.groupName, repositoryID: member.repository)
                 let path = try PathSafety.child(resource.path, of: root, allowMissing: false)
                 try await checkWorktree(resource, at: path, repository: member.inspection)
                 return member
             } catch { try checkCancellation(); return nil }
         }
         let acceptedMembers = members.compactMap { $0 }
-        for member in acceptedMembers { record.groups[member.group]?.repositories.append(member.repository) }
+        for member in acceptedMembers { record.groups[member.groupName]?.repositoryIDs.append(member.repository) }
         git.runner.diagnostics?.record("recovery.members.accepted", count: acceptedMembers.count)
         try checkCancellation()
         guard !record.repositories.isEmpty || !record.groups.isEmpty else { throw MonoDeckError("workspace-not-empty", .noRecoverableWorkspaceResources) }
@@ -94,7 +94,7 @@ private struct RecoveredRepository: Sendable {
 }
 
 private struct RecoveryMember: Sendable {
-    let group: String
+    let groupName: String
     let repository: String
     let inspection: RepositoryInspection
 }

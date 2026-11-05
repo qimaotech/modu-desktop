@@ -88,7 +88,7 @@ final class ManagementModel {
             await previousEdit?.value
             await session.waitForReadCancellation()
             let outcome = await body(service, root, report)
-            let isWorktreeOperation = ["worktree.create", "worktree.update", "worktree.remove"].contains(outcome.command)
+            let isGroupOperation = ["group.create", "group.edit", "group.delete", "group.member.add", "group.member.delete"].contains(outcome.command)
             let noEffects = outcome.items.allSatisfy { $0.effects.isEmpty }
             if outcome.status == .failed, noEffects, sheet != nil, sheet != .delete, !presentation.quitPending {
                 formError = outcome.message == nil ? outcome.items.filter { $0.message != nil }.map(text.message).joined(separator: "\n") : text.message(outcome)
@@ -105,7 +105,7 @@ final class ManagementModel {
                 presentation.result = text.resultDisplayItems(outcome).isEmpty ? nil : outcome
             } else if outcome.status == .success && !presentation.quitPending {
                 presentation.result = outcome.hasWarnings ? outcome : nil
-                if presentation.result == nil, presentation.resultHost == .main, !isWorktreeOperation {
+                if presentation.result == nil, presentation.resultHost == .main, !isGroupOperation {
                     presentation.completionMessage = text.string(.uiCompleted)
                     Task { try? await Task.sleep(for: .seconds(3)); if operationGeneration == operationToken { presentation.completionMessage = nil } }
                 }
@@ -121,15 +121,20 @@ final class ManagementModel {
             await Task { @MainActor [self] in
                 await session.refreshRecord(refreshingSidebar: false, afterLoad: { [self] in
                     guard operationGeneration == operationToken, session.record?.rootURL == root, session.selection == selectionAtCompletion else { return }
-                    if let select, let workspace = session.record, service.resources(workspace).contains(select) { session.selection = select; if let group = select.group { session.expandedGroups.insert(group) } }
-                    else if let last = outcome.items.last(where: { $0.data?["disposition"] == "added" }), outcome.command == "repo.import-yaml" { session.selection = last.resource }
+                    if let select, let workspace = session.record, service.resources(workspace).contains(select) { session.selection = select; if let group = select.groupName { session.expandedGroups.insert(group) } }
+                    else if let last = outcome.items.last(where: { $0.data?["disposition"] == "added" }), outcome.command == "repo.import" { session.selection = last.resource }
                 })
             }.value
         }
         operations.attach(task, to: operationID)
     }
-    func add(_ url: String, name: String) { run({ service, root, progress in await service.addRepository(.init(url: url.trimmingCharacters(in: .whitespacesAndNewlines), name: name.isEmpty ? nil : name), at: root, progress: progress) }, select: try? Resource.repository(RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)).name)) }
-    func create(_ group: String, members: [String]) { run({ service, root, progress in await service.createGroup(group, repositories: members, at: root, progress: progress) }, select: .group(group)) }
+    func add(_ url: String, displayName: String) {
+        let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        run({ service, root, progress in
+            await service.addRepository(.init(url: url, displayNameOverride: displayName.isEmpty ? nil : displayName), at: root, progress: progress)
+        }, select: try? Resource.repository(RepositoryIdentity(url).id))
+    }
+    func create(_ group: String, members: [String]) { run({ service, root, progress in await service.createGroup(group, repositoryIDs: members, at: root, progress: progress) }, select: .group(group)) }
     func edit(_ group: String, members: [String]) {
         guard let root = session.record?.rootURL, session.canManage else { return }
         let previous = editPreviewTask
@@ -139,15 +144,15 @@ final class ManagementModel {
         editPreviewTask = Task {
             await previous?.value
             guard !Task.isCancelled, editPreviewGeneration == context, session.record?.rootURL == root, sheet == .edit, !busy else { return }
-            let preview = await service.editGroupPreview(group, repositories: members, at: root)
+            let preview = await service.editGroupPreview(group, repositoryIDs: members, at: root)
             guard !Task.isCancelled, editPreviewGeneration == context, session.record?.rootURL == root, sheet == .edit, !busy else { return }
             editPreviewTask = nil
             if preview.status == .confirmationRequired {
-                deletion = preview.plan ?? []; deleteRequest = nil
+                deletion = preview.plan?.deletions ?? []; deleteRequest = nil
                 pendingEdit = (group, members); sheet = .delete
             }
             else if preview.status == .failed { formError = text.message(preview); formErrorDetails = preview.message.map(Git.sanitize) }
-            else { run({ service, root, progress in await service.editGroup(group, repositories: members, at: root, progress: progress) }) }
+            else { run({ service, root, progress in await service.editGroup(group, repositoryIDs: members, at: root, progress: progress) }) }
         }
     }
     func prepareDelete(_ request: DeleteRequest) {
@@ -191,8 +196,8 @@ final class ManagementModel {
     func confirmDelete() {
         guard canConfirmDelete else { return }
         let authorization = deletion
-        if let edit = pendingEdit { run({ service, root, progress in await service.editGroup(edit.0, repositories: edit.1, at: root, authorization: authorization, progress: progress) }) }
-        else if let request = deleteRequest { run({ service, root, progress in await service.remove(request, at: root, authorization: authorization, progress: progress) }) }
+        if let edit = pendingEdit { run({ service, root, progress in await service.editGroup(edit.0, repositoryIDs: edit.1, at: root, authorization: authorization, progress: progress) }) }
+        else if let request = deleteRequest { run({ service, root, progress in await service.delete(request, at: root, authorization: authorization, progress: progress) }) }
     }
     func prepareRepositoryImport(_ text: String, filename: String) {
         guard let root = session.record?.rootURL, sheet == .add, session.canManage else { return }
@@ -248,7 +253,7 @@ final class ManagementModel {
         run { service, root, progress in await service.importRepositories(urls, at: root, progress: progress) }
     }
     func importWorkspace(_ text: String, filename: String) { importFileName = filename; run { service, root, progress in await service.importWorkspaceYAML(text, at: root, progress: progress) } }
-    func update() { run { service, root, progress in await service.updateRepositories(at: root, progress: progress) } }
+    func updateRepositories() { run { service, root, progress in await service.updateRepositories(at: root, progress: progress) } }
 
     func presentError(_ error: Error) {
         formError = text.message(error)

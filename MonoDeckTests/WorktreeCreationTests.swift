@@ -9,7 +9,7 @@ struct WorktreeCreationTests {
         let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let probe = try installReferenceHook(at: repository, fixture: f, phase: phase)
-        let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
+        let task = Task { await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root) }
         let result: OperationResult
         do {
             try await waitFor(probe.started)
@@ -22,7 +22,7 @@ struct WorktreeCreationTests {
             throw error
         }
         #expect(result.status == .cancelled, "\(result.items)")
-        let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
+        let resource: Resource = kind == "root" ? .group("feature") : .member(groupName: "feature", repositoryID: "repo")
         let item = try #require(result.items.first { $0.resource == resource })
         #expect(item.status == .cancelled && item.reasonCode == "cancelled")
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == nil)
@@ -30,7 +30,7 @@ struct WorktreeCreationTests {
         let saved = try f.service.store.load(f.root)
         if kind == "root" { #expect(saved.groups["feature"] == nil) }
         else {
-            #expect(saved.groups["feature"]?.repositories == [])
+            #expect(saved.groups["feature"]?.repositoryIDs == [])
             #expect(PathSafety.exists(saved.groupURL("feature")))
             #expect(try await f.service.git.oid("refs/heads/feature", at: f.root) != nil)
         }
@@ -57,7 +57,7 @@ struct WorktreeCreationTests {
         while [ ! -e "\(release.path)" ]; do sleep 0.02; done
         """.utf8).write(to: hook)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
-        let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
+        let task = Task { await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root) }
         let result: OperationResult
         do {
             try await waitFor(started)
@@ -71,7 +71,7 @@ struct WorktreeCreationTests {
         }
         #expect(result.status == .cancelled, "\(result.items)")
         #expect(try await f.service.git.oid("refs/heads/feature", at: repository) == oid)
-        let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
+        let resource: Resource = kind == "root" ? .group("feature") : .member(groupName: "feature", repositoryID: "repo")
         #expect(!PathSafety.exists(record.rootURL.appending(path: resource.path)))
         #expect(!result.items.flatMap(\.effects).contains { $0.action == "create-branch" && $0.state == "reverted" })
     }
@@ -79,7 +79,7 @@ struct WorktreeCreationTests {
     @Test func branchCleanupFailureReportsTheResidualBranch() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let probe = try installReferenceHook(at: f.root, fixture: f, phase: "committed", rejectDeletion: true)
-        let task = Task { await f.service.createGroup("feature", repositories: ["repo"], at: f.root) }
+        let task = Task { await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root) }
         let result: OperationResult
         do {
             try await waitFor(probe.started)
@@ -109,9 +109,9 @@ struct WorktreeCreationTests {
         let reused = try await commit(after: original, message: "Feature change", at: repository, git: f.service.git)
         _ = try await f.service.git.run(["update-ref", kind == "root" ? "refs/heads/main" : "refs/remotes/origin/main", base], at: repository)
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", reused], at: repository)
-        let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
+        let result = await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root)
         #expect(result.status == .success && result.exitCode == 0, "\(result.message ?? "") \(result.items)")
-        let resource: Resource = kind == "root" ? .group("feature") : .member("feature", "repo")
+        let resource: Resource = kind == "root" ? .group("feature") : .member(groupName: "feature", repositoryID: "repo")
         let item = try #require(result.items.first { $0.resource == resource })
         let behind = history == "diverged"
         #expect(result.hasWarnings == behind && item.hasWarning == behind)
@@ -131,7 +131,7 @@ struct WorktreeCreationTests {
         let oid = try #require(try await f.service.git.oid("HEAD", at: repository))
         _ = try await f.service.git.run(["update-ref", "refs/heads/feature", oid], at: repository)
         _ = try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/missing"], at: repository)
-        let result = await f.service.createGroup("feature", repositories: ["repo"], at: f.root)
+        let result = await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root)
         #expect(result.status == .success && result.hasWarnings)
         let member = try #require(result.items.first { $0.resource.kind == .member })
         #expect(member.data?["warning-code"] == "branch-comparison-unavailable")
@@ -151,7 +151,7 @@ struct WorktreeCreationTests {
         for json in [false, true] {
             let group = json ? "feature-json" : "feature-text"
             _ = try await f.service.git.run(["update-ref", "refs/heads/\(group)", original], at: f.root)
-            let arguments = ["worktree", "create", group, "--repo", "repo", "--workspace", f.root.path] + (json ? ["--json"] : [])
+            let arguments = ["group", "create", group, "--repo", "repo", "--workspace", f.root.path] + (json ? ["--json"] : [])
             let output = try await runner.run(executable.path, arguments)
             #expect(output.status == 0, "\(output.text)")
             if json {
@@ -159,7 +159,7 @@ struct WorktreeCreationTests {
                 #expect(result.status == .success && result.hasWarnings)
                 #expect(result.items.first?.data?["behind-count"] == "1")
             } else {
-                #expect(output.text.contains("worktree.create: success") && output.text.contains("1 commit behind 'workspace HEAD'"))
+                #expect(output.text.contains("group.create: success") && output.text.contains("1 commit behind 'workspace HEAD'"))
             }
             #expect(try await f.service.git.oid("HEAD", at: record.groupURL(group)) == original)
         }

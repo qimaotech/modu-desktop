@@ -10,6 +10,8 @@ struct RepositoryDiskCacheTests {
         let directory = f.directory.appending(path: "cache")
         let observedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let detail = sampleDetail(observedAt: observedAt)
+        let encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(detail)) as? [String: Any])
+        #expect(encoded["unique-commits"] != nil && encoded["commits"] == nil)
         let history = sampleHistory()
         let key = RepositoryHistoryCacheKey(repository: identity.repository, head: detail.summary.headOID, base: String(repeating: "b", count: 40))
         let cache = RepositoryDiskCache(directory: directory)
@@ -22,7 +24,7 @@ struct RepositoryDiskCacheTests {
         #expect(restored.observedAt == observedAt)
         #expect(restored.summary == detail.summary)
         #expect(restored.changes == detail.changes)
-        #expect(restored.commits == detail.commits && restored.behindCommits == detail.behindCommits)
+        #expect(restored.uniqueCommits == detail.uniqueCommits && restored.behindCommits == detail.behindCommits)
         let restoredHistory = try #require(await reopened.loadHistory(for: key))
         #expect(restoredHistory.ahead == history.ahead && restoredHistory.behind == history.behind)
     }
@@ -65,7 +67,7 @@ struct RepositoryDiskCacheTests {
         let bounded = RepositoryDiskCache(directory: directory, maximumEntryBytes: 8_192)
         var oversized = sampleDetail()
         oversized = RepositoryDetailSnapshot(summary: oversized.summary, changes: oversized.changes,
-                                              commits: [.init(id: String(repeating: "a", count: 40), subject: String(repeating: "x", count: 20_000), author: "Author", date: "2026-11-02T00:00:00Z")],
+                                              uniqueCommits: [.init(id: String(repeating: "a", count: 40), subject: String(repeating: "x", count: 20_000), author: "Author", date: "2026-11-02T00:00:00Z")],
                                               behindCommits: [], observedAt: oversized.observedAt)
         await bounded.saveDetail(oversized, for: identity)
         await bounded.flush()
@@ -86,18 +88,18 @@ struct RepositoryDiskCacheTests {
         var unavailableBase = successful.summary
         unavailableBase.baseError = "Base is temporarily unavailable"
         for summary in [unavailableBase, successful.summary] {
-            let incomplete = RepositoryDetailSnapshot(summary: summary, changes: [], commits: nil, behindCommits: [], observedAt: Date())
+            let incomplete = RepositoryDetailSnapshot(summary: summary, changes: [], uniqueCommits: nil, behindCommits: [], observedAt: Date())
             await cache.saveDetail(incomplete, for: identity)
             await cache.flush()
             #expect(await cache.loadDetail(for: identity)?.changes == successful.changes)
         }
         let local = RepositoryDetailSnapshot(summary: .init(head: "local", headOID: String(repeating: "c", count: 40), hasRemotes: false),
-                                             changes: [], commits: [], behindCommits: nil, observedAt: Date())
+                                             changes: [], uniqueCommits: [], behindCommits: nil, observedAt: Date())
         await cache.saveDetail(local, for: identity)
         await cache.flush()
         let restored = try #require(await cache.loadDetail(for: identity))
         #expect(!restored.summary.hasRemotes && restored.summary.head == "local")
-        #expect(restored.commits?.isEmpty == true && restored.behindCommits == nil)
+        #expect(restored.uniqueCommits?.isEmpty == true && restored.behindCommits == nil)
     }
 
     @Test func cacheEntriesNeverFollowSymlinksForReadsOrWrites() async throws {
@@ -184,7 +186,7 @@ struct RepositoryDiskCacheTests {
         let summary = GitSummary(head: "feature", headOID: String(repeating: "a", count: 40), base: "origin/main", baseOID: String(repeating: "b", count: 40))
         return RepositoryDetailSnapshot(summary: summary,
                                         changes: [.init(path: "新目录/new\nname", originalPath: "old\tname", index: "R", workingTree: "M")],
-                                        commits: sampleHistory().ahead, behindCommits: sampleHistory().behind, observedAt: observedAt)
+                                        uniqueCommits: sampleHistory().ahead, behindCommits: sampleHistory().behind, observedAt: observedAt)
     }
 
     private func sampleHistory() -> RepositoryHistorySnapshot {

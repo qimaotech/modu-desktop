@@ -140,7 +140,7 @@ import Testing
         gate.blockedHead = blocksAhead ? first : base
         let defaults = UserDefaults(suiteName: f.directory.lastPathComponent)!
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
             try await gate.read(at: path, head: head, base: base)
         })
         details.cache(.init(resource: resource, available: true, dirty: false))
@@ -148,11 +148,11 @@ import Testing
         do {
             try await eventually { gate.started.contains(gate.blockedHead!) && gate.completed.contains(blocksAhead ? base : first) }
             #expect(details.detail.changes == nil && details.detail.summary == nil)
-            #expect(details.detail.commits == nil && details.detail.behindCommits == nil && details.detailLoading)
+            #expect(details.detail.uniqueCommits == nil && details.detail.behindCommits == nil && details.detailLoading)
             gate.blockedHead = nil
             try await settle(details)
             #expect(details.detail.changes?.isEmpty == true && details.detail.summary?.headOID == first)
-            #expect(details.detail.commits?.map(\.subject) == ["first"] && details.detail.behindCommits?.isEmpty == true)
+            #expect(details.detail.uniqueCommits?.map(\.subject) == ["first"] && details.detail.behindCommits?.isEmpty == true)
 
             _ = try await f.service.git.run(["checkout", "-b", "feature"], at: path)
             _ = try await f.service.git.run(["commit", "--allow-empty", "-m", "second"], at: path)
@@ -167,7 +167,7 @@ import Testing
             try await eventually { gate.started.contains(gate.blockedHead!) && gate.completed.contains(blocksAhead ? base : second) }
             #expect(!idleNotified && !details.snapshotLoading && details.detailLoading)
             #expect(details.detail.changes?.isEmpty == true && details.detail.summary?.head == "main")
-            #expect(details.detail.summary?.headOID == first && details.detail.commits?.map(\.subject) == ["first"])
+            #expect(details.detail.summary?.headOID == first && details.detail.uniqueCommits?.map(\.subject) == ["first"])
             try Data("during history".utf8).write(to: path.appending(path: "last.txt"))
             details.request(.workingTree)
             #expect(!reading.isCancelled)
@@ -177,7 +177,7 @@ import Testing
             #expect(idleNotified)
             #expect(details.detail.changes?.map(\.path) == ["last.txt", "new.txt"])
             #expect(details.detail.summary?.head == "feature" && details.detail.summary?.headOID == second)
-            #expect(details.detail.commits?.map(\.subject) == ["second", "first"] && details.detail.behindCommits?.isEmpty == true)
+            #expect(details.detail.uniqueCommits?.map(\.subject) == ["second", "first"] && details.detail.behindCommits?.isEmpty == true)
             details.stop(); await details.waitForReads()
         } catch {
             gate.blockedHead = nil
@@ -196,7 +196,7 @@ import Testing
         gate.blockedHead = head
         let defaults = UserDefaults(suiteName: f.directory.lastPathComponent)!
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: TestResourceMonitor(), readCommits: { path, head, base in
             try await gate.read(at: path, head: head, base: base)
         })
         details.refresh(resource, in: record)
@@ -214,13 +214,13 @@ import Testing
             else { details.pause(); await details.waitForReads() }
             await reading.value
             #expect(reading.isCancelled && !details.detailLoading && details.pendingFailure == nil)
-            #expect(details.detail.changes == nil && details.detail.summary == nil && details.detail.commits == nil)
+            #expect(details.detail.changes == nil && details.detail.summary == nil && details.detail.uniqueCommits == nil)
             gate.blockedHead = nil
             if switchesSelection { details.refresh(resource, in: record) }
             else { details.resume() }
             try await settle(details)
             #expect(details.detail.summary?.headOID == head && details.detail.changes?.isEmpty == true)
-            #expect(details.detail.commits?.isEmpty == true && details.detail.behindCommits?.isEmpty == true)
+            #expect(details.detail.uniqueCommits?.isEmpty == true && details.detail.behindCommits?.isEmpty == true)
             details.stop(); await details.waitForReads()
         } catch {
             gate.blockedHead = nil
@@ -298,7 +298,7 @@ import Testing
         let monitor = TestResourceMonitor()
         let defaults = UserDefaults(suiteName: f.directory.lastPathComponent)!
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
-        let details = RepositoryDetailModel(service: service, defaults: defaults, monitor: monitor)
+        let details = GitBrowserModel(service: service, defaults: defaults, monitor: monitor)
         details.refresh(.group("feature"), in: record)
         try await settle(details)
         let hook = probe.appending(path: "fsmonitor")
@@ -343,7 +343,7 @@ import Testing
         let monitor = TestResourceMonitor()
         let defaults = UserDefaults(suiteName: f.directory.lastPathComponent)!
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor)
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor)
         details.refresh(.group("feature"), in: record)
         try await settle(details)
         details.setActive(false)
@@ -463,7 +463,7 @@ import Testing
         let monitor = TestResourceMonitor()
         let defaults = UserDefaults(suiteName: f.directory.lastPathComponent)!
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }
-        let details = RepositoryDetailModel(service: f.service, defaults: defaults, monitor: monitor)
+        let details = GitBrowserModel(service: f.service, defaults: defaults, monitor: monitor)
         details.refresh(resource, in: record)
         do {
             try await settle(details)
@@ -483,7 +483,7 @@ import Testing
         }
     }
 
-    private func settle(_ details: RepositoryDetailModel) async throws {
+    private func settle(_ details: GitBrowserModel) async throws {
         try await eventually { !details.detailLoading && details.detailTask == nil }
     }
     private func eventually(_ condition: () -> Bool) async throws {

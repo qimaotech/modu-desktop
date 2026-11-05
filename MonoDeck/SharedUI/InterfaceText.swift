@@ -36,13 +36,13 @@ struct InterfaceText {
             if result.items.first?.data?["disposition"] == "added" { return string(.uiRepositoryAddedWithIssue) }
             return string(.uiCanTAddRepository)
         }
-        if result.status == .skipped, result.command == "repo.import-yaml" { return string(.uiNoRepositoriesWereAdded) }
+        if result.status == .skipped, result.command == "repo.import" { return string(.uiNoRepositoriesWereAdded) }
         let tasks: [String: LocalizedStringResource] = [
             "repo.add": .uiRepositoryAddition, "repo.update": .uiRepositoryUpdate,
-            "repo.remove": .uiRepositoryDeletion, "repo.import-yaml": .uiRepositoryImport,
-            "workspace.import-yaml": .uiWorkspaceImport, "workspace.open": .uiWorkspaceOpening,
-            "workspace.inspect": .uiResourceCheck, "worktree.create": .uiGroupCreation,
-            "worktree.update": .uiGroupUpdate, "worktree.remove": .uiWorktreeDeletion,
+            "repo.delete": .uiRepositoryDeletion, "repo.import": .uiRepositoryImport,
+            "workspace.configuration.import": .uiWorkspaceImport, "workspace.open": .uiWorkspaceOpening,
+            "workspace.inspect": .uiResourceCheck, "group.create": .uiGroupCreation,
+            "group.edit": .uiGroupEdit, "group.delete": .uiGroupDeletion, "group.member.delete": .uiMemberWorktreeDeletion, "group.member.add": .uiGroupMemberAddition,
             "cli.install": .uiCliInstallation
         ]
         let task = tasks[result.command] ?? .uiOperation
@@ -68,7 +68,7 @@ struct InterfaceText {
             guard let count = counts[status], count > 0 else { return nil }
             let label: String
             if status == "warning" { label = string(.uiWarnings) }
-            else { label = statusText(status == "success" && result.command == "repo.import-yaml" ? "added" : status) }
+            else { label = statusText(status == "success" && result.command == "repo.import" ? "added" : status) }
             return label + " " + number(count)
         }.joined(separator: " · ")
     }
@@ -96,13 +96,13 @@ struct InterfaceText {
             "completed-with-warnings": .uiCompletedWithWarnings,
             "not-processed": .uiNotProcessed,
             "added": .uiAdded, "already-exists": .uiAlreadyExists, "updated": .uiUpdated,
-            "Clean": .uiClean, "Dirty": .uiDirty, "Other": .uiOther, "Unset": .uiUnset,
+            "Clean": .uiClean, "Dirty": .uiDirty, "Unavailable": .uiUnavailable, "Unset": .uiUnset,
             "Added": .uiAdded2, "Moved": .uiMoved, "Modified": .uiModified, "Deleted": .uiDeleted, "Untracked": .uiUntracked, "Conflict": .uiConflict,
             "Checking repository…": .uiCheckingRepository, "Cloning…": .uiCloning,
             "Opening workspace…": .uiOpeningWorkspace,
             "Updating repositories…": .uiUpdatingRepositories2,
             "Scanning local repositories…": .uiScanningLocalRepositories,
-            "Creating…": .uiCreating, "Creating workspace worktree…": .uiCreatingWorkspaceWorktree,
+            "Creating…": .uiCreating, "Creating group root worktree…": .uiCreatingGroupRootWorktree,
             "Saving…": .uiSaving, "Cleaning up…": .uiCleaningUp, "Deleting…": .uiDeleting,
             "Importing repositories…": .uiImportingRepositories, "Created": .uiCreated,
             "update-ignore": .uiUpdatedGitignore, "git-init": .uiInitializedGit,
@@ -110,9 +110,9 @@ struct InterfaceText {
             "install-cli": .uiInstalledCLI,
             "stash-workspace": .uiStashedWorkspaceChanges, "restore-workspace": .uiRestoredWorkspaceChanges,
             "discard-workspace-file-changes": .uiDiscardedManagedFileChanges,
-            "create-directory": .uiCreatedDirectory, "save-configuration": .uiSavedConfiguration,
+            "create-directory": .uiCreatedDirectory, "save-workspace-record": .uiSavedWorkspaceRecord,
             "clone": .uiClone, "create-worktree": .uiCreateWorktree, "create-branch": .uiCreateBranch,
-            "remove-worktree": .uiRemoveWorktree, "remove-declaration": .uiRemoveDeclaration, "delete-branch": .uiDeleteBranch,
+            "remove-worktree": .uiRemoveWorktree, "remove-record-entry": .uiRemoveRecordEntry, "delete-branch": .uiDeleteBranch,
             "move-to-trash": .uiMoveTrash, "update-refs": .uiUpdateRefs, "fast-forward": .uiFastForward,
             "applied": .uiApplied, "reverted": .uiCleanedUp, "unknown": .uiUnconfirmed,
             "Agent": .uiAgent, "Git GUI": .uiGitGUI, "Editor": .uiEditor, "Terminal": .uiTerminal

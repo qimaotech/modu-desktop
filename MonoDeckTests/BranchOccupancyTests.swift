@@ -17,11 +17,11 @@ struct BranchOccupancyTests {
         }
         let rootHead = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let repositoryHead = try #require(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")))
-        let result = await f.service.createGroup("Main", repositories: ["repo"], at: f.root)
+        let result = await f.service.createGroup("Main", repositoryIDs: ["repo"], at: f.root)
 
         if caseSensitive {
             #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
-            #expect(await f.service.remove(.group("Main"), at: f.root, execute: true).status == .success)
+            #expect(await f.service.deleteConfirmed(.group("Main"), at: f.root).status == .success)
         } else {
             #expect(result.status == .failed && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
             #expect(result.items.allSatisfy { $0.effects.isEmpty })
@@ -37,7 +37,7 @@ struct BranchOccupancyTests {
     @Test(arguments: ["root", "member"], [false, true])
     func deletionProtectsBranchesCheckedOutUnderCaseAliases(_ kind: String, _ confirmed: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try f.service.store.load(f.root)
         let repository = kind == "root" ? f.root : record.repositoryURL("repo")
         let worktree = kind == "root" ? record.groupURL("feature") : record.memberURL("feature", "repo")
@@ -66,7 +66,7 @@ struct BranchOccupancyTests {
                 Issue.record("Expected the occupied branch to block the deletion preview.")
             } catch { #expect((error as? MonoDeckError)?.code == "branch-in-use") }
         }
-        let result = await f.service.remove(.group("feature"), at: f.root, authorization: authorization, execute: !confirmed)
+        let result = await f.service.deleteConfirmed(.group("feature"), at: f.root, authorization: authorization)
         if caseSensitive {
             #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
             #expect(try f.service.store.load(f.root).groups.isEmpty)

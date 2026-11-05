@@ -8,8 +8,8 @@ import Testing
     func cancellationFinishesTheCurrentDeletionAndPreservesPendingResources(_ kind: String) async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
-        let current: Resource = kind == "last" ? .group("feature") : .member("feature", "repo")
-        let repository = current.repo.map { record.repositoryURL($0) } ?? fixture.root
+        let current: Resource = kind == "last" ? .group("feature") : .member(groupName: "feature", repositoryID: "repo")
+        let repository = current.repositoryID.map { record.repositoryURL($0) } ?? fixture.root
         let probe = try installDeletionHook(at: repository, fixture: fixture)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -21,7 +21,7 @@ import Testing
             model.management.edit("feature", members: [])
             await model.management.editPreviewTask?.value
         } else {
-            let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "member" ? .member(group: "feature", repo: "repo") : .group("feature")
+            let request: DeleteRequest = kind == "repository" ? .repository("repo") : kind == "member" ? .member(groupName: "feature", repositoryID: "repo") : .group("feature")
             model.management.prepareDelete(request)
             await model.management.deletePreviewTask?.value
         }
@@ -61,12 +61,12 @@ import Testing
             #expect(result.status == .cancelled && result.exitCode == 130)
             let completed = try #require(result.items.first { $0.resource == current })
             #expect(completed.status == .success)
-            #expect(completed.effects.map(\.action) == ["remove-worktree", "remove-declaration", "delete-branch"])
+            #expect(completed.effects.map(\.action) == ["remove-worktree", "remove-record-entry", "delete-branch"])
             #expect(completed.effects.allSatisfy { $0.state == "applied" })
             #expect(result.items.dropFirst().allSatisfy { $0.effects.isEmpty && [.cancelled, .skipped].contains($0.status) })
         }
         if kind == "last" { #expect(saved.groups["feature"] == nil) }
-        else { #expect(saved.groups["feature"]?.repositories == ["other"]) }
+        else { #expect(saved.groups["feature"]?.repositoryIDs == ["other"]) }
         let lease = try fixture.service.store.tryLock(fixture.root); lease.unlock()
     }
 
@@ -74,10 +74,10 @@ import Testing
     func cancellationAtTheFinalItemKeepsTheSuccessfulOutcome(_ kind: String) async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
-        let resource: Resource = kind == "group" ? .group("feature") : kind == "repository" ? .repository("repo") : .member("feature", "repo")
+        let resource: Resource = kind == "group" ? .group("feature") : kind == "repository" ? .repository("repo") : .member(groupName: "feature", repositoryID: "repo")
         let request = try #require(DeleteRequest(resource))
         let (result, cancelled) = await Task {
-            let result = await fixture.service.remove(request, at: fixture.root, execute: true) { progress in
+            let result = await fixture.service.deleteConfirmed(request, at: fixture.root) { progress in
                 if progress.target == resource.path, progress.phase == .deleting { withUnsafeCurrentTask { $0?.cancel() } }
             }
             return (result, Task.isCancelled)
@@ -91,9 +91,9 @@ import Testing
             let trash = try #require(result.items.last?.trashPath)
             #expect(PathSafety.exists(URL(fileURLWithPath: trash)))
         } else {
-            let repository = resource.repo.map { record.repositoryURL($0) } ?? fixture.root
+            let repository = resource.repositoryID.map { record.repositoryURL($0) } ?? fixture.root
             #expect(try await fixture.service.git.oid("refs/heads/feature", at: repository) == nil)
-            #expect(result.items.last?.effects.map(\.action) == ["remove-worktree", "remove-declaration", "delete-branch"])
+            #expect(result.items.last?.effects.map(\.action) == ["remove-worktree", "remove-record-entry", "delete-branch"])
         }
     }
 
@@ -101,7 +101,7 @@ import Testing
         let other = "https://mono-deck-test.invalid/other.git"
         _ = try await fixture.service.git.run(["config", "--global", "--add", "url.\(fixture.directory.appending(path: "repo.git").path).insteadOf", other], at: fixture.root)
         #expect(await fixture.service.addRepository(.init(url: other), at: fixture.root).status == .success)
-        try await fixture.prepareGroup("feature", repositories: ["repo", "other"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo", "other"])
         return try fixture.service.store.load(fixture.root)
     }
 

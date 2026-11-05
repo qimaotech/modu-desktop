@@ -24,11 +24,11 @@ import Testing
     @Test func successfulCreationPreservesWarningsAndTheirEffects() async throws {
         try await withModel { model in
             model.management.sheet = .create
-            var item = ItemResult(.member("feature", "repo"))
+            var item = ItemResult(.member(groupName: "feature", repositoryID: "repo"))
             item.effects = [.init("create-worktree", item.resource.path)]
             item.data = ["warning-code": "branch-behind-base", "reused-branch": "feature", "comparison-base": "origin/main"]
             item.message = "Reused branch needs attention."
-            let outcome = OperationResult(command: "worktree.create", workspace: try #require(model.workspace.record).root, items: [item])
+            let outcome = OperationResult(command: "group.create", workspace: try #require(model.workspace.record).root, items: [item])
             model.management.run { _, _, _ in outcome }
             await (try #require(model.operation)).value
             #expect(model.management.sheet == nil && !model.busy && model.presentation.completionMessage == nil)
@@ -41,7 +41,7 @@ import Testing
 
     @Test func cancellingDeletionPreservesContentAndCleansUpAfterDismissal() async throws {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try fixture.service.store.load(fixture.root)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
@@ -78,7 +78,7 @@ import Testing
                 var added = ItemResult(.repository("added"))
                 added.effects = [.init("update-ignore", root.appending(path: ".gitignore").path)]
                 let remaining = status == "cancelled" ? ItemResult.notProcessed(.repository("remaining")) : ItemResult(.repository("remaining"), status: .failed)
-                return OperationResult(command: "repo.import-yaml", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [added, remaining])
+                return OperationResult(command: "repo.import", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [added, remaining])
             }
             await (try #require(model.operation)).value
             let result = try #require(model.presentation.result)
@@ -103,7 +103,7 @@ import Testing
                 model.management.run { _, root, _ in
                     var item = ItemResult(.repository("repo"), status: OperationStatus(rawValue: status)!)
                     if effects { item.effects = [.init("update-ignore", root.appending(path: ".gitignore").path)] }
-                    return OperationResult(command: "workspace.import", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [item])
+                    return OperationResult(command: "workspace.configuration.import", workspace: root.path, status: OperationStatus(rawValue: status)!, items: [item])
                 }
                 #expect(model.busy && model.presentation.resultHost == .settings)
                 model.presentation.quitPending = quitting

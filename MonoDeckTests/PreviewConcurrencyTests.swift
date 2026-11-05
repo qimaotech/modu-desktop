@@ -11,9 +11,10 @@ struct PreviewConcurrencyTests {
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         let preview = Task {
             if entry == "edit-plan" {
-                return await scan.service.editGroup("feature", repositories: [], at: fixture.root)
+                return await scan.service.editGroup("feature", repositoryIDs: [], at: fixture.root)
             }
-            return await scan.service.remove(.member(group: "feature", repo: "repo"), at: fixture.root, execute: entry == "remove-execute")
+            if entry == "remove-execute" { return await scan.service.deleteConfirmed(.member(groupName: "feature", repositoryID: "repo"), at: fixture.root) }
+            return await scan.service.delete(.member(groupName: "feature", repositoryID: "repo"), at: fixture.root)
         }
         do {
             try await waitFor(scan.started)
@@ -23,10 +24,10 @@ struct PreviewConcurrencyTests {
             if entry == "remove-execute" {
                 #expect(result.status == .success)
                 #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
-                #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositories == [])
+                #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositoryIDs == [])
             } else {
                 #expect(result.status == .confirmationRequired)
-                #expect(result.plan?.map(\.resource) == [.member("feature", "repo")])
+                #expect(result.plan?.deletions.map(\.resource) == [.member(groupName: "feature", repositoryID: "repo")])
                 #expect(result.items.allSatisfy { $0.effects.isEmpty })
                 #expect(try Data(contentsOf: fixture.service.store.recordURL(fixture.root)) == original)
                 #expect(PathSafety.exists(record.memberURL("feature", "repo")))
@@ -47,7 +48,7 @@ struct PreviewConcurrencyTests {
         let invalidIndex = Data("invalid index".utf8)
         try invalidIndex.write(to: index)
 
-        let result = await fixture.service.remove(.repository("repo"), at: fixture.root, execute: true)
+        let result = await fixture.service.deleteConfirmed(.repository("repo"), at: fixture.root)
 
         #expect(result.status == .failed && result.reasonCode == "git-failed")
         #expect(result.items.allSatisfy { $0.effects.isEmpty })
@@ -68,12 +69,12 @@ struct PreviewConcurrencyTests {
         runner.environment["GIT_TRACE"] = trace.path
         let service = WorkspaceService(store: fixture.service.store, git: Git(runner: runner))
         let lease = try fixture.service.store.tryLock(fixture.root); defer { lease.unlock() }
-        let update = Task { await service.editGroup("feature", repositories: ["repo"], at: fixture.root) }
+        let update = Task { await service.editGroup("feature", repositoryIDs: ["repo"], at: fixture.root) }
         do {
             try await waitFor(trace, containing: "check-ref-format refs/heads/feature")
             let member = record.memberURL("feature", "other")
             _ = try await fixture.service.git.run(["worktree", "add", "-b", "feature", member.path], at: record.repositoryURL("other"))
-            record.groups["feature"]?.repositories.append("other")
+            record.groups["feature"]?.repositoryIDs.append("other")
             try fixture.service.store.save(record)
             lease.unlock()
 
@@ -94,7 +95,7 @@ struct PreviewConcurrencyTests {
         let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
         let record = try await prepare(fixture)
         let scan = try await slowScan(fixture, record: record)
-        let preview = Task { try await scan.service.previewDelete(.member(group: "feature", repo: "repo"), at: fixture.root) }
+        let preview = Task { try await scan.service.previewDelete(.member(groupName: "feature", repositoryID: "repo"), at: fixture.root) }
         do {
             try await waitFor(scan.started)
             let lease = try fixture.service.store.tryLock(fixture.root)
@@ -108,9 +109,9 @@ struct PreviewConcurrencyTests {
             #expect(targets.first?.branch == "feature")
             let result: OperationResult
             if operation == "edit" {
-                result = await scan.service.editGroup("feature", repositories: [], at: fixture.root, authorization: targets)
+                result = await scan.service.editGroup("feature", repositoryIDs: [], at: fixture.root, authorization: targets)
             } else {
-                result = await scan.service.remove(.member(group: "feature", repo: "repo"), at: fixture.root, authorization: targets)
+                result = await scan.service.delete(.member(groupName: "feature", repositoryID: "repo"), at: fixture.root, authorization: targets)
             }
             #expect(result.status == .failed && result.reasonCode == "confirmation-changed")
             #expect(result.items.allSatisfy { $0.effects.isEmpty })
@@ -124,7 +125,7 @@ struct PreviewConcurrencyTests {
     }
 
     private func prepare(_ fixture: Fixture) async throws -> WorkspaceRecord {
-        try await fixture.prepareGroup("feature", repositories: ["repo"])
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
         return try fixture.service.store.load(fixture.root)
     }
 

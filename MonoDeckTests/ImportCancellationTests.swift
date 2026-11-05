@@ -140,7 +140,7 @@ import Testing
             #expect(result.status == .cancelled && result.reasonCode == "cancelled" && result.exitCode == 130)
             let completed = try #require(result.items.first { $0.resource == .repository("repo") })
             #expect(completed.status == .success && completed.effects.allSatisfy { $0.state == "applied" })
-            #expect(completed.effects.contains { $0.action == "clone" } && completed.effects.contains { $0.action == "save-configuration" })
+            #expect(completed.effects.contains { $0.action == "clone" } && completed.effects.contains { $0.action == "save-workspace-record" })
             #expect(result.items.contains { $0.effects.contains { $0.action == "commit-workspace-files" } })
             #expect(result.items.filter { $0.resource == .repository("other") }.allSatisfy { $0.effects.isEmpty && [.cancelled, .skipped].contains($0.status) })
             #expect(!result.items.contains { $0.status == .failed })
@@ -205,7 +205,7 @@ import Testing
         try #require(mkfifo(config.path, 0o600) == 0)
         var writer: Int32 = -1
         defer { if writer >= 0 { close(writer) } }
-        if kind == "add" { model.management.add(fixture.remoteURL, name: "") }
+        if kind == "add" { model.management.add(fixture.remoteURL, displayName: "") }
         else {
             model.management.prepareRepositoryImport("repos: [\(fixture.remoteURL)]", filename: "repos.yaml")
             model.management.confirmRepositoryImport()
@@ -247,10 +247,10 @@ import Testing
 
     private func workspaceYAML(_ fixture: Fixture, other: String?, group: Bool = false) -> String {
         """
-        version: 1
+        version: 2
         repositories:
           - url: \(fixture.remoteURL)
-        \(other.map { "  - url: \($0)\n" } ?? "")groups: \(group || other != nil ? "\n  feature:\n    created-at: \"2026-10-10T00:00:00Z\"\n    repositories: [repo]" : "{}")
+        \(other.map { "  - url: \($0)\n" } ?? "")groups: \(group || other != nil ? "\n  feature:\n    created-at: \"2026-10-10T00:00:00Z\"\n    repository-ids: [repo]" : "{}")
         """
     }
 }

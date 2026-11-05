@@ -3,7 +3,7 @@ import MonoDeckCore
 import Observation
 
 @MainActor @Observable
-final class RepositoryDetailModel {
+final class GitBrowserModel {
     private let service: WorkspaceService
     private let defaults: UserDefaults
     private let monitor: any ResourceChangeMonitoring
@@ -13,7 +13,7 @@ final class RepositoryDetailModel {
     private let diskCache: (any RepositoryDetailCaching)?
     private let readSession: ResourceReadSession
     private let diagnostics: RepositoryReadDiagnostics?
-    let presentationCache: RepositoryDetailPresentation
+    let presentationCache: GitBrowserPresentation
     private var workspace: WorkspaceRecord?
     private var selection: Resource?
     var collapsedPaths = Set<String>() {
@@ -23,8 +23,8 @@ final class RepositoryDetailModel {
             if defaults.stringArray(forKey: key) != paths { defaults.set(paths, forKey: key) }
         }
     }
-    private(set) var detail = RepositoryDetailState()
-    private(set) var pendingFailure: RepositoryDetailFailure?
+    private(set) var detail = GitBrowserState()
+    private(set) var pendingFailure: GitBrowserFailure?
     private(set) var changesLoading = false
     private(set) var summaryLoading = false
     var hasActiveReads: Bool { detailTask != nil || detailPreloadTask != nil || snapshotPreloadTask != nil || eventFilterTask != nil || cancellationDrain != nil || monitoring || fallbackTask != nil }
@@ -42,7 +42,7 @@ final class RepositoryDetailModel {
     private var pendingChange: ResourceChange?
     private var revalidateConfiguration = false
     private var userInitiatedRefresh = false
-    private var presentedFailure: RepositoryDetailFailure?
+    private var presentedFailure: GitBrowserFailure?
     private var pendingCandidates = Set<String>()
     private var eventFilterTask: Task<Void, Never>?
     private var cancellationDrain: Task<Void, Never>?
@@ -82,7 +82,7 @@ final class RepositoryDetailModel {
         self.service = service; self.defaults = defaults; self.monitor = monitor; self.now = now
         self.diskCache = cache; self.date = date; self.diagnostics = diagnostics
         readSession = ResourceReadSession(service: service, diagnostics: diagnostics)
-        presentationCache = RepositoryDetailPresentation(diagnostics: diagnostics)
+        presentationCache = GitBrowserPresentation(diagnostics: diagnostics)
         self.readCommits = readCommits ?? { path, head, base in
             try await service.git.commits(at: path, head: head, base: base, limit: nil)
         }
@@ -130,7 +130,7 @@ final class RepositoryDetailModel {
             self.selection = selection
             let saved = selection.flatMap { resources[$0]?.lastSuccessfulDetail }
             if saved != nil { diagnostics?.record("detail.memory.hit") }
-            detail = saved.map(RepositoryDetailState.init) ?? .init()
+            detail = saved.map(GitBrowserState.init) ?? .init()
             collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? [])
             updatePreloadScope(visiblePreloadResources)
         }
@@ -215,13 +215,13 @@ final class RepositoryDetailModel {
 
     func flushCache() async { await diskCache?.flush() }
 
-    var failureForPresentation: RepositoryDetailFailure? {
+    var failureForPresentation: GitBrowserFailure? {
         guard let failure = pendingFailure, active, !suspended, !detailLoading, pendingChange == nil,
               isCurrent(failure.generation, resource: failure.resource, root: failure.workspace) else { return nil }
         return failure
     }
 
-    func takeFailureForPresentation() -> RepositoryDetailFailure? {
+    func takeFailureForPresentation() -> GitBrowserFailure? {
         guard let failure = failureForPresentation else { return nil }
         pendingFailure = nil
         resources[failure.resource, default: .init()].lastPresentedError = failure.signature
@@ -481,7 +481,7 @@ final class RepositoryDetailModel {
                 await diskCache?.saveDetail(saved, for: identity)
                 guard valid() else { return }
             } else if let saved = resources[resource]?.lastSuccessfulDetail {
-                detail = RepositoryDetailState(saved)
+                detail = GitBrowserState(saved)
             } else {
                 detail = next
             }
@@ -496,7 +496,7 @@ final class RepositoryDetailModel {
         finishDetail()
     }
 
-    private func readResourceDetail(_ resource: Resource, in workspace: WorkspaceRecord, initial: RepositoryDetailState,
+    private func readResourceDetail(_ resource: Resource, in workspace: WorkspaceRecord, initial: GitBrowserState,
                                     change: ResourceChange, revalidatingConfiguration: Bool, isValid: () -> Bool,
                                     progress: (DetailReadProgress) -> Void = { _ in }) async -> DetailReadResult? {
         guard isValid() else { return nil }
@@ -521,13 +521,13 @@ final class RepositoryDetailModel {
             }
             resources[resource, default: .init()].identity = identity
             if let saved = resources[resource]?.lastSuccessfulDetail {
-                result.detail = RepositoryDetailState(saved)
+                result.detail = GitBrowserState(saved)
             } else if let diskCache {
                 let saved = await diskCache.loadDetail(for: identity)
                 guard isValid() else { return nil }
                 if let saved, identity.isCurrent() {
                     resources[resource, default: .init()].lastSuccessfulDetail = saved
-                    result.detail = RepositoryDetailState(saved)
+                    result.detail = GitBrowserState(saved)
                 }
             }
             progress(.prepared(context, result.detail))
@@ -568,15 +568,15 @@ final class RepositoryDetailModel {
             }
             if !statusRead { result.detail.changes = nil; result.detail.changesError = error }
             result.detail.summary = nil; result.detail.summaryError = error
-            result.detail.commits = nil; result.detail.behindCommits = nil
-            result.detail.commitsError = error; result.detail.comparisonError = nil
+            result.detail.uniqueCommits = nil; result.detail.behindCommits = nil
+            result.detail.uniqueCommitsError = error; result.detail.comparisonError = nil
         }
         guard isValid() else { return nil }
         return result
     }
 
     private func enqueueFailure(_ error: MonoDeckError, resource: Resource, root: String, token: Int) {
-        let failure = RepositoryDetailFailure(workspace: root, resource: resource, generation: token,
+        let failure = GitBrowserFailure(workspace: root, resource: resource, generation: token,
                                               error: error, keepsPreviousResult: resources[resource]?.lastSuccessfulDetail != nil,
                                               userInitiated: userInitiatedRefresh)
         if let presentedFailure, presentedFailure.workspace == root, presentedFailure.resource == resource,
@@ -585,7 +585,7 @@ final class RepositoryDetailModel {
         pendingFailure = failure
     }
 
-    private func readHistory(_ initial: RepositoryDetailState, context: ResourceReadContext, identity: RepositoryCacheIdentity, isValid: () -> Bool) async -> (detail: RepositoryDetailState, needsRefresh: Bool) {
+    private func readHistory(_ initial: GitBrowserState, context: ResourceReadContext, identity: RepositoryCacheIdentity, isValid: () -> Bool) async -> (detail: GitBrowserState, needsRefresh: Bool) {
         let started = ContinuousClock.now
         defer { diagnostics?.record("detail.history", duration: started.duration(to: .now)) }
         guard isValid() else { return (initial, false) }
@@ -593,8 +593,8 @@ final class RepositoryDetailModel {
         var needsRefresh = false
         guard let summary = next.summary else { return (next, needsRefresh) }
         guard let base = summary.baseOID else {
-            next.commits = summary.hasRemotes ? nil : []
-            next.commitsError = summary.baseError.map { MonoDeckError("base-unavailable", $0, userMessage: summary.baseMessage) }
+            next.uniqueCommits = summary.hasRemotes ? nil : []
+            next.uniqueCommitsError = summary.baseError.map { MonoDeckError("base-unavailable", $0, userMessage: summary.baseMessage) }
             next.behindCommits = nil; next.comparisonError = nil
             return (next, needsRefresh)
         }
@@ -631,8 +631,8 @@ final class RepositoryDetailModel {
             var history = cached ?? .init()
             switch results.0 {
             case .success(let commits):
-                history.ahead = commits; next.commits = commits; next.commitsError = nil
-            case .failure(let error): next.commits = nil; next.commitsError = error
+                history.ahead = commits; next.uniqueCommits = commits; next.uniqueCommitsError = nil
+            case .failure(let error): next.uniqueCommits = nil; next.uniqueCommitsError = error
             }
             switch results.1 {
             case .success(let commits):
@@ -650,8 +650,8 @@ final class RepositoryDetailModel {
         } catch {
             guard isValid() else { return (next, needsRefresh) }
             let error = MonoDeckError.wrap(error)
-            next.commits = nil; next.behindCommits = nil
-            next.commitsError = error; next.comparisonError = error
+            next.uniqueCommits = nil; next.behindCommits = nil
+            next.uniqueCommitsError = error; next.comparisonError = error
         }
         return (next, needsRefresh)
     }
@@ -688,7 +688,7 @@ final class RepositoryDetailModel {
     }
 
     private func startMonitoring(_ context: ResourceReadContext, token: Int) {
-        let excluded = context.resource.kind == .group ? (context.workspace.groups[context.resource.group ?? ""]?.repositories ?? []).map { context.workspace.memberURL(context.resource.group!, $0) } : []
+        let excluded = context.resource.kind == .group ? (context.workspace.groups[context.resource.groupName ?? ""]?.repositoryIDs ?? []).map { context.workspace.memberURL(context.resource.groupName!, $0) } : []
         monitoring = monitor.start(context, excludedDirectories: excluded) { [weak self] event in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == token, !self.suspended else { return }
@@ -852,9 +852,9 @@ final class RepositoryDetailModel {
         guard let workspace else { return [:] }
         let repositories = Dictionary(workspace.repositories.map { ($0.id, $0.url) }, uniquingKeysWith: { first, _ in first })
         return Dictionary(service.resources(workspace).map { resource in
-            (resource, ResourceIdentity(repositoryURL: resource.repo.flatMap { repositories[$0] },
-                                        groupCreatedAt: resource.group.flatMap { workspace.groups[$0]?.createdAt },
-                                        groupRepositories: resource.kind == .group ? Set(workspace.groups[resource.group ?? ""]?.repositories ?? []) : nil))
+            (resource, ResourceIdentity(repositoryURL: resource.repositoryID.flatMap { repositories[$0] },
+                                        groupCreatedAt: resource.groupName.flatMap { workspace.groups[$0]?.createdAt },
+                                        groupRepositoryIDs: resource.kind == .group ? Set(workspace.groups[resource.groupName ?? ""]?.repositoryIDs ?? []) : nil))
         }, uniquingKeysWith: { first, _ in first })
     }
 
@@ -866,7 +866,7 @@ final class RepositoryDetailModel {
     private func statusIdentity(for resource: Resource) -> [PathStamp]? {
         guard let workspace else { return nil }
         let path = workspace.rootURL.appending(path: resource.path)
-        let main = resource.repo.map(workspace.repositoryURL) ?? workspace.rootURL
+        let main = resource.repositoryID.map(workspace.repositoryURL) ?? workspace.rootURL
         return try? [path, path.appending(path: ".git"), main.appending(path: ".git")].map(PathStamp.init)
     }
 
@@ -907,7 +907,7 @@ final class RepositoryDetailModel {
     }
 
     private struct DetailReadResult {
-        var detail: RepositoryDetailState
+        var detail: GitBrowserState
         var context: ResourceReadContext?
         var identity: RepositoryCacheIdentity?
         var discardsSavedDetail = false
@@ -915,7 +915,7 @@ final class RepositoryDetailModel {
     }
 
     private enum DetailReadProgress {
-        case prepared(ResourceReadContext, RepositoryDetailState)
+        case prepared(ResourceReadContext, GitBrowserState)
         case statusRead, readingSummary, summaryRead
     }
 
@@ -931,13 +931,13 @@ final class RepositoryDetailModel {
         var lastSuccessfulDetail: RepositoryDetailSnapshot?
         var identity: RepositoryCacheIdentity?
         var invalidated = true
-        var lastPresentedError: RepositoryDetailFailure.Signature?
+        var lastPresentedError: GitBrowserFailure.Signature?
     }
 
     private struct ResourceIdentity: Equatable {
         let repositoryURL: String?
         let groupCreatedAt: String?
-        let groupRepositories: Set<String>?
+        let groupRepositoryIDs: Set<String>?
     }
 
     private struct PathStamp: Equatable {
@@ -963,7 +963,7 @@ final class RepositoryDetailModel {
     }
 }
 
-struct RepositoryDetailFailure: Identifiable {
+struct GitBrowserFailure: Identifiable {
     let id = UUID()
     let workspace: String
     let resource: Resource
@@ -979,31 +979,31 @@ struct RepositoryDetailFailure: Identifiable {
     }
 }
 
-struct RepositoryDetailState: Sendable {
+struct GitBrowserState: Sendable {
     var summary: GitSummary?
     var summaryError: MonoDeckError?
     var changes: [FileChange]?
     var changesError: MonoDeckError?
-    var commits: [GitCommit]?
-    var commitsError: MonoDeckError?
+    var uniqueCommits: [GitCommit]?
+    var uniqueCommitsError: MonoDeckError?
     var behindCommits: [GitCommit]?
     var comparisonError: MonoDeckError?
 }
 
-private extension RepositoryDetailState {
+private extension GitBrowserState {
     init(_ snapshot: RepositoryDetailSnapshot) {
         summary = snapshot.summary; changes = snapshot.changes
-        commits = snapshot.commits; behindCommits = snapshot.behindCommits
+        uniqueCommits = snapshot.uniqueCommits; behindCommits = snapshot.behindCommits
     }
 
     var readError: MonoDeckError? {
-        changesError ?? summaryError ?? commitsError ?? comparisonError
+        changesError ?? summaryError ?? uniqueCommitsError ?? comparisonError
             ?? summary?.baseError.map { MonoDeckError("base-unavailable", $0, userMessage: summary?.baseMessage) }
     }
 
     func successfulSnapshot(observedAt: Date) -> RepositoryDetailSnapshot? {
         guard readError == nil, let summary, let changes,
-              !summary.hasRemotes || (summary.baseOID != nil && commits != nil && behindCommits != nil) else { return nil }
-        return .init(summary: summary, changes: changes, commits: commits, behindCommits: behindCommits, observedAt: observedAt)
+              !summary.hasRemotes || (summary.baseOID != nil && uniqueCommits != nil && behindCommits != nil) else { return nil }
+        return .init(summary: summary, changes: changes, uniqueCommits: uniqueCommits, behindCommits: behindCommits, observedAt: observedAt)
     }
 }

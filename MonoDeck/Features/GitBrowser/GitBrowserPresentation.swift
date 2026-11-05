@@ -1,7 +1,7 @@
 import AppKit
 import MonoDeckCore
 
-@MainActor final class RepositoryDetailPresentation {
+@MainActor final class GitBrowserPresentation {
     struct CommitRow: Identifiable {
         let commit: GitCommit
         let date: String
@@ -20,7 +20,7 @@ import MonoDeckCore
     private var tree: [ChangeNode] = []
     private var collapsed: Set<String>?
     private var rows: [ChangeNode.Row] = []
-    private var commits: [GitCommit]?
+    private var uniqueCommits: [GitCommit]?
     private var locale: AppLocale?
     private var timeZone: String?
     private var fonts: [String] = []
@@ -47,9 +47,9 @@ import MonoDeckCore
     func commitRows(_ commits: [GitCommit], locale: AppLocale, timeZone: TimeZone = .current,
                     font: NSFont = .systemFont(ofSize: 12), hashFont: NSFont = .monospacedSystemFont(ofSize: 12, weight: .regular)) -> Commits {
         let fonts = [font.fontName, "\(font.pointSize)", hashFont.fontName, "\(hashFont.pointSize)"]
-        guard self.commits != commits || self.locale != locale || self.timeZone != timeZone.identifier || self.fonts != fonts else { return commitPresentation }
+        guard self.uniqueCommits != commits || self.locale != locale || self.timeZone != timeZone.identifier || self.fonts != fonts else { return commitPresentation }
         let started = ContinuousClock.now
-        self.commits = commits; self.locale = locale; self.timeZone = timeZone.identifier; self.fonts = fonts
+        self.uniqueCommits = commits; self.locale = locale; self.timeZone = timeZone.identifier; self.fonts = fonts
         let rows = commits.map { CommitRow(commit: $0, date: $0.displayDate(locale: locale, timeZone: timeZone)) }
         var author: CGFloat = 0, date: CGFloat = 0, hash: CGFloat = 0
         for row in rows {

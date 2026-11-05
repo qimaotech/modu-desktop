@@ -22,8 +22,8 @@ extension WorkspaceService {
             for name in record.groups.keys.sorted() {
                 guard try await reader.isValidTreeResource(.group(name), in: record) else { continue }
                 var members: [WorkspaceTreeNode] = []
-                for repository in record.groups[name]!.repositories.sorted() where validRepositories.contains(repository) {
-                    if try await reader.isValidTreeResource(.member(name, repository), in: record) {
+                for repository in record.groups[name]!.repositoryIDs.sorted() where validRepositories.contains(repository) {
+                    if try await reader.isValidTreeResource(.member(groupName: name, repositoryID: repository), in: record) {
                         members.append(.init(.linkedWorktree, path: repository))
                     }
                 }

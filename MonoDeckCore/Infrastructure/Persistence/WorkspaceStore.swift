@@ -51,16 +51,16 @@ public struct WorkspaceStore: Sendable {
     public func load(_ root: URL) throws -> WorkspaceRecord {
         try checkBoundary(root)
         let url = recordURL(root)
-        guard PathSafety.exists(url) else { throw MonoDeckError("configuration-missing", .workspaceRecordIsMissing(url.path)) }
+        guard PathSafety.exists(url) else { throw MonoDeckError("workspace-record-missing", .workspaceRecordIsMissing(url.path)) }
         do {
             let bytes = try Data(contentsOf: url)
             _ = try JSONSerialization.jsonObject(with: bytes)
-            try ConfigValidation.validateDocument(String(decoding: bytes, as: UTF8.self), workspace: true)
+            try WorkspaceDocumentValidation.validateRecordDocument(String(decoding: bytes, as: UTF8.self))
             let record = try JSONDecoder().decode(WorkspaceRecord.self, from: bytes)
             try validate(record)
-            guard PathSafety.identity(record.rootURL) == PathSafety.identity(root) else { throw MonoDeckError("invalid-configuration", .workspaceRootDoesNotMatchRecord) }
+            guard PathSafety.identity(record.rootURL) == PathSafety.identity(root) else { throw MonoDeckError("invalid-workspace-record", .workspaceRootDoesNotMatchRecord) }
             return record
-        } catch { throw MonoDeckError("invalid-configuration", .context(url.path, MonoDeckError.wrap(error).userMessage)) }
+        } catch { throw MonoDeckError("invalid-workspace-record", .context(url.path, MonoDeckError.wrap(error).userMessage)) }
     }
     public func save(_ record: WorkspaceRecord) throws {
         try validate(record)
@@ -68,7 +68,7 @@ public struct WorkspaceStore: Sendable {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         do { try writer(encoder.encode(record), url) }
-        catch { throw MonoDeckError("configuration-write-failed", .couldNotSave(url.path, MonoDeckError.wrap(error).userMessage)) }
+        catch { throw MonoDeckError("workspace-record-write-failed", .couldNotSave(url.path, MonoDeckError.wrap(error).userMessage)) }
     }
     public func locate(explicit: String?, cwd: URL) async throws -> URL {
         guard !Task.isCancelled else { throw MonoDeckError("cancelled", .operationCancelled) }
@@ -100,19 +100,19 @@ public struct WorkspaceStore: Sendable {
     }
     public func validate(_ record: WorkspaceRecord) throws {
         try checkBoundary(record.rootURL)
-        guard record.version == 1, record.root.hasPrefix("/"), PathSafety.canonical(record.rootURL).path == record.root else { throw MonoDeckError("invalid-configuration", .invalidVersionOrCanonicalRootPath) }
+        guard record.version == 2, record.root.hasPrefix("/"), PathSafety.canonical(record.rootURL).path == record.root else { throw MonoDeckError("invalid-workspace-record", .invalidVersionOrCanonicalRootPath) }
         var repositories = Set<String>()
         for repo in record.repositories {
             let identity = try RepositoryIdentity(repo.url)
-            guard repositories.insert(identity.name.lowercased()).inserted else { throw MonoDeckError("repository-conflict", .duplicateRepositoryIdentity(identity.name)) }
+            guard repositories.insert(identity.id.lowercased()).inserted else { throw MonoDeckError("repository-conflict", .duplicateRepositoryID(identity.id)) }
         }
         var groups = Set<String>()
         for (name, group) in record.groups {
             try PathSafety.groupName(name)
             guard groups.insert(PathSafety.identity(record.groupURL(name))).inserted,
                   ISO8601DateFormatter().date(from: group.createdAt) != nil || Self.fractionalDate(group.createdAt) != nil,
-                  group.repositories.count == Set(group.repositories).count,
-                  group.repositories.allSatisfy({ name in record.repositories.contains { $0.id == name } }) else { throw MonoDeckError("invalid-configuration", .invalidGroup(name)) }
+                  group.repositoryIDs.count == Set(group.repositoryIDs).count,
+                  group.repositoryIDs.allSatisfy({ name in record.repositories.contains { $0.id == name } }) else { throw MonoDeckError("invalid-workspace-record", .invalidGroup(name)) }
         }
     }
     private func key(_ root: URL) -> String { SHA256.hash(data: Data(PathSafety.identity(root).utf8)).map { String(format: "%02x", $0) }.joined() }

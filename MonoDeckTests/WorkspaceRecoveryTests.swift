@@ -50,7 +50,7 @@ struct WorkspaceRecoveryTests {
 
     @Test func recoveryAvoidsDuplicateReadsAndValidatesWorktreeOrigin() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try f.service.store.load(f.root)
         let main = record.repositoryURL("repo")
         _ = try await f.service.git.run(["config", "extensions.worktreeConfig", "true"], at: main)
@@ -69,7 +69,7 @@ struct WorkspaceRecoveryTests {
         #expect(commands.filter { $0.contains("built-in: git worktree list") }.count == 2)
         let opened = await service.openWorkspaceWithRecord(f.root, recoverUnregisteredResources: true)
         #expect(opened.result.status == .success && opened.record?.repositories.map(\.id) == ["repo"])
-        #expect(opened.record?.groups["feature"]?.repositories == [])
+        #expect(opened.record?.groups["feature"]?.repositoryIDs == [])
     }
 
     @Test func recoveryPreservesGitStateAndRunsWorkspaceMaintenance() async throws {
@@ -82,11 +82,11 @@ struct WorkspaceRecoveryTests {
         try f.service.store.save(initial)
         _ = try await f.service.git.ensureIgnore([other.id], at: f.root)
         try await f.commitWorkspace()
-        try await f.prepareGroup("feature", repositories: ["repo", "other"])
-        try await f.prepareGroup("review", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo", "other"])
+        try await f.prepareGroup("review", repositoryIDs: ["repo"])
         try await f.prepareEmptyGroup("empty")
         var previous = try f.service.store.load(f.root)
-        previous.repositories[0].name = "Custom"
+        previous.repositories[0].displayNameOverride = "Custom"
         previous.groups["feature"]?.createdAt = "2001-01-01T00:00:00Z"
         try f.service.store.save(previous)
         let main = previous.repositoryURL("repo")
@@ -97,7 +97,7 @@ struct WorkspaceRecoveryTests {
         var files = Dictionary(uniqueKeysWithValues: previous.repositories.map { (previous.repositoryURL($0.id), "README") })
         for name in previous.groups.keys {
             files[previous.groupURL(name)] = ".gitignore"
-            for repo in previous.groups[name]!.repositories { files[previous.memberURL(name, repo)] = "README" }
+            for repo in previous.groups[name]!.repositoryIDs { files[previous.memberURL(name, repo)] = "README" }
         }
         var before: [URL: [Data]] = [:]
         for (path, file) in files {
@@ -128,7 +128,7 @@ struct WorkspaceRecoveryTests {
         #expect(restored.repositories == [other, Repository(url: f.remoteURL)])
         #expect(Set(restored.groups.keys) == Set(previous.groups.keys))
         for (name, group) in restored.groups {
-            #expect(Set(group.repositories) == Set(previous.groups[name]!.repositories))
+            #expect(Set(group.repositoryIDs) == Set(previous.groups[name]!.repositoryIDs))
             #expect(try #require(ISO8601DateFormatter().date(from: group.createdAt)) >= started)
         }
         #expect(try f.service.store.load(f.root) == restored)
@@ -145,9 +145,9 @@ struct WorkspaceRecoveryTests {
 
     @Test func recoverySkipsInvalidResourcesAndKeepsTheirFilesAndRegistrations() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("valid", repositories: ["repo"])
-        try await f.prepareGroup("broken-member", repositories: ["repo"])
-        try await f.prepareGroup("foreign-root", repositories: ["repo"])
+        try await f.prepareGroup("valid", repositoryIDs: ["repo"])
+        try await f.prepareGroup("broken-member", repositoryIDs: ["repo"])
+        try await f.prepareGroup("foreign-root", repositoryIDs: ["repo"])
         let previous = try f.service.store.load(f.root)
         let broken = previous.memberURL("broken-member", "repo").appending(path: ".git")
         let foreign = previous.groupURL("foreign-root").appending(path: ".git")
@@ -173,7 +173,7 @@ struct WorkspaceRecoveryTests {
         #expect(opened.result.status == .success, "\(opened.result.items)")
         let restored = try #require(opened.record)
         #expect(restored.repositories.map(\.id) == ["repo"])
-        #expect(restored.groups.mapValues(\.repositories) == ["valid": ["repo"], "broken-member": []])
+        #expect(restored.groups.mapValues(\.repositoryIDs) == ["valid": ["repo"], "broken-member": []])
         #expect(try Data(contentsOf: broken) == rootLink && Data(contentsOf: foreign) == memberLink)
         #expect(try Data(contentsOf: docs.appending(path: "README")) == Data("user document".utf8))
         #expect(PathSafety.exists(mismatch) && PathSafety.exists(invalidOrigin) && PathSafety.exists(symlink) && PathSafety.exists(external))
@@ -183,13 +183,13 @@ struct WorkspaceRecoveryTests {
     @Test(arguments: ["saved", "corrupt", "unsupported", "required", "ordinary"])
     func recoveryDoesNotOverrideRegistrationOrOtherOpeningPolicies(_ kind: String) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let file = f.service.store.recordURL(f.root)
         switch kind {
         case "saved": try f.service.store.save(WorkspaceRecord(root: PathSafety.canonical(f.root).path))
         case "corrupt": try Data("invalid".utf8).write(to: file)
         case "unsupported":
-            var record = try f.service.store.load(f.root); record.version = 2
+            var record = try f.service.store.load(f.root); record.version = 1
             try JSONEncoder().encode(record).write(to: file)
         default: try FileManager.default.removeItem(at: file)
         }
@@ -199,7 +199,7 @@ struct WorkspaceRecoveryTests {
             #expect(opened.result.status == .success)
             #expect(opened.record?.repositories.isEmpty == true && opened.record?.groups.isEmpty == true)
         } else {
-            let code = kind == "ordinary" ? "workspace-not-empty" : (kind == "required" ? "configuration-missing" : "invalid-configuration")
+            let code = kind == "ordinary" ? "workspace-not-empty" : (kind == "required" ? "workspace-record-missing" : "invalid-workspace-record")
             #expect(opened.result.status == .failed && opened.result.items.first?.reasonCode == code)
             #expect(opened.result.items.allSatisfy { $0.effects.isEmpty })
             do {
@@ -234,7 +234,7 @@ struct WorkspaceRecoveryTests {
     @Test(arguments: [false, true])
     func recoveryVerifiesUncertainSavesAndCanRetryWithoutChangingResources(_ wrote: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try f.service.store.load(f.root)
         let path = record.memberURL("feature", "repo")
         let before = try await gitState(at: path, file: "README", git: f.service.git)
@@ -251,13 +251,13 @@ struct WorkspaceRecoveryTests {
             #expect(!PathSafety.exists(file))
         }
         let retried = await f.service.openWorkspaceWithRecord(f.root, recoverUnregisteredResources: true)
-        #expect(retried.result.status == .success && retried.record?.groups["feature"]?.repositories == ["repo"])
+        #expect(retried.result.status == .success && retried.record?.groups["feature"]?.repositoryIDs == ["repo"])
         #expect(try await gitState(at: path, file: "README", git: f.service.git) == before)
     }
 
     @Test func recoveryKeepsSavedConfigurationWhenMaintenanceFails() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let previous = try f.service.store.load(f.root)
         let ignore = f.root.appending(path: ".gitignore")
         let original = try Data(contentsOf: ignore)
@@ -266,8 +266,8 @@ struct WorkspaceRecoveryTests {
         try FileManager.default.removeItem(at: f.service.store.recordURL(f.root))
         let opened = await f.service.openWorkspaceWithRecord(f.root, recoverUnregisteredResources: true)
         #expect(opened.result.status == .failed && opened.result.items.first?.reasonCode == "ignore-unavailable")
-        #expect(opened.result.items.flatMap(\.effects).contains { $0.action == "save-configuration" })
-        #expect(try f.service.store.load(f.root).groups.mapValues(\.repositories) == previous.groups.mapValues(\.repositories))
+        #expect(opened.result.items.flatMap(\.effects).contains { $0.action == "save-workspace-record" })
+        #expect(try f.service.store.load(f.root).groups.mapValues(\.repositoryIDs) == previous.groups.mapValues(\.repositoryIDs))
         try FileManager.default.removeItem(at: ignore)
         try original.write(to: ignore)
         #expect(await f.service.openWorkspace(f.root).status == .success)

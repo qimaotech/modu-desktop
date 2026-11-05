@@ -44,7 +44,7 @@ struct ResourceSnapshotTests {
                 #expect(snapshot.changes?.map(\.path) == ["parent.txt"])
                 if case .workingTreeOnly = content { #expect(snapshot.summary == nil && snapshot.summaryError == nil) }
                 else { #expect(snapshot.summary != nil && snapshot.summaryError == nil) }
-                try? Data().write(to: probe.appending(path: "published-\(snapshot.resource.repo ?? "workspace")"))
+                try? Data().write(to: probe.appending(path: "published-\(snapshot.resource.repositoryID ?? "workspace")"))
                 if cancelsAfterPublish, snapshot.resource == .repository("second") { withUnsafeCurrentTask { $0?.cancel() } }
             }
         }
@@ -84,10 +84,10 @@ struct ResourceSnapshotTests {
         try #require(PathSafety.exists(path))
     }
 
-    @Test(arguments: [Resource.repository("repo"), Resource.member("feature", "repo")])
+    @Test(arguments: [Resource.repository("repo"), Resource.member(groupName: "feature", repositoryID: "repo")])
     func workingStateMatchesExistingChangesAndIncludesHead(_ resource: Resource) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try f.service.store.load(f.root)
         let path = record.rootURL.appending(path: resource.path)
         _ = try await f.service.git.run(["mv", "README", "renamed file\nname"], at: path)
@@ -98,7 +98,7 @@ struct ResourceSnapshotTests {
         let changes = try await f.service.git.changes(at: path)
         #expect(state.changes == changes)
         #expect(state.headOID == (try await f.service.git.oid("HEAD", at: path)))
-        #expect(state.branch == (resource.group ?? "main"))
+        #expect(state.branch == (resource.groupName ?? "main"))
         _ = try await f.service.git.run(["checkout", "--detach"], at: path)
         #expect(try await f.service.workingState(context).branch == nil)
         _ = try await f.service.git.run(["config", "remote.origin.url", "https://mono-deck-test.invalid/replaced.git"], at: path)

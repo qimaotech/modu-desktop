@@ -44,7 +44,7 @@ struct RepositoryImportForm: View {
 
     private func repositoryRow(_ url: String) -> some View {
         Toggle(isOn: selectionBinding(for: url)) {
-            Text((try? RepositoryIdentity(url).name) ?? url)
+            Text((try? RepositoryIdentity(url).id) ?? url)
                 .lineLimit(1).truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

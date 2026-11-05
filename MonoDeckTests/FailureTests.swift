@@ -26,10 +26,10 @@ struct FailureTests {
             git.runner.environment["GIT_CONFIG_VALUE_\(index)"] = hooks.path
         }
         let store = WorkspaceStore(support: f.service.store.support) { data, url in
-            if stage == "save" { throw MonoDeckError("configuration-write-failed", "Injected save failure.") }
+            if stage == "save" { throw MonoDeckError("workspace-record-write-failed", "Injected save failure.") }
             if stage == "save-unknown" {
                 try Data("invalid".utf8).write(to: url)
-                throw MonoDeckError("configuration-write-failed", "Injected uncertain save.")
+                throw MonoDeckError("workspace-record-write-failed", "Injected uncertain save.")
             }
             try data.write(to: url, options: .atomic)
         }
@@ -39,7 +39,7 @@ struct FailureTests {
         }
         #expect(result.status == .failed)
         let item = try #require(result.items.first)
-        #expect(item.reasonCode == (stage == "save-unknown" ? "save-outcome-unknown" : stage == "save" ? "configuration-write-failed" : "git-failed"))
+        #expect(item.reasonCode == (stage == "save-unknown" ? "save-outcome-unknown" : stage == "save" ? "workspace-record-write-failed" : "git-failed"))
         #expect(!item.effects.contains { $0.action == "update-ignore" })
         #expect(try Data(contentsOf: ignoreFile) == before)
         if stage == "save-unknown" {
@@ -56,7 +56,7 @@ struct FailureTests {
         let f = try await Fixture(); defer { f.remove() }
         try await f.prepareWorkspace()
         let targetURL = kind == "single" ? f.remoteURL : "https://mono-deck-test.invalid/next.git"
-        let targetName = try RepositoryIdentity(targetURL).name
+        let targetName = try RepositoryIdentity(targetURL).id
         let started = f.directory.appending(path: "checkout-started"), release = f.directory.appending(path: "checkout-release")
         let hooks = f.directory.appending(path: "checkout-hooks")
         try FileManager.default.createDirectory(at: hooks, withIntermediateDirectories: false)
@@ -105,7 +105,7 @@ struct FailureTests {
         }
         #expect(result.status.rawValue == (cleanupFails ? (kind == "single" ? "failed" : "partial-success") : "cancelled"))
         #expect(result.exitCode == (cleanupFails ? 1 : 130))
-        let item = try #require(result.items.first { $0.resource.repo == targetName })
+        let item = try #require(result.items.first { $0.resource.repositoryID == targetName })
         #expect(item.status.rawValue == (cleanupFails ? "failed" : "cancelled"))
         #expect(item.reasonCode == (cleanupFails ? "cleanup-failed" : "cancelled"))
         #expect(item.causeCode == (cleanupFails ? "cancelled" : nil))
@@ -150,7 +150,7 @@ struct FailureTests {
         let service = WorkspaceService(store: store, git: f.service.git, trash: f.service.trashDirectory)
         let result = await Task { await service.addRepository(.init(url: f.remoteURL), at: f.root) }.value
         #expect(result.status == .success)
-        #expect(result.items.first?.effects.map(\.action) == ["clone", "save-configuration", "update-ignore", "commit-workspace-files"])
+        #expect(result.items.first?.effects.map(\.action) == ["clone", "save-workspace-record", "update-ignore", "commit-workspace-files"])
         #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])
         #expect(try String(contentsOf: ignoreFile, encoding: .utf8).contains("/repo/\n"))
     }
@@ -167,7 +167,7 @@ struct FailureTests {
         #expect(result.status == .failed)
         let item = try #require(result.items.first)
         #expect(item.reasonCode == "ignore-unavailable" && item.data?["disposition"] == "added")
-        #expect(item.effects.map(\.action) == ["clone", "save-configuration"])
+        #expect(item.effects.map(\.action) == ["clone", "save-workspace-record"])
         #expect(try f.service.store.load(f.root).repositories.map(\.id) == ["repo"])
         #expect(PathSafety.exists(f.root.appending(path: "repositories/repo")))
         #expect(try Data(contentsOf: original) == before)
@@ -529,40 +529,40 @@ struct FailureTests {
     }
     @Test func deletingAfterSaveFailureKeepsBranchAndDeclaration() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let failing = WorkspaceStore(support: f.service.store.support) { _, _ in throw MonoDeckError("injected", "save failed") }
         let service = WorkspaceService(store: failing, git: f.service.git)
-        let result = await service.remove(.group("feature"), at: f.root, execute: true)
+        let result = await service.deleteConfirmed(.group("feature"), at: f.root)
         #expect(result.status == .failed)
         #expect(result.items[0].effects.first?.state == "applied")
         #expect(result.items.last?.resource == .group("feature"))
         #expect(result.items.last?.reasonCode == "not-processed")
         #expect(PathSafety.exists(f.root.appending(path: "worktrees/feature")))
-        #expect(try f.service.store.load(f.root).groups["feature"]?.repositories == ["repo"])
+        #expect(try f.service.store.load(f.root).groups["feature"]?.repositoryIDs == ["repo"])
         #expect(try await f.service.git.oid("refs/heads/feature", at: f.root.appending(path: "repositories/repo")) != nil)
         #expect(!PathSafety.exists(f.root.appending(path: "worktrees/feature/repo")))
-        #expect(await f.service.remove(.member(group: "feature", repo: "repo"), at: f.root, execute: true).status == .success)
+        #expect(await f.service.deleteConfirmed(.member(groupName: "feature", repositoryID: "repo"), at: f.root).status == .success)
     }
     @Test func confirmationDoesNotBypassNewUnmanagedWorktree() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let preview = try await f.service.previewDelete(.repository("repo"), at: f.root)
         let main = f.root.appending(path: "repositories/repo"), outside = f.directory.appending(path: "outside")
         _ = try await f.service.git.run(["worktree", "add", "-b", "outside", outside.path], at: main)
         _ = try await f.service.git.run(["worktree", "lock", outside.path], at: main)
         try FileManager.default.removeItem(at: outside)
-        let result = await f.service.remove(.repository("repo"), at: f.root, authorization: preview)
+        let result = await f.service.delete(.repository("repo"), at: f.root, authorization: preview)
         #expect(result.reasonCode == "unmanaged-worktree")
         #expect(PathSafety.exists(f.root.appending(path: "worktrees/feature/repo")))
     }
     @Test(arguments: [false, true])
     func groupDeletionIncludesUnmanagedRepositories(_ bare: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let nested = f.root.appending(path: "worktrees/feature/unmanaged.git")
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
         _ = try await f.service.git.run(bare ? ["init", "--bare"] : ["init"], at: nested)
-        let result = await f.service.remove(.group("feature"), at: f.root, execute: true)
+        let result = await f.service.deleteConfirmed(.group("feature"), at: f.root)
         #expect(result.status == .success, "\(result.items)")
         #expect(!PathSafety.exists(nested.deletingLastPathComponent()))
         #expect(try f.service.store.load(f.root).groups["feature"] == nil)

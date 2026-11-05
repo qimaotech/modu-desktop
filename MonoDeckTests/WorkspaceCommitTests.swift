@@ -57,7 +57,7 @@ struct WorkspaceCommitTests {
         #expect(try await f.service.git.run(["show", "--no-patch", "--format=%B", "HEAD"], at: f.root).text == "chore: ignore MonoDeck repository repo\n\nAuto-committed-by: MonoDeck")
         #expect(try await changedPaths(f) == [".gitignore"])
         #expect(try await f.service.git.run(["show", ":notes.txt"], at: f.root).stdout == index)
-        #expect(await f.service.createGroup("feature", repositories: ["repo"], at: f.root).status == .success)
+        #expect(await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root).status == .success)
         let skill = f.root.appending(path: "worktrees/feature/.agents/skills/mono-deck-workflow/SKILL.md")
         #expect(try Data(contentsOf: skill) == Data(contentsOf: source))
         #expect(try Data(contentsOf: skill.deletingLastPathComponent().appending(path: "agents/openai.yaml")) == Data(contentsOf: policy))
@@ -298,7 +298,7 @@ struct WorkspaceCommitTests {
         #expect(try #require(clones.last) < #require(commits.first))
         #expect(try #require(commits.first) < #require(worktrees.first))
         let record = try f.service.store.load(f.root)
-        #expect(record.groups["feature"]?.repositories == ["repo", "other"])
+        #expect(record.groups["feature"]?.repositoryIDs == ["repo", "other"])
         #expect(try await f.service.git.oid("HEAD", at: record.groupURL("feature")) == f.service.git.oid("HEAD", at: f.root))
         #expect(try await f.service.git.changes(at: record.groupURL("feature")).isEmpty)
     }
@@ -321,7 +321,7 @@ struct WorkspaceCommitTests {
     func cancelledWorkspaceImportFinishesIgnoreCommitAndStopsPendingGroups(_ hasGroups: Bool) async throws {
         let f = try await Fixture(); defer { f.remove() }
         try await f.prepareWorkspace()
-        let yaml = hasGroups ? workspaceYAML(f) : "version: 1\nrepositories: [{url: \(f.remoteURL)}]\ngroups: {}\n"
+        let yaml = hasGroups ? workspaceYAML(f) : "version: 2\nrepositories: [{url: \(f.remoteURL)}]\ngroups: {}\n"
         let result = await Task {
             await f.service.importWorkspaceYAML(yaml, at: f.root) { value in
                 if value.phase == .added { withUnsafeCurrentTask { $0?.cancel() } }
@@ -387,13 +387,13 @@ struct WorkspaceCommitTests {
 
     private func workspaceYAML(_ f: Fixture, other: String? = nil) -> String {
         """
-        version: 1
+        version: 2
         repositories:
           - url: \(f.remoteURL)
         \(other.map { "  - url: \($0)\n" } ?? "")groups:
           feature:
             created-at: "2026-10-10T00:00:00Z"
-            repositories: [repo\(other == nil ? "" : ", other")]
+            repository-ids: [repo\(other == nil ? "" : ", other")]
         """
     }
 }

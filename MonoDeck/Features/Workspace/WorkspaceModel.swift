@@ -29,7 +29,7 @@ final class WorkspaceModel {
         static let sidebar = Self(rawValue: 4)
         static let all: Self = [.record, .current, .sidebar]
     }
-    let details: RepositoryDetailModel
+    let details: GitBrowserModel
     enum MaintenanceState { case pending, maintaining, ready, failed }
     var maintenanceState: MaintenanceState = .ready
     private(set) var maintenanceFailure: OperationResult?
@@ -125,7 +125,7 @@ final class WorkspaceModel {
     private var defaults: UserDefaults { preferences.defaults }
     private var busy: Bool { operations.busy }
     func state(for resource: Resource) -> ResourceState? { details.state(for: resource) }
-    var detail: RepositoryDetailState { details.detail }
+    var detail: GitBrowserState { details.detail }
     var detailLoading: Bool { details.detailLoading }
     var detailPreloadTask: Task<Void, Never>? { details.detailPreloadTask }
     var sortedRepositories: [Repository] { record?.repositories.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending } ?? [] }
@@ -154,7 +154,7 @@ final class WorkspaceModel {
         self.waitForRecordDebounce = waitForRecordDebounce ?? { deadline in
             try await Task.sleep(until: deadline, clock: .continuous)
         }
-        details = RepositoryDetailModel(service: service, defaults: preferences.defaults, cache: cache, now: now, diagnostics: diagnostics)
+        details = GitBrowserModel(service: service, defaults: preferences.defaults, cache: cache, now: now, diagnostics: diagnostics)
         details.onIdle = { [weak self] in self?.startDetailPreload() }
     }
 
@@ -162,20 +162,20 @@ final class WorkspaceModel {
 
     var visibleResources: [Resource] {
         sortedRepositories.map { .repository($0.id) } + sortedGroups.flatMap { group in
-            [Resource.group(group)] + (expandedGroups.contains(group) ? sortedRepositories.filter { record?.groups[group]?.repositories.contains($0.id) == true }.map { .member(group, $0.id) } : [])
+            [Resource.group(group)] + (expandedGroups.contains(group) ? sortedRepositories.filter { record?.groups[group]?.repositoryIDs.contains($0.id) == true }.map { .member(groupName: group, repositoryID: $0.id) } : [])
         }
     }
     func selectSidebarRow(_ resource: Resource) {
         let wasSelected = selection == resource
         selection = resource
-        if resource.kind == .group, let group = resource.group {
+        if resource.kind == .group, let group = resource.groupName {
             if wasSelected { toggleGroup(group) }
             else { expandedGroups.insert(group) }
         }
     }
     func toggleGroup(_ group: String) {
         if expandedGroups.remove(group) != nil {
-            if selection?.group == group { selection = .group(group) }
+            if selection?.groupName == group { selection = .group(group) }
         } else { expandedGroups.insert(group) }
     }
     func restoreForStartup(_ root: URL) async throws {
@@ -588,10 +588,10 @@ final class WorkspaceModel {
     func invalidateResources(after outcome: OperationResult) {
         guard let record else { return }
         let changed = outcome.items.filter { !$0.effects.isEmpty }.map(\.resource)
-        let repositories = Set(changed.compactMap(\.repo))
-        let workspaceGitChanged = changed.contains { $0.repo == nil }
+        let repositories = Set(changed.compactMap(\.repositoryID))
+        let workspaceGitChanged = changed.contains { $0.repositoryID == nil }
         let affected = Set(service.resources(record).filter { resource in
-            resource.repo.map(repositories.contains) ?? workspaceGitChanged
+            resource.repositoryID.map(repositories.contains) ?? workspaceGitChanged
         })
         details.invalidate(resources: affected)
     }

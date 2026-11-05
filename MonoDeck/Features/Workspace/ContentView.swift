@@ -124,6 +124,6 @@ struct ContentView: View {
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity).offset(x: -12, y: -24)
-        } else { RepositoryDetailView(workspace: model.workspace, preferences: model.preferences, tools: model.tools, preferredToolIDs: model.preferredToolIDs, openTool: { model.openTool($0) }) }
+        } else { GitBrowserView(workspace: model.workspace, preferences: model.preferences, tools: model.tools, preferredToolIDs: model.preferredToolIDs, openTool: { model.openTool($0) }) }
     }
 }

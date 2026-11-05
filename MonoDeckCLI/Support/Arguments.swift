@@ -1,5 +1,11 @@
 import Foundation
 
+func requestedCommand(_ arguments: [String]) -> String {
+    let arguments = normalizedArguments(arguments)
+    let depth = arguments.starts(with: ["group", "member"]) ? 3 : 2
+    return arguments.prefix(depth).prefix { !$0.hasPrefix("-") }.joined(separator: ".")
+}
+
 func normalizedArguments(_ arguments: [String]) -> [String] {
     var regular: [String] = [], global: [String] = [], index = 0
     while index < arguments.count {

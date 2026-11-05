@@ -118,7 +118,7 @@ private actor InspectionSession {
 
     func repository(for resource: Resource) async throws -> RepositoryInspection {
         try Task.checkCancellation()
-        let key = resource.repo ?? ""
+        let key = resource.repositoryID ?? ""
         let task: Task<RepositoryInspection, Error>
         if let existing = repositories[key] { task = existing }
         else {

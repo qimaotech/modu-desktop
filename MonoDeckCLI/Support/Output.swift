@@ -6,7 +6,7 @@ func reportProgress(_ value: OperationProgress) { diagnostic("\(value.target): \
 func diagnostic(_ value: String) { FileHandle.standardError.write(Data((value + "\n").utf8)) }
 func confirm(_ targets: [DeletionTarget]) -> Bool {
     for target in targets { diagnostic("\(target.path)\n\(target.risks.joined(separator: "\n"))") }
-    diagnostic("Permanently delete the listed worktrees and current local branches? [y/N]")
+    diagnostic("Apply the listed deletion plan? [y/N]")
     var input = Data()
     while !Task.isCancelled {
         var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
@@ -21,39 +21,29 @@ func confirm(_ targets: [DeletionTarget]) -> Bool {
 }
 func finish(_ value: OperationResult, json: Bool) -> Never {
     var result = value
-    if Task.isCancelled && result.status == .confirmationRequired { result.status = .cancelled; result.reasonCode = "cancelled" }
+    if Task.isCancelled && (result.status == .confirmationRequired || (result.status == .success && (result.dryRun || result.data != nil))) {
+        result.status = .cancelled; result.reasonCode = "cancelled"; result.data = nil
+    }
     if json {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         do { let data = try encoder.encode(result); FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data([10])) }
         catch { diagnostic("Could not encode result."); exit(1) }
+    } else if result.status == .success, let tree = result.data?.tree {
+        var lines = [directoryLabel(tree.path)]
+        appendTreeChildren(tree.children, prefix: "", to: &lines)
+        print(lines.joined(separator: "\n"))
     } else {
-        print("\(result.command): \(result.status)")
+        print("\(result.command): \(result.status)\(result.dryRun ? " (dry run)" : "")")
         if let message = result.message { print(message) }
         for item in result.items {
             print("\(item.resource.path): \(item.status)\(item.message.map { " — " + $0 } ?? "")")
             for effect in item.effects { print("  \(effect.action): \(effect.target) [\(effect.state)]") }
             if let trash = item.trashPath { print("  Trash: \(trash)") }
         }
-        for target in result.plan ?? [] { print("\(target.path)\n\(target.risks.joined(separator: "\n"))") }
+        for action in result.plan?.actions ?? [] { print("  \(action.action): \(action.target) [planned]") }
+        for target in result.plan?.deletions ?? [] { print("\(target.path)\n\(target.risks.joined(separator: "\n"))") }
     }
     exit(result.exitCode)
-}
-
-func finish(_ tree: WorkspaceTreeNode, json: Bool) throws -> Never {
-    let output: Data
-    if json {
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        var encoded = try encoder.encode(tree)
-        encoded.append(10)
-        output = encoded
-    } else {
-        var lines = [directoryLabel(tree.path)]
-        appendTreeChildren(tree.children, prefix: "", to: &lines)
-        output = Data((lines.joined(separator: "\n") + "\n").utf8)
-    }
-    guard !Task.isCancelled else { throw MonoDeckError("cancelled", .operationCancelled) }
-    FileHandle.standardOutput.write(output)
-    exit(0)
 }
 
 private func appendTreeChildren(_ children: [WorkspaceTreeNode]?, prefix: String, to lines: inout [String]) {

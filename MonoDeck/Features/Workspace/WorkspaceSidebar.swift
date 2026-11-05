@@ -46,8 +46,8 @@ struct WorkspaceSidebar: View {
                                             resourceRow(.group(group), title: group)
                                             if workspace.expandedGroups.contains(group) {
                                                 VStack(spacing: 1) {
-                                                    ForEach(workspace.sortedRepositories.filter { workspace.record?.groups[group]?.repositories.contains($0.id) == true }) { repo in
-                                                        resourceRow(.member(group, repo.id), title: repo.displayName)
+                                                    ForEach(workspace.sortedRepositories.filter { workspace.record?.groups[group]?.repositoryIDs.contains($0.id) == true }) { repo in
+                                                        resourceRow(.member(groupName: group, repositoryID: repo.id), title: repo.displayName)
                                                     }
                                                 }.transition(.opacity)
                                             }
@@ -80,11 +80,11 @@ struct WorkspaceSidebar: View {
         .onKeyPress(.downArrow) { moveSelection(1) }
         .onKeyPress(.upArrow) { moveSelection(-1) }
         .onKeyPress(.rightArrow) {
-            guard let selection = workspace.selection, selection.kind == .group, let group = selection.group else { return .ignored }
+            guard let selection = workspace.selection, selection.kind == .group, let group = selection.groupName else { return .ignored }
             workspace.expandedGroups.insert(group); return .handled
         }
         .onKeyPress(.leftArrow) {
-            guard let group = workspace.selection?.group else { return .ignored }
+            guard let group = workspace.selection?.groupName else { return .ignored }
             workspace.expandedGroups.remove(group); workspace.selection = .group(group); return .handled
         }
     }
@@ -100,7 +100,7 @@ struct WorkspaceSidebar: View {
                 }.contentShape(Rectangle())
             }.accessibilityLabel(title).accessibilityValue(expanded.wrappedValue ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed))
             if add == .add {
-                Button { management.update() } label: {
+                Button { management.updateRepositories() } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12, weight: .semibold)).frame(width: 24, height: 24).accessibilityHidden(true)
                 }

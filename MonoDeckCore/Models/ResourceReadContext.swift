@@ -60,17 +60,17 @@ public struct ResourceReadContext: Sendable {
 
     private func matchesRegistration(in record: WorkspaceRecord) -> Bool {
         guard workspace.root == record.root else { return false }
-        if let name = resource.repo {
+        if let name = resource.repositoryID {
             guard let previous = workspace.repositories.first(where: { $0.id == name }),
                   record.repositories.first(where: { $0.id == name })?.url == previous.url else { return false }
         }
-        if let name = resource.group {
+        if let name = resource.groupName {
             guard let previous = workspace.groups[name], let current = record.groups[name],
                   previous.createdAt == current.createdAt else { return false }
-            if let repository = resource.repo { return current.repositories.contains(repository) }
-            return Set(previous.repositories) == Set(current.repositories)
+            if let repository = resource.repositoryID { return current.repositoryIDs.contains(repository) }
+            return Set(previous.repositoryIDs) == Set(current.repositoryIDs)
         }
-        return resource.repo != nil
+        return resource.repositoryID != nil
     }
 
 }

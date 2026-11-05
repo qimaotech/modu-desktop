@@ -8,7 +8,7 @@ final class MockWorkspace {
     let fixture: MockWorkspaceFixture
     var directory: URL { fixture.directory }
     let defaults: UserDefaults
-    let initialSelection = Resource.member("feature-store-pickup", "order-service")
+    let initialSelection = Resource.member(groupName: "feature-store-pickup", repositoryID: "order-service")
     let suite: String
 
     init(scenario: Scenario, workspace: URL) throws {

@@ -53,7 +53,7 @@ struct ManagementView: View {
         .onAppear {
             focused = true
             if sheet != .delete { management.formError = nil }
-            if sheet == .edit, let name = workspace.selection?.group { group = name; selected = Set(management.pendingEdit?.0 == name ? management.pendingEdit!.1 : workspace.record?.groups[name]?.repositories ?? []) }
+            if sheet == .edit, let name = workspace.selection?.groupName { group = name; selected = Set(management.pendingEdit?.0 == name ? management.pendingEdit!.1 : workspace.record?.groups[name]?.repositoryIDs ?? []) }
         }
     }
 
@@ -136,13 +136,13 @@ struct ManagementView: View {
         return workspace.sortedRepositories.filter { query.isEmpty || $0.displayName.localizedStandardContains(query) }
     }
 
-    var selectedMembers: [String] {
+    var selectedRepositoryIDs: [String] {
         workspace.sortedRepositories.filter { selected.contains($0.id) }.map(\.id)
     }
 
     private var deletionForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if management.deletionPresentation.editingGroup { Text(presentation.text.string(.uiGroupWorkspaceWorktreeWillBeKept)).font(DialogTypography.auxiliary) }
+            if management.deletionPresentation.editingGroup { Text(presentation.text.string(.uiGroupRootWorktreeWillBeKept)).font(DialogTypography.auxiliary) }
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(deletionDisplayResources) { resource in deletionRow(resource) }
@@ -207,7 +207,7 @@ struct ManagementView: View {
             switch management.deletionPresentation.request {
             case .repository: presentation.text.string(.uiDeleteRepository)
             case .group: presentation.text.string(.uiDeleteWorktreeGroup)
-            default: presentation.text.string(.uiDeleteLinkedWorktree)
+            default: presentation.text.string(.uiDeleteMemberWorktree)
             }
         }
     }
@@ -216,7 +216,7 @@ struct ManagementView: View {
         if sheet == .importRepositories { return presentation.text.string(.uiChooseRepositoriesCloneIntoWorkspace) }
         if sheet == .delete {
             switch management.deletionPresentation.request {
-            case .group: return presentation.text.string(.uiGroupWorkspaceWorktreeMembersAndCurrentLocalBranches)
+            case .group: return presentation.text.string(.uiGroupRootWorktreeMembersAndCurrentLocalBranches)
             case .repository: return presentation.text.string(.uiRepositoryWillMoveTrashLinkedWorktreesAndCurrent)
             default: return presentation.text.string(.uiLinkedWorktreeAndCurrentLocalBranchIncludingUnmerged)
             }
@@ -231,29 +231,29 @@ struct ManagementView: View {
         case .add: return presentation.text.string(.uiAddingRepository)
         case .importRepositories: return presentation.text.string(.uiImportingRepositories)
         case .create: return presentation.text.string(.uiCreatingWorktreeGroup)
-        case .edit: return presentation.text.string(.uiUpdatingWorktreeGroup)
+        case .edit: return presentation.text.string(.uiEditingWorktreeGroup)
         case .delete: return presentation.text.string(.uiDeleting)
         }
     }
 
     func deletionStatus(_ target: DeletionTarget) -> String {
-        guard target.exists, let dirty = target.dirty else { return "Other" }
+        guard target.exists, let dirty = target.dirty else { return "Unavailable" }
         return dirty ? "Dirty" : "Clean"
     }
     private var actionTitle: String { switch sheet { case .add: presentation.text.string(.uiAdd); case .importRepositories: presentation.text.string(.uiImport); case .create: presentation.text.string(.uiCreate); case .edit: presentation.text.string(.uiSaveChanges); case .delete: management.deletionPresentation.editingGroup ? presentation.text.string(.uiSaveChanges) : presentation.text.string(.uiDelete2) } }
-    private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .importRepositories: !management.canConfirmRepositoryImport; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositories ?? []); case .delete: !management.canConfirmDelete } }
+    private var disabled: Bool { switch sheet { case .add: url.isEmpty; case .importRepositories: !management.canConfirmRepositoryImport; case .create: group.isEmpty || selected.isEmpty; case .edit: selected == Set(workspace.record?.groups[group]?.repositoryIDs ?? []); case .delete: !management.canConfirmDelete } }
     private func memberStatus(_ repo: String) -> String {
-        guard workspace.record?.groups[group]?.repositories.contains(repo) == true else { return "Unset" }
-        let state = workspace.state(for: .member(group, repo))
-        if state?.available != true { return "Other" }
+        guard workspace.record?.groups[group]?.repositoryIDs.contains(repo) == true else { return "Unset" }
+        let state = workspace.state(for: .member(groupName: group, repositoryID: repo))
+        if state?.available != true { return "Unavailable" }
         return state?.dirty == true ? "Dirty" : "Clean"
     }
     private func submit() {
         error = nil; fieldError = nil; management.formError = nil
-        let members = selectedMembers
+        let members = selectedRepositoryIDs
         switch sheet {
         case .add:
-            do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, name: displayName) } catch { fieldError = presentation.text.message(error) }
+            do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, displayName: displayName) } catch { fieldError = presentation.text.message(error) }
         case .importRepositories: management.confirmRepositoryImport()
         case .create:
             do { try PathSafety.groupName(group); management.create(group, members: members) } catch { fieldError = presentation.text.message(error) }

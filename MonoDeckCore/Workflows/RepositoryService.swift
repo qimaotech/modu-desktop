@@ -1,7 +1,8 @@
 import Foundation
 
 extension WorkspaceService {
-    public func addRepository(_ repository: Repository, at root: URL, progress: ProgressHandler = { _ in }) async -> OperationResult {
+    public func addRepository(_ repository: Repository, at root: URL, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
+        if dryRun { return await previewRepositoryAddition(repository, at: root) }
         var result = OperationResult(command: "repo.add", workspace: root.path)
         var staging: RepositoryStaging?
         do {
@@ -10,6 +11,28 @@ extension WorkspaceService {
         } catch { result = .init(command: result.command, workspace: root.path, status: .failed, error: .wrap(error)) }
         finishRepositoryStaging(staging, items: &result.items)
         if !result.items.isEmpty { result.summarize(cancelled: result.items.contains { $0.status == .cancelled }) }
+        return result
+    }
+
+    private func previewRepositoryAddition(_ repository: Repository, at root: URL) async -> OperationResult {
+        var result = OperationResult(command: "repo.add", workspace: root.path)
+        result.dryRun = true
+        do {
+            _ = try RepositoryIdentity(repository.url)
+            let record = try await read(root)
+            try await checkRepositoryWorkspace(root)
+            let resource = Resource.repository(repository.id)
+            if let existing = record.repositories.first(where: { $0.id.lowercased() == repository.id.lowercased() }) {
+                guard existing.url == repository.url, repository.displayNameOverride == nil || existing.displayNameOverride == repository.displayNameOverride else { throw MonoDeckError("repository-conflict", .repositoryIDIsAlreadyRegistered(repository.id)) }
+                _ = try await checked(.repository(existing.id), in: record)
+                result.plan = .init()
+            } else {
+                let target = try PathSafety.child(resource.path, of: root)
+                guard !PathSafety.exists(target) else { throw MonoDeckError("path-conflict", .repositoryTargetAlreadyExists(target.path)) }
+                result.plan = .init(actions: [.init("clone", resource: resource, target: repository.url), .init("save-workspace-record", resource: resource, target: target.path)])
+            }
+            result.plan?.actions.append(.init("maintain-workspace-ignore", resource: .workspace(), target: root.appending(path: ".gitignore").path))
+        } catch { result = .init(command: result.command, workspace: root.path, status: .failed, error: .wrap(error)); result.dryRun = true }
         return result
     }
 
@@ -86,29 +109,29 @@ extension WorkspaceService {
 
     func publishRepository(_ prepared: PreparedRepository, record: inout WorkspaceRecord, commitIgnore: Bool = true, progress: ProgressHandler) async -> ItemResult {
         let repository = prepared.repository
-        let name = repository.id
-        var item = ItemResult(.repository(name))
+        let repositoryID = repository.id
+        var item = ItemResult(.repository(repositoryID))
         var published: RepositoryDirectory?
         do {
             try checkCancellation()
             try prepared.staging.validate(); try prepared.directory.validate()
             try await checkRepositoryWorkspace(record.rootURL)
             if let existing = await existingRepository(repository, in: record, commitIgnore: commitIgnore, progress: progress) { return existing }
-            let target = try PathSafety.child("repositories/\(name)", of: record.rootURL)
+            let target = try PathSafety.child("repositories/\(repositoryID)", of: record.rootURL)
             guard !PathSafety.exists(target) else { throw MonoDeckError("path-conflict", .repositoryTargetIsOccupied) }
             try await git.checkRepository(prepared.directory.url, origin: repository.url, main: true)
             try checkCancellation()
             try prepared.staging.validate(); try prepared.directory.validate()
-            progress(.init(name, .saving, cancellable: false))
+            progress(.init(repositoryID, .saving, cancellable: false))
             try FileManager.default.moveItem(at: prepared.directory.url, to: target)
             published = prepared.directory.relocated(to: target)
             var candidate = record; candidate.repositories.append(repository)
             try persist(candidate, into: &record)
             published = nil
-            item.effects.append(.init("clone", target.path)); item.effects.append(.init("save-configuration", name))
+            item.effects.append(.init("clone", target.path)); item.effects.append(.init("save-workspace-record", repositoryID))
             item.data = ["disposition": "added"]
-            try await finishRepositoryIgnore(name, at: record.rootURL, commit: commitIgnore, item: &item)
-            progress(.init(name, .added, snapshot: record))
+            try await finishRepositoryIgnore(repositoryID, at: record.rootURL, commit: commitIgnore, item: &item)
+            progress(.init(repositoryID, .added, snapshot: record))
         } catch {
             fail(&item, error)
             if let published, PathSafety.exists(published.url) {
@@ -149,15 +172,15 @@ extension WorkspaceService {
     }
 
     private func existingRepository(_ repository: Repository, in record: WorkspaceRecord, commitIgnore: Bool, progress: ProgressHandler) async -> ItemResult? {
-        let name = repository.id
-        guard let existing = record.repositories.first(where: { $0.id.lowercased() == name.lowercased() }) else { return nil }
-        var item = ItemResult(.repository(name))
+        let repositoryID = repository.id
+        guard let existing = record.repositories.first(where: { $0.id.lowercased() == repositoryID.lowercased() }) else { return nil }
+        var item = ItemResult(.repository(repositoryID))
         do {
-            guard existing.url == repository.url, repository.name == nil || existing.name == repository.name else { throw MonoDeckError("repository-conflict", .repositoryNameIsAlreadyRegistered(name)) }
+            guard existing.url == repository.url, repository.displayNameOverride == nil || existing.displayNameOverride == repository.displayNameOverride else { throw MonoDeckError("repository-conflict", .repositoryIDIsAlreadyRegistered(repositoryID)) }
             _ = try await checked(.repository(existing.id), in: record)
             item.data = ["disposition": "already-exists"]
-            progress(.init(name, .saving, cancellable: false))
-            try await finishRepositoryIgnore(name, at: record.rootURL, commit: commitIgnore, item: &item)
+            progress(.init(repositoryID, .saving, cancellable: false))
+            try await finishRepositoryIgnore(repositoryID, at: record.rootURL, commit: commitIgnore, item: &item)
         } catch { fail(&item, error) }
         return item
     }
@@ -176,9 +199,9 @@ extension WorkspaceService {
         item.effects.append(.init("clone", path.path, state: "unknown"))
     }
 
-    private func finishRepositoryIgnore(_ name: String, at root: URL, commit: Bool, item: inout ItemResult) async throws {
-        if try await git.ensureIgnore([name], at: root, cancellable: false) { item.effects.append(.init("update-ignore", root.appending(path: ".gitignore").path)) }
-        if commit, let oid = try await git.commitWorkspaceFiles([".gitignore"], message: "chore: ignore MonoDeck repository \(name)", at: root) { item.effects.append(.init("commit-workspace-files", oid)) }
+    private func finishRepositoryIgnore(_ repositoryID: String, at root: URL, commit: Bool, item: inout ItemResult) async throws {
+        if try await git.ensureIgnore([repositoryID], at: root, cancellable: false) { item.effects.append(.init("update-ignore", root.appending(path: ".gitignore").path)) }
+        if commit, let oid = try await git.commitWorkspaceFiles([".gitignore"], message: "chore: ignore MonoDeck repository \(repositoryID)", at: root) { item.effects.append(.init("commit-workspace-files", oid)) }
     }
     func remoteDefault(_ url: String, at root: URL) async throws -> String {
         try await checkRemoteBoundary(url, at: root)

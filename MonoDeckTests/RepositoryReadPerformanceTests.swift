@@ -65,7 +65,7 @@ struct RepositoryReadPerformanceTests {
                                          waitForWrite: { try await Task.sleep(for: .seconds(30)) })
         do {
             let snapshot = RepositoryDetailSnapshot(summary: .init(head: "benchmark", headOID: oid(1), hasRemotes: false),
-                                                    changes: [], commits: [], behindCommits: nil, observedAt: Date())
+                                                    changes: [], uniqueCommits: [], behindCommits: nil, observedAt: Date())
             let initial = ContinuousClock.now
             await cache.saveDetail(snapshot, for: identity)
             await cache.flush()

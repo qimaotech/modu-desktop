@@ -42,7 +42,7 @@ struct RepositoryUpdateTests {
 
     @Test func pullsNamedBaseOnceAndLeavesLinkedWorktreeUntouched() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositories: ["repo"])
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let path = f.root.appending(path: "repositories/repo"), source = f.directory.appending(path: "source")
         let member = f.root.appending(path: "worktrees/feature/repo")
         let original = try #require(await f.service.git.oid("HEAD", at: path))
@@ -95,7 +95,7 @@ struct RepositoryUpdateTests {
         let operation = Task { await gate.service.updateRepositories(at: f.root) }
         do {
             try await gate.waitForStarts(1)
-            let removed = await f.service.remove(.repository("repo"), at: f.root, execute: true)
+            let removed = await f.service.deleteConfirmed(.repository("repo"), at: f.root)
             try #require(removed.status == .success)
             let trash = try #require(removed.items.first?.trashPath)
             try #require(await f.service.addRepository(replacement, at: f.root).status == .success)
@@ -189,7 +189,7 @@ struct RepositoryUpdateTests {
             for index in 0..<8 { try batch.release(index) }
             let result = await operation.value
             #expect(result.status == .partialSuccess)
-            #expect(result.items.map(\.resource.repo) == (0..<8).map { "repo\($0)" })
+            #expect(result.items.map(\.resource.repositoryID) == (0..<8).map { "repo\($0)" })
             #expect(result.items[3].status == .failed)
             #expect(result.items.enumerated().allSatisfy { $0.offset == 3 || $0.element.data?["disposition"] == "up-to-date" })
         } catch {

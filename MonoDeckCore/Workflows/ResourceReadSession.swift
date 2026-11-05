@@ -71,7 +71,7 @@ public actor ResourceReadSession {
 
     public func invalidate(resources: Set<Resource>) {
         generation += 1
-        let names = Set(resources.map(\.repo))
+        let names = Set(resources.map(\.repositoryID))
         let affected = Set(repositories.keys.filter { names.contains($0.repository) })
         contexts = contexts.filter { !affected.contains($0.key.family) }
         for family in affected { repositories.removeValue(forKey: family) }
@@ -177,8 +177,8 @@ public actor ResourceReadSession {
         let repository: String?
         let url: String?
         init(resource: Resource, record: WorkspaceRecord) {
-            workspace = record.root; repository = resource.repo
-            url = resource.repo.flatMap { name in record.repositories.first { $0.id == name }?.url }
+            workspace = record.root; repository = resource.repositoryID
+            url = resource.repositoryID.flatMap { name in record.repositories.first { $0.id == name }?.url }
         }
     }
 

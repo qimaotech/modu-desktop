@@ -1,11 +1,11 @@
 import Foundation
 import ArgumentParser
 import MonoDeckCore
-import Darwin
 
 struct Repo: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(subcommands: [List.self, Add.self, Remove.self])
+    static let configuration = CommandConfiguration(abstract: "Manage registered business repositories.", subcommands: [List.self, Add.self, Delete.self])
     struct List: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "List registered repositories with their local status.")
         @OptionGroup var options: Options
         mutating func run() async throws {
             let service = WorkspaceService(); let root = try await options.root(service)
@@ -20,25 +20,30 @@ struct Repo: AsyncParsableCommand {
         }
     }
     struct Add: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Clone and register a remote repository.")
         @OptionGroup var options: Options
+        @OptionGroup var mutation: MutationOptions
         @Argument var url: String
-        @Option(name: .long) var name: String?
+        @Option(name: .customLong("display-name"), help: ArgumentHelp("An optional display name, independent of the repository ID.", valueName: "display-name")) var displayNameOverride: String?
         mutating func run() async throws {
-            let service = WorkspaceService()
-            finish(await service.addRepository(.init(url: url, name: name), at: try await options.root(service), progress: reportProgress), json: options.json)
+            let service = WorkspaceService(), root = try await options.root(service)
+            let repository = Repository(url: url, displayNameOverride: displayNameOverride)
+            await runMutation(options: options, mutation: mutation,
+                preview: { await service.addRepository(repository, at: root, dryRun: true) },
+                execute: { _ in await service.addRepository(repository, at: root, progress: reportProgress) })
         }
     }
-    struct Remove: AsyncParsableCommand {
+    struct Delete: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Delete managed members and move the main repository to Trash.")
         @OptionGroup var options: Options
-        @Argument var repoName: String
-        @Flag(name: .long) var execute = false
+        @OptionGroup var mutation: MutationOptions
+        @Argument(help: ArgumentHelp("The repository ID, independent of its display name.", valueName: "repository-id")) var repositoryID: String
         mutating func run() async throws {
             let service = WorkspaceService(); let root = try await options.root(service)
-            var result = await service.remove(.repository(repoName), at: root, execute: execute, progress: reportProgress)
-            if result.status == .confirmationRequired, !options.json, isatty(STDIN_FILENO) == 1, confirm(result.plan ?? []) {
-                result = await service.remove(.repository(repoName), at: root, authorization: result.plan, progress: reportProgress)
-            }
-            finish(result, json: options.json)
+            let request = DeleteRequest.repository(repositoryID)
+            await runMutation(options: options, mutation: mutation,
+                preview: { await service.delete(request, at: root, dryRun: true) },
+                execute: { plan in await service.delete(request, at: root, authorization: plan?.deletions, progress: reportProgress) })
         }
     }
 }
