@@ -940,7 +940,7 @@ import SwiftUI
     }
 
     @Test(arguments: ["missing-link", "missing-path", "no-saved-workspace"])
-    func setupUsesStartupCLIResultBeforeCheckingTheSavedWorkspace(_ kind: String) async throws {
+    func setupUsesStartupCLIResultAndRestoresSavedSelection(_ kind: String) async throws {
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
@@ -958,6 +958,11 @@ import SwiftUI
         let initial = try #require(model.startupCLIInstallation)
         #expect(initial.available == (kind == "no-saved-workspace"))
 
+        let file = fixture.service.store.recordURL(fixture.root)
+        if kind == "missing-link" { try FileManager.default.removeItem(at: file) }
+        if kind == "missing-path" { try Data("invalid record".utf8).write(to: file) }
+        let original = PathSafety.exists(file) ? try Data(contentsOf: file) : nil
+
         let setup = SetupModel(model: model)
         #expect(setup.cliReady == initial.available && setup.cliActivity == nil)
         #expect(setup.cliMessage == initial.message && setup.cliUserMessage == initial.userMessage)
@@ -967,7 +972,9 @@ import SwiftUI
         await setup.check()
         #expect(setup.cliReady == initial.available && setup.cliMessage == initial.message)
         #expect(setup.cliActivity == nil && !setup.working && model.startupCLIInstallation == nil)
-        #expect(setup.candidate?.path == (kind == "no-saved-workspace" ? nil : PathSafety.canonical(fixture.root).path))
+        #expect(setup.selectedWorkspace?.path == (kind == "no-saved-workspace" ? nil : PathSafety.canonical(fixture.root).path))
+        #expect(setup.error == nil)
+        #expect((PathSafety.exists(file) ? try Data(contentsOf: file) : nil) == original)
 
         setup.windowClosed()
         await setup.check()
@@ -980,7 +987,7 @@ import SwiftUI
         #expect(!setup.isPreparedForCurrentWorkspace)
         await setup.check()
         #expect(setup.isPreparedForCurrentWorkspace)
-        #expect(setup.candidate?.path == otherWorkspace.path)
+        #expect(setup.selectedWorkspace?.path == otherWorkspace.path)
         await model.workspace.stopReads()
     }
 
@@ -1785,11 +1792,13 @@ private actor WorkspaceLockRetryGate {
 
     mutating func waitUntilStarted() async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while writer < 0, ContinuousClock.now < deadline {
-            writer = Darwin.open(config.path, O_WRONLY | O_NONBLOCK)
-            if writer < 0 { try await Task.sleep(for: .milliseconds(10)) }
-        }
-        try #require(writer >= 0)
+        while !connectIfStarted(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(connectIfStarted())
+    }
+
+    mutating func connectIfStarted() -> Bool {
+        if writer < 0 { writer = Darwin.open(config.path, O_WRONLY | O_NONBLOCK) }
+        return writer >= 0
     }
 
     mutating func resume() throws {

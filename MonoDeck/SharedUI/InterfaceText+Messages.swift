@@ -119,6 +119,7 @@ extension InterfaceText {
         case .invalidResourcePath: return string(.messageInvalidResourcePath)
         case .directoryMissing(let arg1): return string(.messageDirectoryMissing(arg1))
         case .chooseFolderWithEmptyRepositoriesAndWorktrees(let arg1): return string(.messageChooseFolderWithEmptyRepositoriesAndWorktrees(arg1))
+        case .noRecoverableWorkspaceResources: return string(.messageNoRecoverableWorkspaceResources)
         case .groupNameMustBeOneDirectoryNameAnd: return string(.messageGroupNameMustBeOneDirectoryNameAnd)
         case .couldNotMoveTrash(let arg1, let arg2): return string(.messageCouldNotMoveTrash(arg1, message(arg2)))
         case .trashCompletedWithoutVerifiableDestination(let arg1): return string(.messageTrashCompletedWithoutVerifiableDestination(arg1))

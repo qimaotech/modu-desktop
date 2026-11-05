@@ -2049,6 +2049,23 @@
         }
       }
     },
+    "message.noRecoverableWorkspaceResources": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recoverable repositories or worktree groups were found in this workspace."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此工作区中没有可恢复的仓库或工作树分组。"
+          }
+        }
+      }
+    },
     "message.noRegisteredWorkspaceContainsCurrentDirectoryUseWorkspace": {
       "extractionState": "manual",
       "localizations": {

@@ -115,6 +115,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case invalidResourcePath
     case directoryMissing(String)
     case chooseFolderWithEmptyRepositoriesAndWorktrees(String)
+    case noRecoverableWorkspaceResources
     case groupNameMustBeOneDirectoryNameAnd
     case couldNotMoveTrash(String, UserMessage)
     case trashCompletedWithoutVerifiableDestination(String)
@@ -307,6 +308,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .invalidResourcePath: return "Invalid resource path."
         case .directoryMissing(let arg1): return "Directory missing: \(arg1)"
         case .chooseFolderWithEmptyRepositoriesAndWorktrees(let arg1): return "Choose a folder with empty repositories/ and worktrees/: \(arg1)"
+        case .noRecoverableWorkspaceResources: return "No recoverable repositories or worktree groups were found in this workspace."
         case .groupNameMustBeOneDirectoryNameAnd: return "Group name must be one directory name and a valid Git branch name."
         case .couldNotMoveTrash(let arg1, let arg2): return "Could not move to Trash: \(arg1). \(arg2.englishDescription)"
         case .trashCompletedWithoutVerifiableDestination(let arg1): return "Trash completed without a verifiable destination: \(arg1)"

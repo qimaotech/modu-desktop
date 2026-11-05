@@ -6,14 +6,14 @@ public struct WorkspaceService: Sendable {
     let trashDirectory: @Sendable (URL) throws -> URL
     public init(store: WorkspaceStore = .init(), git: Git = .init(), trash: @escaping @Sendable (URL) throws -> URL = { try PathSafety.trash($0) }) { self.store = store; self.git = git; self.trashDirectory = trash }
 
-    public func candidate(_ url: URL, requireExistingRecord: Bool = false) async throws -> URL {
+    public func candidate(_ url: URL, requireExistingRecord: Bool = false, recoverUnregisteredResources: Bool = false) async throws -> URL {
         try checkCancellation()
         let root = PathSafety.canonical(url)
         try store.checkBoundary(root)
         let existing = PathSafety.exists(store.recordURL(root))
         guard existing || !requireExistingRecord else { throw MonoDeckError("configuration-missing", .workspaceRecordIsMissing(store.recordURL(root).path)) }
         if existing { _ = try store.load(root) }
-        try await checkCandidate(root, hasRecord: existing)
+        _ = try await checkCandidate(root, hasRecord: existing, recoverUnregisteredResources: recoverUnregisteredResources)
         return root
     }
 
@@ -21,7 +21,7 @@ public struct WorkspaceService: Sendable {
         await openWorkspaceWithRecord(url, skill: skill, installer: installer, progress: progress).result
     }
 
-    public func openWorkspaceWithRecord(_ url: URL, skill: URL? = nil, installer: InstallationService = .init(), requireExistingRecord: Bool = false, progress: ProgressHandler = { _ in }) async -> (record: WorkspaceRecord?, result: OperationResult, skillError: MonoDeckError?) {
+    public func openWorkspaceWithRecord(_ url: URL, skill: URL? = nil, installer: InstallationService = .init(), requireExistingRecord: Bool = false, recoverUnregisteredResources: Bool = false, progress: ProgressHandler = { _ in }) async -> (record: WorkspaceRecord?, result: OperationResult, skillError: MonoDeckError?) {
         let root = PathSafety.canonical(url)
         var item = ItemResult(.workspace())
         var result = OperationResult(command: "workspace.open", workspace: root.path)
@@ -35,7 +35,7 @@ public struct WorkspaceService: Sendable {
             var stash: String?
             var pendingCommitPaths: [String] = []
             do {
-                try await checkCandidate(root, hasRecord: existing)
+                let recovered = try await checkCandidate(root, hasRecord: existing, recoverUnregisteredResources: recoverUnregisteredResources)
                 progress(.init(root.path, .openingWorkspace))
                 if !PathSafety.exists(root.appending(path: ".git")) {
                     _ = try await git.run(["init"], at: root)
@@ -44,6 +44,12 @@ public struct WorkspaceService: Sendable {
                 }
                 let tracked = try await git.run(["-c", "core.fsmonitor=false", "ls-files", "-z", "--", "repositories", "worktrees"], at: root)
                 guard tracked.stdout.isEmpty else { throw MonoDeckError("path-conflict", .workspaceTracksRepositoriesOrWorktreesRemovePathsFrom) }
+                if let recovered {
+                    try checkCancellation()
+                    progress(.init(root.path, .saving, cancellable: false))
+                    try persist(recovered, into: &record)
+                    item.effects.append(.init("save-configuration", store.recordURL(root).path))
+                }
                 var updatingSkill = false
                 if let skill {
                     do { updatingSkill = try installer.skillNeedsUpdate(from: skill, workspace: root) }
@@ -73,7 +79,7 @@ public struct WorkspaceService: Sendable {
                 if !updatingSkill {
                     if try await validateAndClean(&record) { item.effects.append(.init("save-configuration", store.recordURL(root).path)) }
                 }
-                if !existing {
+                if !existing && recovered == nil {
                     progress(.init(root.path, .saving, cancellable: false))
                     try persist(record, into: &record)
                     item.effects.append(.init("save-configuration", store.recordURL(root).path))
@@ -165,6 +171,9 @@ public struct WorkspaceService: Sendable {
             main = record.rootURL
             origin = nil
         }
+        return try await inspectMainRepository(main, origin: origin)
+    }
+    func inspectMainRepository(_ main: URL, origin: String? = nil) async throws -> RepositoryInspection {
         try await git.checkRepository(main, origin: origin, main: true)
         let registrations = try await git.registrations(at: main)
         let common = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
@@ -185,11 +194,19 @@ public struct WorkspaceService: Sendable {
             guard try await git.oid("HEAD", at: path) != nil else { throw MonoDeckError("resource-unavailable", .worktreeHEADIsUnavailable) }
         }
     }
-    private func checkCandidate(_ root: URL, hasRecord: Bool) async throws {
+    private func checkCandidate(_ root: URL, hasRecord: Bool, recoverUnregisteredResources: Bool) async throws -> WorkspaceRecord? {
         try PathSafety.directory(root)
         guard FileManager.default.isWritableFile(atPath: root.path) else { throw MonoDeckError("workspace-unwritable", .workspaceIsNotWritable(root.path)) }
         try store.checkNesting(root)
-        if !hasRecord { try PathSafety.emptyResourceDirectories(root) }
+        var needsRecovery = false
+        if !hasRecord {
+            do { try PathSafety.emptyResourceDirectories(root) }
+            catch let error as MonoDeckError where error.code == "workspace-not-empty" && recoverUnregisteredResources { needsRecovery = true }
+        }
+        if needsRecovery {
+            for name in ["repositories", "worktrees"] { try PathSafety.directory(root.appending(path: name), allowMissing: true) }
+            return try await recoverWorkspaceRecord(root)
+        }
         let top = try await git.run(["rev-parse", "--show-toplevel"], at: root, allowFailure: true)
         if top.status == 0 { try await git.checkRepository(root, main: true) }
         else {
@@ -197,6 +214,7 @@ public struct WorkspaceService: Sendable {
             guard !PathSafety.exists(root.appending(path: ".git")), bare.text != "true" else { throw MonoDeckError("resource-unavailable", .chooseOrdinaryGitMainWorktreeOrDirectoryOutside) }
         }
         for name in ["repositories", "worktrees"] { try PathSafety.directory(root.appending(path: name), allowMissing: true) }
+        return nil
     }
     private func validateAndClean(_ record: inout WorkspaceRecord) async throws -> Bool {
         for name in record.groups.keys { try await git.validateRef(name, at: record.rootURL) }

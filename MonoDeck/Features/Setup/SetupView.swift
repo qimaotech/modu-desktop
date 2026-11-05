@@ -46,13 +46,13 @@ struct SetupView: View {
                         stepGraphic("DesignIcons/Finder").opacity(setup.cliReady ? 1 : 0.4)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(model.text.string(.uiChooseWorkspace)).fontWeight(.semibold)
-                            if let candidate = setup.candidate {
-                                pathLabel(candidate).accessibilityIdentifier("workspaceCandidate")
+                            if let workspace = setup.selectedWorkspace {
+                                pathLabel(workspace).accessibilityIdentifier("workspaceCandidate")
                             } else {
                                 Text(model.text.string(.uiNoWorkspaceSelected)).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading).opacity(setup.cliReady ? 1 : 0.4)
-                        Button(setup.candidate == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { choose() }.disabled(!setup.cliReady || setup.working)
+                        Button(setup.selectedWorkspace == nil ? model.text.string(.uiChoose) : model.text.string(.uiChange)) { choose() }.disabled(!setup.cliReady || setup.working || model.busy)
                     }.padding(.horizontal, 20).frame(height: 84)
                 }.formPlate()
                 if showsStatus {
@@ -76,7 +76,7 @@ struct SetupView: View {
                     continueButtonLabel
                 }
                 .accessibilityLabel(continueButtonTitle)
-                .keyboardShortcut(.defaultAction).disabled(!setup.cliReady || setup.candidate == nil || setup.working)
+                .keyboardShortcut(.defaultAction).disabled(!setup.cliReady || setup.selectedWorkspace == nil || setup.working || model.busy)
             }.padding(.horizontal, 24).frame(height: 54)
         }.font(DialogTypography.body).background(DesignStyle.background)
         .interactiveDismissDisabled(setup.working)
@@ -161,8 +161,8 @@ struct SetupView: View {
 
     private func choose() {
         Task {
-            guard let url = await FilePanels.directory(at: setup.candidate ?? model.workspace.record?.rootURL) else { return }
-            await setup.checkCandidate(url)
+            guard let url = await FilePanels.directory(at: setup.selectedWorkspace ?? model.workspace.record?.rootURL) else { return }
+            setup.selectWorkspace(url)
         }
     }
 }

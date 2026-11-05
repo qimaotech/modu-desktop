@@ -14,8 +14,7 @@ final class SetupModel {
     private(set) var cliPreviouslyInstalled = false
     private(set) var cliMessage = ""
     private(set) var cliUserMessage: UserMessage?
-    private(set) var candidate: URL?
-    private var candidateRequiresExistingRecord = false
+    private(set) var selectedWorkspace: URL?
     private(set) var working = false
     private(set) var cliActivity: CLIActivity? = .checking
     private(set) var settingUp = false
@@ -38,8 +37,8 @@ final class SetupModel {
         defer { cliActivity = nil; working = false }
         while !Task.isCancelled {
             let workspace = model.defaults.string(forKey: "workspace")
-            candidate = nil; candidateRequiresExistingRecord = false
-            error = nil; skillConflict = false
+            selectedWorkspace = nil
+            error = nil; errorDetails = nil; skillConflict = false
             working = true
             let check: CLIInstallation
             if let startup = model.takeStartupCLIInstallation() {
@@ -52,9 +51,8 @@ final class SetupModel {
             applyCLIInstallation(check)
             cliPreviouslyInstalled = model.hasSavedWorkspace || PathSafety.exists(model.installer.commandLink)
             cliActivity = nil
-            if let workspace { await checkCandidate(URL(fileURLWithPath: workspace), requireExistingRecord: true) }
-            guard !Task.isCancelled else { return }
             guard workspace == model.defaults.string(forKey: "workspace") else { continue }
+            restoreSavedSelection()
             checkedWorkspace = workspace
             initialCheckCompleted = true
             return
@@ -77,7 +75,7 @@ final class SetupModel {
                 applyCLIInstallation(check)
                 outcome.status = check.available ? .success : .failed; outcome.message = check.message; outcome.userMessage = check.userMessage
                 cliActivity = nil
-                if check.available { await restoreSavedCandidate() }
+                if check.available { restoreSavedSelection() }
             } catch { presentError(error); outcome.status = Task.isCancelled ? .cancelled : .failed; outcome.message = error.localizedDescription; outcome.userMessage = MonoDeckError.wrap(error).userMessage }
             if PathSafety.exists(model.installer.commandLink) {
                 var item = ItemResult(.cli(path: model.installer.commandLink.path), status: outcome.status)
@@ -86,22 +84,17 @@ final class SetupModel {
             return outcome
         }
     }
-    func checkCandidate(_ url: URL, requireExistingRecord: Bool = false) async {
-        working = true; error = nil; skillConflict = false; candidate = nil
-        candidateRequiresExistingRecord = requireExistingRecord
-        defer { working = false }
-        do {
-            let checked = try await model.service.candidate(url, requireExistingRecord: requireExistingRecord)
-            guard !Task.isCancelled else { return }
-            candidate = checked
-        } catch { if !Task.isCancelled { presentError(error) } }
+    func selectWorkspace(_ url: URL) {
+        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil else { return }
+        selectedWorkspace = url.standardizedFileURL
+        error = nil; errorDetails = nil; skillConflict = false
     }
     func continueSetup(onReady: @escaping @MainActor () -> Void) {
-        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil, let candidate else { return }
-        working = true; settingUp = true; error = nil
+        guard !working, !model.busy, !model.presentation.quitPending, model.presentation.result == nil, let root = selectedWorkspace else { return }
+        working = true; settingUp = true; error = nil; errorDetails = nil
         model.runSetupOperation { [self] in
             let skill = skillConflict ? nil : Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "mono-deck-workflow")
-            let opened = await model.service.openWorkspaceWithRecord(candidate, skill: skill, installer: model.installer, requireExistingRecord: candidateRequiresExistingRecord)
+            let opened = await model.service.openWorkspaceWithRecord(root, skill: skill, installer: model.installer, recoverUnregisteredResources: true)
             var outcome = opened.result
             defer { settingUp = false; working = false }
             if outcome.status != .success {
@@ -118,20 +111,20 @@ final class SetupModel {
             }
             guard !model.presentation.quitPending else { return outcome }
             do {
-                try await model.completeSetup(candidate, loaded: opened.record)
+                try await model.completeSetup(root, loaded: opened.record)
                 onReady()
             } catch {
                 presentError(error)
-                outcome.items.append(ItemResult(.workspace(path: candidate.path), status: .failed, error: .wrap(error)))
+                outcome.items.append(ItemResult(.workspace(path: root.path), status: .failed, error: .wrap(error)))
                 outcome.summarize()
             }
             return outcome
         }
     }
 
-    private func restoreSavedCandidate() async {
-        guard candidate == nil, let path = model.defaults.string(forKey: "workspace") else { return }
-        await checkCandidate(URL(fileURLWithPath: path), requireExistingRecord: true)
+    private func restoreSavedSelection() {
+        guard selectedWorkspace == nil, let path = model.defaults.string(forKey: "workspace") else { return }
+        selectedWorkspace = URL(fileURLWithPath: path).standardizedFileURL
     }
 
     private func applyCLIInstallation(_ check: CLIInstallation) {
