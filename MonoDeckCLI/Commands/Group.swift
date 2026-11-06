@@ -30,10 +30,7 @@ struct Group: AsyncParsableCommand {
         mutating func validate() throws { guard !repositoryIDs.isEmpty else { throw ValidationError("At least one --repo is required.") } }
         mutating func run() async throws {
             let service = WorkspaceService(), root = try await options.root(service)
-            let groupName = groupName, repositoryIDs = repositoryIDs
-            await runMutation(options: options, mutation: mutation,
-                preview: { await service.createGroup(groupName, repositoryIDs: repositoryIDs, at: root, dryRun: true) },
-                execute: { _ in await service.createGroup(groupName, repositoryIDs: repositoryIDs, at: root, progress: reportProgress) })
+            finish(await service.createGroup(groupName, repositoryIDs: repositoryIDs, at: root, dryRun: mutation.dryRun, progress: reportProgress), json: options.json)
         }
     }
 
@@ -84,10 +81,7 @@ struct Group: AsyncParsableCommand {
             mutating func validate() throws { guard !repositoryIDs.isEmpty else { throw ValidationError("At least one repository ID is required.") } }
             mutating func run() async throws {
                 let service = WorkspaceService(), root = try await options.root(service)
-                let groupName = groupName, repositoryIDs = repositoryIDs
-                await runMutation(options: options, mutation: mutation,
-                    preview: { await service.addGroupMembers(groupName, repositoryIDs: repositoryIDs, at: root, dryRun: true) },
-                    execute: { _ in await service.addGroupMembers(groupName, repositoryIDs: repositoryIDs, at: root, progress: reportProgress) })
+                finish(await service.addGroupMembers(groupName, repositoryIDs: repositoryIDs, at: root, dryRun: mutation.dryRun, progress: reportProgress), json: options.json)
             }
         }
         struct Delete: AsyncParsableCommand {

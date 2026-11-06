@@ -23,7 +23,18 @@ public enum PathSafety {
         }
     }
     public static func identity(_ url: URL) -> String {
-        let resolved = canonical(url)
+        var resolved = canonical(url)
+        var ancestor = resolved
+        var missing: [String] = []
+        while !exists(ancestor), ancestor.path != "/" {
+            missing.append(ancestor.lastPathComponent)
+            ancestor.deleteLastPathComponent()
+        }
+        // Foundation may leave parent aliases unresolved when the final path no longer exists.
+        if !missing.isEmpty {
+            resolved = canonical(ancestor)
+            for component in missing.reversed() { resolved.append(path: component) }
+        }
         var volume = resolved
         while !FileManager.default.fileExists(atPath: volume.path), volume.path != "/" { volume.deleteLastPathComponent() }
         let sensitive = (try? volume.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]).volumeSupportsCaseSensitiveNames) ?? true

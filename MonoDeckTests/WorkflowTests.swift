@@ -232,7 +232,9 @@ struct WorkflowTests {
         #expect(await f.service.addRepository(.init(url: f.remoteURL), at: f.root).status == .success)
         _ = try await f.service.git.run(["branch", "feature", "HEAD~1"], at: f.root)
         let result = await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root)
-        #expect(result.reasonCode == "workspace-ignore-required")
+        #expect(result.status == .failed && result.items.first?.resource == .group("feature"))
+        #expect(result.items.first?.reasonCode == "workspace-ignore-required")
+        #expect(result.items.last?.reasonCode == "not-processed")
         #expect(!PathSafety.exists(f.root.appending(path: "worktrees/feature")))
     }
     @Test func cliJSONContractAndMissingUpdateMembersHaveNoEffects() async throws {

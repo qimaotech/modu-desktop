@@ -22,7 +22,7 @@ public struct CommandRunner: Sendable {
         let cancellation = CancellationFlag()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                // Synchronous process polling must not occupy Swift's cooperative thread pool.
+                // Blocking process I/O must not occupy Swift's cooperative thread pool.
                 DispatchQueue.global().async {
                     continuation.resume(with: Result {
                         try execute(executable, arguments, directory: directory, timeout: timeout, cancellation: cancellation, cancellable: cancellable, input: input)
@@ -83,6 +83,9 @@ public struct CommandRunner: Sendable {
         if inputPipe[0] >= 0 { close(inputPipe[0]); inputPipe[0] = -1 }
         guard spawnError == 0 else { throw MonoDeckError("process-failed", .couldNotLaunch(URL(fileURLWithPath: executable).lastPathComponent, .diagnostic(String(cString: strerror(spawnError))))) }
         for fd in [out[0], err[0], inputPipe[1]] where fd >= 0 { _ = fcntl(fd, F_SETFL, O_NONBLOCK) }
+        var monitor = CommandEventMonitor(pid: pid, output: [out[0], err[0]], input: inputPipe[1])
+        cancellation.setMonitor(monitor)
+        defer { cancellation.setMonitor(nil) }
         var inputOffset = 0
         var status: Int32 = 0
         let start = ContinuousClock.now
@@ -113,8 +116,16 @@ public struct CommandRunner: Sendable {
                 if parentExited && !processGroupExists(pid) { break }
                 if termination!.duration(to: .now) >= .seconds(terminationGracePeriod) { kill(-pid, SIGKILL) }
             }
-            usleep(pollInterval)
-            pollInterval = min(pollInterval * 2, 20_000)
+            if termination == nil, let currentMonitor = monitor, !currentMonitor.exitReported {
+                if !currentMonitor.wait(for: max(.zero, .seconds(timeout) - start.duration(to: .now))) {
+                    cancellation.setMonitor(nil)
+                    monitor = nil
+                }
+            } else {
+                // Group disappearance has no kqueue event; also cover unavailable process monitoring.
+                usleep(pollInterval)
+                pollInterval = min(pollInterval * 2, 20_000)
+            }
         }
         // A detached helper may retain the pipe. Drain available bytes, never wait for its EOF.
         readAvailable(out[0], into: &stdout); readAvailable(err[0], into: &stderr)
@@ -166,6 +177,63 @@ public struct CommandRunner: Sendable {
 private final class CancellationFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
+    private var monitor: CommandEventMonitor?
     var cancelled: Bool { lock.withLock { value } }
-    func cancel() { lock.withLock { value = true } }
+    func cancel() {
+        lock.withLock {
+            value = true
+            monitor?.wake()
+        }
+    }
+    func setMonitor(_ monitor: CommandEventMonitor?) {
+        lock.withLock {
+            self.monitor = monitor
+            if value { monitor?.wake() }
+        }
+    }
+}
+
+private final class CommandEventMonitor {
+    private let queue: Int32
+    private(set) var exitReported = false
+
+    init?(pid: pid_t, output: [Int32], input: Int32) {
+        let queue = kqueue()
+        guard queue >= 0 else { return nil }
+        var ready = false
+        defer { if !ready { close(queue) } }
+        guard fcntl(queue, F_SETFD, FD_CLOEXEC) == 0 else { return nil }
+        var events = output.map {
+            kevent(ident: UInt($0), filter: Int16(EVFILT_READ), flags: UInt16(EV_ADD | EV_CLEAR), fflags: 0, data: 0, udata: nil)
+        }
+        if input >= 0 {
+            events.append(kevent(ident: UInt(input), filter: Int16(EVFILT_WRITE), flags: UInt16(EV_ADD), fflags: 0, data: 0, udata: nil))
+        }
+        events.append(kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: UInt32(NOTE_EXIT), data: 0, udata: nil))
+        events.append(kevent(ident: 0, filter: Int16(EVFILT_USER), flags: UInt16(EV_ADD | EV_CLEAR), fflags: 0, data: 0, udata: nil))
+        // A short-lived child may already be gone before NOTE_EXIT can be registered.
+        guard events.withUnsafeBufferPointer({ kevent(queue, $0.baseAddress, Int32($0.count), nil, 0, nil) }) == 0 else { return nil }
+        self.queue = queue
+        ready = true
+    }
+
+    deinit { close(queue) }
+
+    func wait(for duration: Duration) -> Bool {
+        let components = duration.components
+        var timeout = timespec(tv_sec: Int(components.seconds), tv_nsec: Int(components.attoseconds / 1_000_000_000))
+        var events = (0..<5).map { _ in kevent() }
+        let count = events.withUnsafeMutableBufferPointer {
+            kevent(queue, nil, 0, $0.baseAddress, Int32($0.count), &timeout)
+        }
+        if count > 0 {
+            exitReported = events.prefix(Int(count)).contains { $0.filter == Int16(EVFILT_PROC) }
+        }
+        return count >= 0 || errno == EINTR
+    }
+
+    func wake() {
+        var event = kevent(ident: 0, filter: Int16(EVFILT_USER), flags: 0, fflags: UInt32(NOTE_TRIGGER), data: 0, udata: nil)
+        _ = kevent(queue, &event, 1, nil, 0, nil)
+    }
 }

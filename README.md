@@ -85,11 +85,11 @@ mono-deck group delete feature-checkout --yes
 
 CLI 会从当前目录向父目录查找已登记的工作区；在工作区外运行时，通过 `--workspace <工作区根目录>` 指定。
 
-`workspace tree` 默认输出工作区目录树，跳过失效资源，不列出代码文件。所有命令的 `--json` 均输出 schema 版本 2 的操作结果，包含 `command`、`status`、`dry-run`、`data`、`items` 和 `plan`；目录树位于 `data.tree`，节点包含 `type`、`path`、`children`，根路径为绝对路径，子路径相对父节点，叶子的 `children` 为 `null`。失败或取消也使用同一结果结构。
+`workspace tree` 默认按登记、磁盘目录和 `.git` 文件类型输出工作区目录树，跳过缺失、类型不符或符号链接路径，不列出代码文件。它不认证子资源的 Git 健康、origin 或注册归属；这些异常在详情或实际操作时反馈。所有命令的 `--json` 均输出 schema 版本 2 的操作结果，包含 `command`、`status`、`dry-run`、`data`、`items` 和 `plan`；目录树位于 `data.tree`，节点包含 `type`、`path`、`children`，根路径为绝对路径，子路径相对父节点，叶子的 `children` 为 `null`。失败或取消也使用同一结果结构。
 
 `repo list` 和 `group list` 通过 `items` 返回逐项状态与错误，仓库 ID 位于 `resource["repository-id"]`，分组名称位于 `resource["group-name"]`。查询和 YAML 导出只读取登记快照，不清理记录、不 fetch，也不等待工作区锁；YAML 导出保留全部已登记仓库与分组定义，不因资源失效过滤，也不包含工作区根路径。并行操作期间，查询结果不会自动修复或接管资源。
 
-创建、添加和编辑命令默认执行。`group create` 要求分组尚不存在；已有分组通过 `group member add` 增加成员。`group edit` 的 `--repo` 是完整目标成员集合，省略的成员将被删除；`--clear-members` 删除全部成员但保留分组根工作树。`group member delete <分组名称> <仓库 ID>…` 只删除指定成员，`group delete` 删除整个分组。
+创建、添加和编辑命令默认执行。`group create` 要求分组尚不存在；已有分组通过 `group member add` 增加成员。创建与添加按项检查并执行；后续成员失败会保留已完成的根和成员，剩余项目不再处理。`group edit` 的 `--repo` 是完整目标成员集合，省略的成员将被删除；`--clear-members` 删除全部成员但保留分组根工作树。`group member delete <分组名称> <仓库 ID>…` 只删除指定成员，`group delete` 删除整个分组。
 
 所有写命令支持 `--dry-run`，只检查本地前提并返回计划，不修改工作区资源、不克隆或 fetch。仓库添加计划中的 `maintain-workspace-ignore` 表示维护 `.gitignore` 并按需提交，可能包含该文件已有的手动修改。计划中的 `actions` 是预计动作，`deletions` 包含删除目标、当前分支和风险；它们不属于已完成的 `effects`。预览不保证后续网络和文件操作成功。
 

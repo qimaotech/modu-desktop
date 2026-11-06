@@ -4,7 +4,7 @@ import Testing
 
 struct BranchOccupancyTests {
     @Test(arguments: ["root", "member"], [false, true])
-    func creationChecksBranchCaseAliasesBeforeCreatingAnyWorktree(_ kind: String, _ packed: Bool) async throws {
+    func creationChecksBranchCaseAliasesBeforeCreatingEachWorktree(_ kind: String, _ packed: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let record = try f.service.store.load(f.root)
         if kind == "member" { _ = try await f.service.git.run(["branch", "-m", "workspace"], at: f.root) }
@@ -23,14 +23,19 @@ struct BranchOccupancyTests {
             #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
             #expect(await f.service.deleteConfirmed(.group("Main"), at: f.root).status == .success)
         } else {
-            #expect(result.status == .failed && result.reasonCode == "branch-in-use", "\(result.message ?? "") \(result.items)")
-            #expect(result.items.allSatisfy { $0.effects.isEmpty })
-            #expect(!PathSafety.exists(record.groupURL("Main")))
+            #expect(result.status == (kind == "root" ? .failed : .partialSuccess), "\(result.message ?? "") \(result.items)")
+            let resource: Resource = kind == "root" ? .group("Main") : .member(groupName: "Main", repositoryID: "repo")
+            let item = try #require(result.items.first { $0.resource == resource })
+            #expect(item.status == .failed && item.reasonCode == "branch-in-use" && item.effects.isEmpty)
+            #expect(PathSafety.exists(record.groupURL("Main")) == (kind == "member"))
+            #expect(!PathSafety.exists(record.memberURL("Main", "repo")))
         }
-        #expect(try f.service.store.load(f.root) == record)
+        let saved = try f.service.store.load(f.root)
+        if !caseSensitive && kind == "member" { #expect(saved.groups["Main"]?.repositoryIDs == []) }
+        else { #expect(saved == record) }
         #expect(try await f.service.git.oid("HEAD", at: f.root) == rootHead)
         #expect(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")) == repositoryHead)
-        #expect(try await f.service.git.registrations(at: f.root).count == 1)
+        #expect(try await f.service.git.registrations(at: f.root).count == (!caseSensitive && kind == "member" ? 2 : 1))
         #expect(try await f.service.git.registrations(at: record.repositoryURL("repo")).count == 1)
     }
 

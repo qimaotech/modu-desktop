@@ -3,6 +3,95 @@ import Testing
 @testable import MonoDeckCore
 
 struct WorktreeCreationTests {
+    @Test(arguments: ["base", "origin", "submodule", "registration"], [false, true])
+    func laterMemberPlanningFailureKeepsEarlierWorktrees(_ failure: String, _ addingMembers: Bool) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        var record = try f.service.store.load(f.root)
+        for id in ["blocked", "untouched"] {
+            let repository = Repository(url: "https://mono-deck-test.invalid/\(id).git")
+            try FileManager.default.copyItem(at: record.repositoryURL("repo"), to: record.repositoryURL(id))
+            _ = try await f.service.git.run(["config", "remote.origin.url", repository.url], at: record.repositoryURL(id))
+            record.repositories.append(repository)
+        }
+        try f.service.store.save(record)
+        _ = try await f.service.git.ensureIgnore(["blocked", "untouched"], at: f.root)
+        try await f.commitWorkspace()
+        if addingMembers { try await f.prepareEmptyGroup("feature") }
+        record = try f.service.store.load(f.root)
+        let repository = record.repositoryURL("blocked")
+        let expectedCode: String
+        switch failure {
+        case "base":
+            _ = try await f.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: repository)
+            expectedCode = "base-unavailable"
+        case "origin":
+            _ = try await f.service.git.run(["config", "remote.origin.url", "https://mono-deck-test.invalid/replaced.git"], at: repository)
+            expectedCode = "origin-mismatch"
+        case "submodule":
+            let oid = try #require(try await f.service.git.oid("HEAD", at: repository))
+            _ = try await f.service.git.run(["update-index", "--add", "--cacheinfo", "160000", oid, "nested"], at: repository)
+            let tree = try await f.service.git.run(["write-tree"], at: repository).text
+            let commit = try await f.service.git.run(["commit-tree", tree, "-p", oid, "-m", "Add gitlink"], at: repository).text
+            _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/main", commit], at: repository)
+            expectedCode = "submodule-unsupported"
+        default:
+            _ = try await f.service.git.run(["worktree", "add", "--detach", "--", record.memberURL("feature", "blocked").path, "HEAD"], at: repository)
+            try FileManager.default.removeItem(at: record.memberURL("feature", "blocked"))
+            if !addingMembers { try FileManager.default.removeItem(at: record.groupURL("feature")) }
+            expectedCode = "path-conflict"
+        }
+
+        let members = ["repo", "blocked", "untouched"]
+        let preview: OperationResult
+        if addingMembers { preview = await f.service.addGroupMembers("feature", repositoryIDs: members, at: f.root, dryRun: true) }
+        else { preview = await f.service.createGroup("feature", repositoryIDs: members, at: f.root, dryRun: true) }
+        #expect(preview.status == .failed && preview.dryRun && preview.reasonCode == expectedCode, "\(preview)")
+        #expect(try f.service.store.load(f.root) == record)
+        #expect(!PathSafety.exists(record.memberURL("feature", "repo")))
+
+        let result: OperationResult
+        if addingMembers { result = await f.service.addGroupMembers("feature", repositoryIDs: members, at: f.root) }
+        else { result = await f.service.createGroup("feature", repositoryIDs: members, at: f.root) }
+        #expect(result.status == .partialSuccess, "\(result.message ?? "") \(result.items)")
+        let expectedResources = (addingMembers ? [] : [Resource.group("feature")]) + members.map { Resource.member(groupName: "feature", repositoryID: $0) }
+        #expect(result.items.map(\.resource) == expectedResources)
+        #expect(result.items.dropLast(2).allSatisfy { $0.status == .success })
+        #expect(result.items.suffix(2).first?.reasonCode == expectedCode, "\(result.items)")
+        #expect(result.items.last?.reasonCode == "not-processed")
+        let saved = try f.service.store.load(f.root)
+        #expect(saved.groups["feature"]?.repositoryIDs == ["repo"])
+        #expect(PathSafety.exists(saved.groupURL("feature")) && PathSafety.exists(saved.memberURL("feature", "repo")))
+        #expect(!PathSafety.exists(saved.memberURL("feature", "blocked")) && !PathSafety.exists(saved.memberURL("feature", "untouched")))
+        #expect(try await f.service.git.oid("refs/heads/feature", at: record.repositoryURL("untouched")) == nil)
+        let lease = try f.service.store.tryLock(f.root); lease.unlock()
+    }
+
+    @Test(arguments: ["local", "remote", "default"])
+    func memberCreationUsesItsSelectedStartingCommitWhenMainHEADIsUnavailable(_ source: String) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
+        let repository = record.repositoryURL("repo")
+        let base = try #require(try await f.service.git.oid("HEAD", at: repository))
+        var expected = base
+        if source != "default" {
+            let remote = try await commit(after: base, message: "Remote starting commit", at: repository, git: f.service.git)
+            _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/feature", remote], at: repository)
+            expected = remote
+            if source == "local" {
+                let local = try await commit(after: base, message: "Local starting commit", at: repository, git: f.service.git)
+                _ = try await f.service.git.run(["update-ref", "refs/heads/feature", local], at: repository)
+                expected = local
+            }
+        }
+        _ = try await f.service.git.run(["symbolic-ref", "HEAD", "refs/heads/unborn"], at: repository)
+        let preview = await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root, dryRun: true)
+        #expect(preview.status == .success && preview.dryRun)
+        let result = await f.service.createGroup("feature", repositoryIDs: ["repo"], at: f.root)
+        #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
+        #expect(try await f.service.git.oid("HEAD", at: record.memberURL("feature", "repo")) == expected)
+        #expect(try await f.service.git.oid("HEAD", at: repository) == nil)
+    }
+
     @Test(arguments: ["root", "member"], ["prepared", "committed"])
     func cancellationDuringReferenceTransactionCleansTheNewBranch(_ kind: String, _ phase: String) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }

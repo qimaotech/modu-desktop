@@ -264,27 +264,25 @@ extension WorkspaceService {
             try await git.checkRepository(path, origin: repository.url, main: true)
             let directory = try RepositoryDirectory(path)
             let gitDirectory = try RepositoryDirectory(path.appending(path: ".git"))
-            let status = try await git.run(["status", "--porcelain=v1", "-z", "--untracked-files=normal"], at: path)
-            guard status.stdout.isEmpty else {
+            let state = try await repositoryUpdateState(at: path)
+            guard state.changes.isEmpty else {
                 return ItemResult(item.resource, status: .skipped, error: MonoDeckError("working-tree-dirty", .workingTreeHasChanges))
             }
-            let branch = try await git.run(["symbolic-ref", "--quiet", "HEAD"], at: path, allowFailure: true)
-            if branch.status == 1 {
+            guard let branch = state.branch else {
                 return ItemResult(item.resource, status: .skipped, error: MonoDeckError("detached-head", .detachedHEAD))
             }
-            guard branch.status == 0 else { throw MonoDeckError("git-failed", .couldNotReadCurrentBranch) }
             let base = try await git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
             guard base.status == 0, base.text.hasPrefix("refs/remotes/origin/"),
                   try await git.oid(base.text, at: path) != nil else {
                 throw MonoDeckError("base-unavailable", .baseBranchIsUnavailableFixOriginHEADIn)
             }
             let remoteBranch = "refs/heads/" + base.text.dropFirst("refs/remotes/origin/".count)
-            guard branch.text == remoteBranch else {
+            guard branch == remoteBranch else {
                 return ItemResult(item.resource, status: .skipped, error: MonoDeckError("not-default-branch", .currentBranchIsNotBaseBranch))
             }
-            guard let before = try await git.oid("HEAD", at: path) else { throw MonoDeckError("resource-unavailable", .headIsUnavailable) }
+            guard let before = state.headOID else { throw MonoDeckError("resource-unavailable", .headIsUnavailable) }
             let context = RepositoryUpdateContext(directory: directory, gitDirectory: gitDirectory, origin: repository.url,
-                                                  branch: branch.text, base: base.text, head: before)
+                                                  branch: branch, base: base.text, head: before)
             try context.validateIdentity()
             try checkCancellation()
             try await checkRemoteBoundary(repository.url, at: path)
@@ -316,21 +314,32 @@ extension WorkspaceService {
         try checkCancellation()
         try context.validateIdentity()
         let path = context.directory.url
-        let status = try await git.run(["status", "--porcelain=v1", "-z", "--untracked-files=normal"], at: path)
-        guard status.stdout.isEmpty else { throw MonoDeckError("repository-changed", .repositoryChangedDuringUpdate) }
+        let state = try await repositoryUpdateState(at: path)
+        guard state.changes.isEmpty else { throw MonoDeckError("repository-changed", .repositoryChangedDuringUpdate) }
         try await git.checkRepository(path, main: true)
         let origin = try await git.run(["config", "--get", "remote.origin.url"], at: path, allowFailure: true)
-        let branch = try await git.run(["symbolic-ref", "--quiet", "HEAD"], at: path, allowFailure: true)
         let base = try await git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: path, allowFailure: true)
         guard origin.status == 0, origin.text == context.origin,
-              branch.status == 0, branch.text == context.branch,
+              state.branch == context.branch,
               base.status == 0, base.text == context.base,
               try await git.oid(context.base, at: path) != nil,
-              try await git.oid("HEAD", at: path) == context.head else {
+              state.headOID == context.head else {
             throw MonoDeckError("repository-changed", .repositoryChangedDuringUpdate)
         }
         try context.validateIdentity()
         try checkCancellation()
+    }
+
+    private func repositoryUpdateState(at path: URL) async throws -> (changes: [FileChange], branch: String?, headOID: String?) {
+        let state = try Git.parseWorkingState(await git.run(["status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z", "--untracked-files=normal"], at: path).stdout)
+        var branch = state.branch.map { "refs/heads/\($0)" }
+        // Git's status markers can also be legal branch names or describe refs outside refs/heads.
+        if state.branch == nil || state.branch == "(null)" {
+            let ref = try await git.run(["symbolic-ref", "--quiet", "HEAD"], at: path, allowFailure: true)
+            guard ref.status == 0 || ref.status == 1 else { throw MonoDeckError("git-failed", .couldNotReadCurrentBranch) }
+            branch = ref.status == 0 ? ref.text : nil
+        }
+        return (state.changes, branch, state.headOID)
     }
 }
 

@@ -220,6 +220,36 @@ struct MonoDeckCoreTests {
         #expect(try await fixture.service.git.ensureIgnore(["repositories", "worktrees"], at: fixture.root) == false)
         #expect(try Data(contentsOf: file) == existingRules)
     }
+    @Test func ignoreRuleChecksPreserveSpecialPathsAndMissingOrder() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let names = ["visible second", "ignored space", "ignored\twith\ttabs", "ignored\n换行", #"ignored\backslash"#, "-ignored", "ignored-keep", "ignored-other", "visible first", "visible second"]
+        let contents = Data("ignored*/\n!ignored-keep/\n-ignored/\n".utf8)
+        #expect(try await fixture.service.git.ignored(names, contents: contents) == ["visible second", "ignored-keep", "visible first", "visible second"])
+    }
+    @Test func creationReferenceSnapshotKeepsExactRefsAndFallsBackForTags() async throws {
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        let record = try fixture.service.store.load(fixture.root)
+        let path = record.repositoryURL("repo"), git = fixture.service.git
+        let common = path.appending(path: ".git").path
+        let original = try #require(await git.oid("HEAD", at: path))
+        _ = try await git.run(["update-ref", "refs/heads/feature/child", original], at: path)
+        let empty = try #require(await git.creationReferences("feature", at: path, commonDirectory: common))
+        #expect(empty["refs/heads/feature"] == nil && empty["refs/remotes/origin/HEAD"] == original)
+
+        _ = try await git.run(["update-ref", "-d", "refs/heads/feature/child"], at: path)
+        _ = try await git.run(["update-ref", "refs/heads/feature", original], at: path)
+        _ = try await git.run(["tag", "-am", "tagged start", "tagged-start", original], at: path)
+        let tag = try await git.run(["rev-parse", "refs/tags/tagged-start"], at: path).text
+        _ = try await git.run(["update-ref", "refs/remotes/origin/feature", tag], at: path)
+        #expect(try await git.creationReferences("feature", at: path, commonDirectory: common) == nil)
+        #expect(try await git.oid("refs/remotes/origin/feature", at: path) == original)
+    }
+    @Test func missingPathIdentitiesResolveExistingParentAliases() async throws {
+        let fixture = try await Fixture(createRemote: false); defer { fixture.remove() }
+        let alias = fixture.directory.appending(path: "workspace-alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.root)
+        #expect(PathSafety.identity(alias.appending(path: "missing/target")) == PathSafety.identity(fixture.root.appending(path: "missing/target")))
+    }
     @Test func lockAndUnmanagedWorktreeBlockDeletion() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let lease = try f.service.store.tryLock(f.root)

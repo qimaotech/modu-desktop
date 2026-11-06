@@ -3,6 +3,53 @@ import Testing
 @testable import MonoDeckCore
 
 struct CLIContractTests {
+    @Test(arguments: [false, true])
+    func additiveGroupCommandsValidateOnceAndReuseRepositoryInspection(_ addingMembers: Bool) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        if addingMembers { try await f.prepareEmptyGroup("feature") }
+        let command = addingMembers ? ["group", "member", "add", "feature", "repo"] : ["group", "create", "feature", "--repo", "repo"]
+        let trace = f.directory.appending(path: "group-creation-trace")
+        let output = try await f.runCLI(command + ["--json", "--workspace", f.root.path], environment: ["GIT_TRACE": trace.path])
+        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+        #expect(output.status == 0 && result.status == .success && !result.dryRun, "\(output.text)")
+        #expect(result.command == (addingMembers ? "group.member.add" : "group.create"))
+        #expect(result.items.count == (addingMembers ? 1 : 2) && result.plan == nil)
+        #expect(try f.service.store.load(f.root).groups["feature"]?.repositoryIDs == ["repo"])
+        let commands = try String(contentsOf: trace, encoding: .utf8).split(separator: "\n")
+        #expect(commands.filter { $0.contains("built-in: git check-ref-format refs/heads/feature") }.count == 1)
+        #expect(commands.filter { $0.contains("built-in: git ls-tree -r -z ") }.count == 1)
+        #expect(commands.filter { $0.contains("built-in: git worktree list --porcelain -z") }.count == 2)
+        #expect(!commands.contains { $0.contains("built-in: git rev-parse --path-format=absolute --git-common-dir") })
+    }
+
+    @Test(arguments: [false, true])
+    func additiveGroupCommandsReportEarlierEffectsWhenALaterMemberHasNoStartingCommit(_ addingMembers: Bool) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let other = try await addOtherRepository(f)
+        if addingMembers { try await f.prepareEmptyGroup("feature") }
+        let record = try f.service.store.load(f.root)
+        _ = try await f.service.git.run(["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"], at: record.repositoryURL(other.id))
+        let command = addingMembers
+            ? ["group", "member", "add", "feature", "repo", other.id]
+            : ["group", "create", "feature", "--repo", "repo", "--repo", other.id]
+        let arguments = command + ["--json", "--workspace", f.root.path]
+        let before = try Data(contentsOf: f.service.store.recordURL(f.root))
+        let previewOutput = try await f.runCLI(arguments + ["--dry-run"])
+        let preview = try JSONDecoder().decode(OperationResult.self, from: previewOutput.stdout)
+        #expect(previewOutput.status == 1 && preview.status == .failed && preview.dryRun && preview.reasonCode == "base-unavailable")
+        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == before)
+
+        let output = try await f.runCLI(arguments)
+        let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+        #expect(output.status == 1 && result.status == .partialSuccess && !result.dryRun, "\(output.text)")
+        #expect(result.plan == nil && result.items.count == (addingMembers ? 2 : 3))
+        #expect(result.items.dropLast().allSatisfy { $0.status == .success && $0.effects.contains { $0.action == "create-worktree" && $0.state == "applied" } })
+        #expect(result.items.last?.resource == .member(groupName: "feature", repositoryID: other.id))
+        #expect(result.items.last?.status == .failed && result.items.last?.reasonCode == "base-unavailable")
+        #expect(try f.service.store.load(f.root).groups["feature"]?.repositoryIDs == ["repo"])
+        #expect(PathSafety.exists(record.memberURL("feature", "repo")) && !PathSafety.exists(record.memberURL("feature", other.id)))
+    }
+
     @Test func confirmedGroupDeletionSkipsRiskScansWithoutChangingPreviewAuthorization() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         try await f.prepareGroup("feature", repositoryIDs: ["repo"])

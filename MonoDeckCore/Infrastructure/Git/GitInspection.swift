@@ -69,6 +69,30 @@ extension Git {
         let output = try await run(["rev-parse", "--verify", "--end-of-options", "\(ref)^{commit}"], at: root, allowFailure: true, cancellable: cancellable)
         return output.status == 0 ? output.text : nil
     }
+    func creationReferences(_ branch: String, at repository: URL, commonDirectory: String) async throws -> [String: String]? {
+        let names = ["refs/heads/\(branch)", "refs/remotes/origin/\(branch)", "refs/remotes/origin/HEAD"]
+        let output = try await run(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(symref)", "--"] + names, at: repository, allowFailure: true)
+        guard output.status == 0 else { return nil }
+        var references: [String: String] = [:]
+        for line in output.stdout.split(separator: 10) {
+            let fields = line.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+            guard fields.count == 4 else { return nil }
+            let name = fields[0]
+            guard names.contains(name) else { continue }
+            guard fields[2] == "commit", fields[1].range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil else { return nil }
+            if name == "refs/remotes/origin/HEAD", !fields[3].hasPrefix("refs/remotes/origin/") { return nil }
+            references[name] = fields[1]
+        }
+        // Loose refs can resolve through filesystem case aliases that ref enumeration does not match.
+        let common = URL(fileURLWithPath: commonDirectory)
+        guard !names.contains(where: { name in
+            let path = common.appending(path: name)
+            guard references[name] == nil, PathSafety.exists(path) else { return false }
+            let type = (try? FileManager.default.attributesOfItem(atPath: path.path)[.type]) as? FileAttributeType
+            return type != .typeDirectory
+        }) else { return nil }
+        return references
+    }
     public func changes(at path: URL) async throws -> [FileChange] {
         try Self.parseChanges(await changeStatus(at: path))
     }
@@ -229,18 +253,19 @@ extension Git {
         return result
     }
     func ignored(_ names: [String], contents: Data, cancellable: Bool = true) async throws -> [String] {
+        guard !names.isEmpty else { return [] }
         let temp = FileManager.default.temporaryDirectory.appending(path: "mono-deck-ignore-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: temp) }
         _ = try await run(["-c", "init.templateDir=", "init", "--quiet"], at: temp, cancellable: cancellable)
         try contents.write(to: temp.appending(path: ".gitignore"))
-        var missing: [String] = []
-        for name in names {
-            let output = try await run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--quiet", "--", "\(name)/"], at: temp, allowFailure: true, cancellable: cancellable)
-            if output.status == 1 { missing.append(name) }
-            else if output.status != 0 { throw MonoDeckError("git-failed", .couldNotCheckGitignoreRules) }
+        let input = Data((names.map { "\($0)/" }.joined(separator: "\0") + "\0").utf8)
+        let output = try await run(["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--stdin", "-z"], at: temp, allowFailure: true, cancellable: cancellable, input: input)
+        guard output.status == 0 || output.status == 1 else {
+            throw MonoDeckError("git-failed", .couldNotCheckGitignoreRules)
         }
-        return missing
+        let ignored = Set(output.stdout.split(separator: 0).map { String(decoding: $0, as: UTF8.self) })
+        return names.filter { !ignored.contains("\($0)/") }
     }
     func ensureIgnore(_ names: [String], at root: URL, cancellable: Bool = true) async throws -> Bool {
         do { return try await updateIgnore(names, at: root, cancellable: cancellable) }

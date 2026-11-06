@@ -3,7 +3,7 @@ import Testing
 @testable import MonoDeckCore
 
 struct RepositoryUpdateTests {
-    @Test(arguments: ["dirty", "staged", "untracked", "detached", "feature", "missing-base", "invalid-base", "origin-mismatch", "missing"])
+    @Test(arguments: ["dirty", "staged", "untracked", "detached", "feature", "missing-base", "invalid-base", "origin-mismatch", "invalid-index", "unreadable-head", "missing"])
     func preflightRejectsWithoutFetching(_ scenario: String) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let path = f.root.appending(path: "repositories/repo")
@@ -28,6 +28,12 @@ struct RepositoryUpdateTests {
         case "origin-mismatch":
             _ = try await f.service.git.run(["config", "remote.origin.url", "https://mono-deck-test.invalid/other.git"], at: path)
             reason = "origin-mismatch"
+        case "invalid-index":
+            try Data("invalid index".utf8).write(to: path.appending(path: ".git/index"))
+            reason = "git-failed"
+        case "unreadable-head":
+            try Data((String(repeating: "1", count: 40) + "\n").utf8).write(to: path.appending(path: ".git/refs/heads/main"))
+            reason = "git-failed"
         default:
             try FileManager.default.removeItem(at: path)
             reason = "resource-missing"
@@ -64,6 +70,8 @@ struct RepositoryUpdateTests {
         #expect(try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD"], at: path).text == "refs/remotes/origin/trunk")
         let commands = try String(contentsOf: trace, encoding: .utf8)
         #expect(commands.components(separatedBy: "\n").filter { $0.contains("built-in: git fetch ") }.count == 1)
+        #expect(commands.components(separatedBy: "\n").filter { $0.contains("built-in: git status --porcelain=v2 --branch --no-ahead-behind") }.count == 2)
+        #expect(!commands.contains("built-in: git symbolic-ref --quiet HEAD"))
         #expect(!commands.contains("FETCH_HEAD"))
         #expect(!commands.contains("ls-remote"))
         #expect(await service.updateRepositories(at: f.root).items.first?.data?["disposition"] == "up-to-date")
@@ -82,6 +90,36 @@ struct RepositoryUpdateTests {
         #expect(result.items.first?.data?["actual-head"] == original)
         #expect(result.items.first?.data?["working-tree"] == "clean")
         #expect(try await f.service.git.oid("HEAD", at: path) == original)
+    }
+
+    @Test(arguments: ["(detached)", "(null)", "outside-heads"])
+    func ambiguousStatusBranchNamesKeepFullReferenceChecks(_ scenario: String) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let path = f.root.appending(path: "repositories/repo")
+        let head = try #require(await f.service.git.oid("HEAD", at: path))
+        let branch = scenario == "outside-heads" ? "(null)" : scenario
+        if scenario == "outside-heads" {
+            _ = try await f.service.git.run(["update-ref", "refs/custom/current", head], at: path)
+            _ = try await f.service.git.run(["symbolic-ref", "HEAD", "refs/custom/current"], at: path)
+        } else {
+            _ = try await f.service.git.run(["branch", "-m", branch], at: path)
+        }
+        _ = try await f.service.git.run(["push", f.directory.appending(path: "repo.git").path, "HEAD:refs/heads/\(branch)"], at: path)
+        _ = try await f.service.git.run(["update-ref", "refs/remotes/origin/\(branch)", head], at: path)
+        _ = try await f.service.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/\(branch)"], at: path)
+        let (service, trace) = tracedService(f)
+
+        let result = await service.updateRepositories(at: f.root)
+
+        let item = try #require(result.items.first)
+        if scenario == "outside-heads" {
+            #expect(item.status == .skipped && item.reasonCode == "not-default-branch")
+            #expect(item.effects.isEmpty)
+            #expect(try !String(contentsOf: trace, encoding: .utf8).contains("built-in: git fetch "))
+        } else {
+            #expect(item.status == .success && item.data?["disposition"] == "up-to-date", "\(result.items)")
+        }
+        #expect(try await f.service.git.oid("HEAD", at: path) == head)
     }
 
     @Test func repositoryReplacedDuringFetchIsNotMergedIntoItsReplacement() async throws {

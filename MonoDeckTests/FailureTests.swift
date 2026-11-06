@@ -684,6 +684,62 @@ struct FailureTests {
         #expect(output.stdout == Data(stdout.utf8) && output.stderr == Data(stderr.utf8))
     }
     @Test(arguments: ["cancelled", "network-timeout"])
+    func closedOutputPipesStillHonorCancellationAndTimeout(_ reason: String) async throws {
+        let directory = TestEnvironment.temporaryDirectory.appending(path: "mono-deck-closed-command-output-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let pidFile = directory.appending(path: "pid")
+        let task = Task {
+            try await CommandRunner().run("/bin/sh", ["-c", "exec 1>&- 2>&-; echo $$ > \"$1\"; trap 'exit 143' TERM INT; while :; do sleep 0.02; done", "mono-deck-closed-output-test", pidFile.path], timeout: reason == "network-timeout" ? 1 : 30)
+        }
+        do {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !PathSafety.exists(pidFile), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            let text = try String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+            let pid = try #require(pid_t(text))
+            if reason == "cancelled" { task.cancel() }
+            do { _ = try await task.value; Issue.record("Expected the command to stop.") }
+            catch { #expect((error as? MonoDeckError)?.code == reason) }
+            #expect(kill(pid, 0) == -1 && errno == ESRCH)
+        } catch {
+            task.cancel(); _ = try? await task.value
+            throw error
+        }
+    }
+    @Test func parentExitDoesNotWaitForAHelpersOutputPipe() async throws {
+        let directory = TestEnvironment.temporaryDirectory.appending(path: "mono-deck-inherited-command-output-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let helper = directory.appending(path: "helper")
+        let release = directory.appending(path: "release")
+        let pidFile = directory.appending(path: "helper.pid")
+        try Data("""
+        #!/bin/sh
+        echo $$ > "$1/helper.pid"
+        while [ ! -e "$1/release" ]; do sleep 0.02; done
+        """.utf8).write(to: helper)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        var helperExited = false
+        defer {
+            if !helperExited, let text = try? String(contentsOf: pidFile, encoding: .utf8),
+               let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                let group = getpgid(pid)
+                if group > 0 && group != getpgrp() { kill(-group, SIGKILL) }
+            }
+        }
+        let output = try await CommandRunner().run("/bin/sh", ["-c", "\"$1/helper\" \"$1\" & while [ ! -s \"$1/helper.pid\" ]; do sleep 0.02; done; printf finished; exit 7", "mono-deck-inherited-output-test", directory.path], timeout: 1)
+        let text = try String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let pid = try #require(pid_t(text))
+        #expect(output.status == 7 && output.text == "finished" && output.stderr.isEmpty)
+        #expect(kill(pid, 0) == 0, "The helper must still hold the output pipes when its parent exits.")
+        try Data().write(to: release)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while kill(pid, 0) == 0, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        let exited = kill(pid, 0) == -1 && errno == ESRCH
+        #expect(exited)
+        helperExited = exited
+    }
+    @Test(arguments: ["cancelled", "network-timeout"])
     func terminationWaitsForHelpersAfterTheParentExits(_ reason: String) async throws {
         let directory = TestEnvironment.temporaryDirectory.appending(path: "mono-deck-process-group-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
