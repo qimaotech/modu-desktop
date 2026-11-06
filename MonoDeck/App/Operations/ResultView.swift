@@ -56,24 +56,26 @@ struct ResultView: View {
             VStack(alignment: .leading, spacing: result.command == "repo.update" ? 4 : 6) {
                 resultHeader
                 if let context { Text(context).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary) }
-                if let summary = text.resultSummaryText(result) {
+                if result.command != "repo.update", let summary = text.resultSummaryText(result) {
                     Text(summary).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).monospacedDigit()
                 }
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(DialogTypography.path) }
-                    if let raw = result.message { IssueDescriptionView(message: text.message(result), details: Git.sanitize(raw), text: text) }
-                    if result.command == "repo.update", !items.isEmpty {
-                        RepositoryUpdateResultsView(text: text, result: result)
-                    } else {
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                            itemContents(item, count: items.count)
+            VStack(spacing: result.command == "repo.update" ? 0 : 16) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(DialogTypography.path) }
+                        if let raw = result.message { IssueDescriptionView(message: text.message(result), details: Git.sanitize(raw), text: text) }
+                        if result.command == "repo.update", !items.isEmpty {
+                            RepositoryUpdateResultsView(text: text, result: result)
+                        } else {
+                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                                itemContents(item, count: items.count)
+                            }
                         }
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-            }.frame(maxHeight: 360)
-            Divider()
+                    }.frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                }.frame(maxHeight: 360)
+                Divider()
+            }
             HStack {
                 if let retry {
                     Button(retryTitle ?? text.string(.uiChooseAnother), action: retry)

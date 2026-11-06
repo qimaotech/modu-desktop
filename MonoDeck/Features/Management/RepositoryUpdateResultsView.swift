@@ -1,18 +1,18 @@
 import SwiftUI
-import AppKit
 import MonoDeckCore
 
 struct RepositoryUpdateResultsView: View {
     var text: InterfaceText
     var result: OperationResult
-    static let resultColumnWidth: CGFloat = 64
+    static let resultColumnWidth: CGFloat = 96
 
     var body: some View {
         let items = text.resultDisplayItems(result)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
                 Text(text.string(.uiRepository)).frame(maxWidth: .infinity, alignment: .leading)
-                Text(text.string(.uiResult)).frame(width: Self.resultColumnWidth)
+                Text(text.string(.uiResult)).padding(.leading, 6)
+                    .frame(width: Self.resultColumnWidth, alignment: .leading)
             }.font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary).padding(.bottom, 6)
             Divider()
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
@@ -27,46 +27,33 @@ struct RepositoryUpdateResultRow: View {
     var text: InterfaceText
     var item: ItemResult
     var workspace: String?
+    @State private var showingDetails = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(repositoryID).font(DialogTypography.body.monospaced())
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
-                    .help(fullPath)
-                Image(systemName: status.symbolName).font(.system(size: 16))
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(status.color)
-                    .frame(width: RepositoryUpdateResultsView.resultColumnWidth, height: 16)
-                    .alignmentGuide(.firstTextBaseline) { dimensions in
-                        dimensions[VerticalAlignment.center] + repositoryFont.capHeight / 2
-                    }
-                    .accessibilityLabel(statusLabel)
-                    .accessibilityIdentifier("repo-update-status-\(item.resource.id)")
-                    .help(statusLabel)
+        HStack(spacing: 12) {
+            Text(repositoryID).font(DialogTypography.body.monospaced())
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                .help(fullPath)
+            Button { showingDetails.toggle() } label: {
+                Label(statusLabel, systemImage: status.symbolName)
+                    .font(DialogTypography.auxiliary)
+                    .padding(.horizontal, 6).frame(minHeight: 26)
+                    .contentShape(Rectangle())
             }
-            if let message = text.resultMessage(item, overallMessage: nil) {
-                Text(message).foregroundStyle(DesignStyle.secondary)
+            .buttonStyle(HoverPlainButtonStyle(shape: RoundedRectangle(cornerRadius: 6), foreground: status.color, hoverForeground: status.color))
+            .background(showingDetails ? DesignStyle.field : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .textSelection(.disabled)
+            .help(text.string(.uiViewDetails))
+            .accessibilityIdentifier("repo-update-status-\(item.resource.id)")
+            .accessibilityValue(text.string(showingDetails ? .uiExpanded : .uiCollapsed))
+            .accessibilityHint(text.string(.uiViewDetails))
+            .popover(isPresented: $showingDetails, arrowEdge: .bottom) {
+                RepositoryUpdateResultPopover(text: text, item: item, fullPath: fullPath)
+                    .onExitCommand { showingDetails = false }
             }
-            ForEach(visibleEffects, id: \.self) { Text($0).font(DialogTypography.auxiliary) }
-            DisclosureGroup(text.string(.uiDetails)) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(fullPath)
-                    if let raw = item.message { Text(Git.sanitize(raw)) }
-                    ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
-                        Text("\(text.statusText(effect.action)): \(effect.target) [\(text.statusText(effect.state))]")
-                    }
-                    if let head = item.data?["actual-head"] { Text("HEAD: \(head)") }
-                    if let workingTree = item.data?["working-tree"] {
-                        Text(text.string(.uiWorkingTree2(text.statusText(workingTree == "clean" ? "Clean" : "Dirty"))))
-                    }
-                }.font(DialogTypography.path).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .disclosureGroupStyle(RepositoryResultDetailsStyle(
-                identifier: "repo-update-details-\(item.resource.id)",
-                expandedLabel: text.string(.uiExpanded), collapsedLabel: text.string(.uiCollapsed)))
-            .font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+            .fixedSize()
+            .frame(width: RepositoryUpdateResultsView.resultColumnWidth, alignment: .leading)
         }.padding(.vertical, 4)
     }
 
@@ -74,33 +61,66 @@ struct RepositoryUpdateResultRow: View {
     var fullPath: String { workspace.map { URL(fileURLWithPath: $0).appending(path: item.resource.path).path } ?? item.resource.path }
     var status: RepositoryUpdateResultStatus { .init(item) }
     var statusLabel: String { text.resultStatus(item) }
-    var visibleEffects: [String] { item.status == .success ? [] : text.effectSummaries(item, workspace: workspace) }
-
-    private var repositoryFont: NSFont {
-        .monospacedSystemFont(ofSize: DialogTypography.bodySize, weight: .regular)
-    }
 }
 
-struct RepositoryResultDetailsStyle: DisclosureGroupStyle {
-    var identifier: String
-    var expandedLabel: String
-    var collapsedLabel: String
+struct RepositoryUpdateResultPopover: View {
+    var text: InterfaceText
+    var item: ItemResult
+    var fullPath: String
+    @FocusState private var focused: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button { configuration.isExpanded.toggle() } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
-                        .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
-                        .frame(width: 8, height: 12).accessibilityHidden(true)
-                    configuration.label
-                }.frame(maxWidth: .infinity, minHeight: 15, alignment: .leading).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).textSelection(.disabled)
-            .accessibilityIdentifier(identifier)
-            .accessibilityValue(configuration.isExpanded ? expandedLabel : collapsedLabel)
-            if configuration.isExpanded { configuration.content.padding(.leading, 12) }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            details
         }
+        .font(DialogTypography.auxiliary).padding(16).frame(width: 420)
+        .textSelection(.enabled)
+        // Focus the container, not the scroll view, so Escape stays within the popover.
+        .focusable().focusEffectDisabled().focused($focused)
+        .onAppear { focused = true }
+        .accessibilityIdentifier("repo-update-details-\(item.resource.id)")
+    }
+
+    private var details: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if let message { Text(message).font(DialogTypography.body) }
+                Text(fullPath).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary)
+                if !item.effects.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(item.effects.enumerated()), id: \.offset) { _, effect in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(text.statusText(effect.action))
+                                    Spacer()
+                                    Text(text.statusText(effect.state)).foregroundStyle(DesignStyle.secondary)
+                                }
+                                if effect.target != item.resource.path, effect.target != fullPath {
+                                    Text(effect.target).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                if let head = item.data?["actual-head"] { Text("HEAD: \(head)").font(DialogTypography.path) }
+                if let workingTree = item.data?["working-tree"] {
+                    Text(text.string(.uiWorkingTree2(text.statusText(workingTree == "clean" ? "Clean" : "Dirty"))))
+                }
+                if let diagnostic {
+                    Divider()
+                    Text(diagnostic).font(DialogTypography.path).foregroundStyle(DesignStyle.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(maxHeight: 300)
+    }
+
+    private var message: String? { text.resultMessage(item, overallMessage: nil).map { Git.sanitize($0) } }
+    private var diagnostic: String? {
+        guard let raw = item.message else { return nil }
+        let sanitized = Git.sanitize(raw)
+        return sanitized.isEmpty || sanitized == message ? nil : sanitized
     }
 }
 

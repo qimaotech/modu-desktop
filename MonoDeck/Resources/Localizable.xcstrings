@@ -7883,6 +7883,23 @@
         }
       }
     },
+    "ui.viewDetails": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View details"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看详情"
+          }
+        }
+      }
+    },
     "ui.warnings": {
       "extractionState": "manual",
       "localizations": {
