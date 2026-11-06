@@ -30,6 +30,31 @@ struct CoreModelTests {
         #expect(encoded == expected)
     }
 
+    @Test func workspaceValidationPreservesDateFormatsAndRepositoryIDCaseRules() throws {
+        let store = WorkspaceStore()
+        var record = WorkspaceRecord(root: PathSafety.canonical(URL(fileURLWithPath: "/tmp/workspace")).path)
+        record.repositories = [Repository(url: "https://example.test/Service.git")]
+        record.groups = [
+            "whole-seconds": .init(createdAt: "2026-11-05T00:00:00Z", repositoryIDs: ["Service"]),
+            "fractional-seconds": .init(createdAt: "2026-11-05T00:00:00.123Z", repositoryIDs: ["Service"])
+        ]
+        try store.validate(record)
+
+        record.groups["fractional-seconds"]?.repositoryIDs = ["service"]
+        do { try store.validate(record); Issue.record("Expected a differently cased member ID to fail validation.") }
+        catch {
+            #expect((error as? MonoDeckError)?.code == "invalid-workspace-record")
+            #expect((error as? MonoDeckError)?.userMessage == .invalidGroup("fractional-seconds"))
+        }
+
+        record.repositories.append(Repository(url: "https://example.test/service.git"))
+        do { try store.validate(record); Issue.record("Expected differently cased repository IDs to conflict before group validation.") }
+        catch {
+            #expect((error as? MonoDeckError)?.code == "repository-conflict")
+            #expect((error as? MonoDeckError)?.userMessage == .duplicateRepositoryID("service"))
+        }
+    }
+
     @Test func resourceEncodingUsesCanonicalIdentityFields() throws {
         let cases: [(Resource, String)] = [
             (.workspace(), #"{"kind":"workspace","path":"."}"#),

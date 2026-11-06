@@ -64,6 +64,9 @@ struct Group: AsyncParsableCommand {
         mutating func run() async throws {
             let service = WorkspaceService(), root = try await options.root(service)
             let request = DeleteRequest.group(groupName)
+            if mutation.yes && !mutation.dryRun {
+                finish(await service.delete(request, at: root, confirmCurrentTargets: true, progress: reportProgress), json: options.json)
+            }
             await runMutation(options: options, mutation: mutation,
                 preview: { await service.delete(request, at: root, dryRun: true) },
                 execute: { plan in await service.delete(request, at: root, authorization: plan?.deletions, progress: reportProgress) })

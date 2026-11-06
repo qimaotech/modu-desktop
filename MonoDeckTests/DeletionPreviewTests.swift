@@ -302,21 +302,19 @@ import Testing
                 await preview.value
                 await model.management.deletePreviewTask?.value
                 #expect(!model.management.deletionLoading && model.presentation.message == nil)
-                #expect((model.management.formError != nil) == (action == "failure"))
+                #expect(model.management.formError == nil)
                 if action == "cancel" || action == "workspace" {
                     #expect(model.management.sheet == nil && model.management.deletion.isEmpty && !model.management.canConfirmDelete)
-                } else if action == "failure" {
-                    #expect(model.management.sheet == .delete && model.management.deletion.isEmpty && !model.management.canConfirmDelete)
-                    model.management.confirmDelete()
-                    #expect(model.operation == nil && !model.busy)
                 } else {
                     #expect(model.management.sheet == .delete && model.management.canConfirmDelete)
                     let expected: [Resource] = action == "replace" || action == "reopen" ? [.member(groupName: "feature", repositoryID: "repo")] : [.member(groupName: "feature", repositoryID: "repo"), .group("feature")]
                     #expect(model.management.deletion.map(\.resource) == expected)
                     #expect(model.management.deletion.allSatisfy { $0.branch == "feature" })
                     let target = try #require(model.management.deletion.first { $0.resource == member })
-                    #expect(target.dirty == true)
+                    if action == "failure" { #expect(target.dirty == nil && !target.risks.isEmpty) }
+                    else { #expect(target.dirty == true) }
                 }
+                #expect(model.operation == nil && !model.busy)
                 #expect(PathSafety.exists(record.groupURL("feature")))
                 #expect(PathSafety.exists(record.memberURL("feature", "repo")))
             } catch {
@@ -329,24 +327,49 @@ import Testing
         }
     }
 
-    @Test(arguments: [false, true])
-    func failedPreflightStaysInSheetAndCannotDelete(_ locked: Bool) async throws {
-        let fixture = try await Fixture(template: locked ? .singleRepository : .emptyWorkspace); defer { fixture.remove() }
-        if locked { try await fixture.prepareGroup("feature", repositoryIDs: ["repo"]) }
+    @Test func failedPreflightStaysInSheetAndCannotDelete() async throws {
+        let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let model = AppModel(defaults: defaults, service: fixture.service)
         model.workspace.record = try fixture.service.store.load(fixture.root)
-        if locked {
-            _ = try await fixture.service.git.run(["worktree", "lock", fixture.root.appending(path: "worktrees/feature/repo").path], at: fixture.root.appending(path: "repositories/repo"))
-        }
-        model.management.prepareDelete(.group(locked ? "feature" : "missing"))
+        model.management.prepareDelete(.group("missing"))
         #expect(model.management.sheet == .delete && model.management.deletionLoading)
         await model.management.deletePreviewTask?.value
         #expect(model.management.sheet == .delete && !model.management.deletionLoading && model.management.formError != nil)
         #expect(model.management.deletion.isEmpty && !model.management.canConfirmDelete && model.presentation.message == nil)
         model.management.confirmDelete()
         #expect(!model.busy && model.operation == nil)
+    }
+
+    @Test func lockedMemberCanBeConfirmedAndFailsDuringDeletion() async throws {
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try fixture.service.store.load(fixture.root)
+        let member = record.memberURL("feature", "repo")
+        _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let model = AppModel(defaults: defaults, service: fixture.service)
+        model.workspace.record = record
+        model.management.prepareDelete(.group("feature"))
+        await model.management.deletePreviewTask?.value
+        #expect(model.management.canConfirmDelete && model.management.formError == nil)
+
+        model.management.confirmDelete()
+        let operation = try #require(model.operation)
+        await operation.value
+        await model.workspace.stopReads()
+
+        let result = try #require(model.presentation.result)
+        let failed = try #require(result.items.first)
+        #expect(result.status == .failed && failed.resource == .member(groupName: "feature", repositoryID: "repo"))
+        #expect(failed.reasonCode == "git-failed")
+        #expect(failed.effects.map(\.action) == ["remove-worktree"] && failed.effects.first?.state == "unknown")
+        #expect(result.items.last?.resource == .group("feature") && result.items.last?.reasonCode == "not-processed")
+        #expect(model.workspace.record == record)
+        #expect(try fixture.service.store.load(fixture.root) == record)
+        #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
     }
 
     @Test func editingMembersDiscardsACancelledDeletionRequest() async throws {
@@ -384,27 +407,37 @@ import Testing
         let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
         let member = record.memberURL("feature", "repo")
         let metadata = member.appending(path: ".git")
-        let originalMetadata = try Data(contentsOf: metadata)
-        for change in ["lock", "repository"] {
-            let reason: String
-            switch change {
-            case "lock":
-                _ = try await fixture.service.git.run(["worktree", "lock", member.path], at: record.repositoryURL("repo"))
-                reason = "worktree-locked"
-            default:
-                let other = fixture.directory.appending(path: "source")
-                _ = try await fixture.service.git.run(["config", "remote.origin.url", fixture.remoteURL], at: other)
-                try Data("gitdir: \(other.appending(path: ".git").path)\n".utf8).write(to: metadata)
-                reason = "resource-unavailable"
-            }
-            let result = await fixture.service.delete(.group("feature"), at: fixture.root, authorization: targets)
-            #expect(result.reasonCode == reason && result.items.allSatisfy { $0.effects.isEmpty })
-            #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
-            #expect(try fixture.service.store.load(fixture.root).groups["feature"]?.repositoryIDs == ["repo"])
-            switch change {
-            case "lock": _ = try await fixture.service.git.run(["worktree", "unlock", member.path], at: record.repositoryURL("repo"))
-            default: try originalMetadata.write(to: metadata)
-            }
-        }
+        let other = fixture.directory.appending(path: "source")
+        try Data("gitdir: \(other.appending(path: ".git").path)\n".utf8).write(to: metadata)
+
+        let result = await fixture.service.delete(.group("feature"), at: fixture.root, authorization: targets)
+
+        #expect(result.reasonCode == "resource-unavailable" && result.items.allSatisfy { $0.effects.isEmpty })
+        #expect(PathSafety.exists(member) && PathSafety.exists(record.groupURL("feature")))
+        #expect(try fixture.service.store.load(fixture.root) == record)
+    }
+
+    @Test func lockedGroupRootKeepsCompletedMemberDeletionAndRemainingRecord() async throws {
+        let fixture = try await Fixture(template: .singleRepository); defer { fixture.remove() }
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try fixture.service.store.load(fixture.root)
+        let targets = try await fixture.service.previewDelete(.group("feature"), at: fixture.root)
+        _ = try await fixture.service.git.run(["worktree", "lock", record.groupURL("feature").path], at: fixture.root)
+
+        let result = await fixture.service.delete(.group("feature"), at: fixture.root, authorization: targets)
+
+        #expect(result.status == .partialSuccess && result.items.count == 2)
+        let member = try #require(result.items.first)
+        #expect(member.status == .success && member.resource == .member(groupName: "feature", repositoryID: "repo"))
+        #expect(member.effects.map(\.action) == ["remove-worktree", "remove-record-entry", "delete-branch"])
+        #expect(member.effects.allSatisfy { $0.state == "applied" })
+        let root = try #require(result.items.last)
+        #expect(root.status == .failed && root.resource == .group("feature") && root.reasonCode == "git-failed")
+        #expect(root.effects.map(\.action) == ["remove-worktree"] && root.effects.first?.state == "unknown")
+        let saved = try fixture.service.store.load(fixture.root)
+        #expect(saved.groups["feature"]?.repositoryIDs == [] && saved.repositories == record.repositories)
+        #expect(PathSafety.exists(record.groupURL("feature")) && !PathSafety.exists(record.memberURL("feature", "repo")))
+        #expect(try await fixture.service.git.oid("refs/heads/feature", at: record.repositoryURL("repo")) == nil)
+        #expect(try await fixture.service.git.oid("refs/heads/feature", at: fixture.root) != nil)
     }
 }

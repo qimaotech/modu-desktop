@@ -22,12 +22,12 @@ extension WorkspaceService {
         let reader = inspectionService()
         return try await reader.deletionTargets(deleteResources(request, record: record), record: record, publish: publish)
     }
-    public func delete(_ request: DeleteRequest, at root: URL, authorization: [DeletionTarget]? = nil, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
+    public func delete(_ request: DeleteRequest, at root: URL, authorization: [DeletionTarget]? = nil, confirmCurrentTargets: Bool = false, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
         let command: String
         switch request { case .repository: command = "repo.delete"; case .group: command = "group.delete"; case .member, .members: command = "group.member.delete" }
         var result = OperationResult(command: command, workspace: root.path)
         do {
-            if dryRun || authorization == nil {
+            if dryRun || (authorization == nil && !confirmCurrentTargets) {
                 let preview = try await previewDelete(request, at: root)
                 result.plan = deletionPlan(preview); result.dryRun = dryRun
                 result.status = dryRun ? .success : .confirmationRequired
@@ -124,20 +124,26 @@ extension WorkspaceService {
             }
             return .init(resource: resource, path: path.path, branch: nil, detached: false, gitRegistered: exists, exists: exists, risks: risks.map(\.englishDescription), riskMessages: risks, dirty: dirty)
         }
-        let repository = try await checkedRepository(for: resource, in: record)
+        let main = try resource.repositoryID.map { try PathSafety.child("repositories/\($0)", of: record.rootURL, allowMissing: false) } ?? record.rootURL
+        let repository = try await inspectMainRepository(main)
         let registrations = repository.registrations
         let entry = registrations.first { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }
         guard !exists || entry != nil else { throw MonoDeckError("resource-unavailable", .existingDirectoryHasNoMatchingGitRegistration(path.path)) }
-        guard entry?.locked != true else { throw MonoDeckError("worktree-locked", .worktreeIsLocked(path.path)) }
         if let entry, let branch = entry.branch { try await git.checkBranchNotInUse(branch, registrations: registrations, at: repository.path, excluding: entry.path, commonDirectory: repository.commonDirectory) }
-        if let entry { guard entry.oid.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil, !entry.oid.allSatisfy({ $0 == "0" }), try await git.oid(entry.oid, at: repository.path) != nil else { throw MonoDeckError("resource-unavailable", .registeredWorktreeHEADIsUnreadable(path.path)) } }
         var risks: [UserMessage] = []
         var dirty: Bool?
-        if exists { try await checkWorktree(resource, at: path, repository: repository) }
+        if exists { try await checkWorktree(resource, at: path, repository: repository, validateHEAD: false) }
         if exists && readRisks {
-            let count = try await git.changeCount(at: path)
-            dirty = count > 0
-            risks.append(count == 0 ? .workingTreeIsClean : .changedPathsWillBePermanentlyDeleted(count))
+            do {
+                let count = try await git.changeCount(at: path)
+                dirty = count > 0
+                risks.append(count == 0 ? .workingTreeIsClean : .changedPathsWillBePermanentlyDeleted(count))
+            } catch {
+                try checkCancellation()
+                let failure = MonoDeckError.wrap(error)
+                guard failure.code != "cancelled" else { throw failure }
+                risks.append(failure.userMessage)
+            }
         }
         if let entry, readRisks {
             if entry.branch == nil { risks.append(.detachedHEADNoBranchDelete) }
@@ -188,9 +194,14 @@ extension WorkspaceService {
                 try persist(candidate, into: &record)
                 item.effects.append(.init("remove-record-entry", resource.path))
                 if let branch = target.branch {
-                    let present = try await git.run(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], at: repository, allowFailure: true, cancellable: false)
-                    if present.status == 0 { _ = try await git.run(["branch", "-D", "--", branch], at: repository, cancellable: false); item.effects.append(.init("delete-branch", branch)) }
-                    else if present.status != 1 { throw MonoDeckError("git-failed", .couldNotVerifyBranchDeletion(branch)) }
+                    do {
+                        _ = try await git.run(["branch", "-D", "--", branch], at: repository, cancellable: false)
+                        item.effects.append(.init("delete-branch", branch))
+                    } catch let failure as MonoDeckError {
+                        guard case .gitFailed("branch", 1, _) = failure.userMessage else { throw failure }
+                        let present = try await git.run(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], at: repository, allowFailure: true, cancellable: false)
+                        guard present.status == 1 else { throw failure }
+                    }
                 }
             }
             progress(.init(resource.path, .deleted, snapshot: record))

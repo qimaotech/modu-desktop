@@ -101,24 +101,26 @@ public struct WorkspaceStore: Sendable {
     public func validate(_ record: WorkspaceRecord) throws {
         try checkBoundary(record.rootURL)
         guard record.version == 2, record.root.hasPrefix("/"), PathSafety.canonical(record.rootURL).path == record.root else { throw MonoDeckError("invalid-workspace-record", .invalidVersionOrCanonicalRootPath) }
-        var repositories = Set<String>()
+        var repositoryIDs = Set<String>()
+        var lowercaseRepositoryIDs = Set<String>()
         for repo in record.repositories {
             let identity = try RepositoryIdentity(repo.url)
-            guard repositories.insert(identity.id.lowercased()).inserted else { throw MonoDeckError("repository-conflict", .duplicateRepositoryID(identity.id)) }
+            guard lowercaseRepositoryIDs.insert(identity.id.lowercased()).inserted else { throw MonoDeckError("repository-conflict", .duplicateRepositoryID(identity.id)) }
+            repositoryIDs.insert(identity.id)
         }
+        let dateFormatter = ISO8601DateFormatter()
+        let fractionalDateFormatter = ISO8601DateFormatter()
+        fractionalDateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var groups = Set<String>()
         for (name, group) in record.groups {
             try PathSafety.groupName(name)
             guard groups.insert(PathSafety.identity(record.groupURL(name))).inserted,
-                  ISO8601DateFormatter().date(from: group.createdAt) != nil || Self.fractionalDate(group.createdAt) != nil,
+                  dateFormatter.date(from: group.createdAt) != nil || fractionalDateFormatter.date(from: group.createdAt) != nil,
                   group.repositoryIDs.count == Set(group.repositoryIDs).count,
-                  group.repositoryIDs.allSatisfy({ name in record.repositories.contains { $0.id == name } }) else { throw MonoDeckError("invalid-workspace-record", .invalidGroup(name)) }
+                  group.repositoryIDs.allSatisfy(repositoryIDs.contains) else { throw MonoDeckError("invalid-workspace-record", .invalidGroup(name)) }
         }
     }
     private func key(_ root: URL) -> String { SHA256.hash(data: Data(PathSafety.identity(root).utf8)).map { String(format: "%02x", $0) }.joined() }
-    private static func fractionalDate(_ text: String) -> Date? {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: text)
-    }
 }
 
 public final class WorkspaceLock: @unchecked Sendable {

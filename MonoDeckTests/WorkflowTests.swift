@@ -111,6 +111,21 @@ struct WorkflowTests {
         let missing = await f.service.deleteConfirmed(.member(groupName: "feature", repositoryID: "repo"), at: f.root)
         #expect(missing.status == .success, "\(missing.message ?? "") \(missing.items)")
     }
+    @Test func deletionPreviewSupportsWorkspacePathsContainingNewlines() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let root = f.directory.appending(path: "workspace\nwith spaces")
+        try FileManager.default.copyItem(at: f.root, to: root)
+        var record = try f.service.store.load(f.root)
+        record.root = PathSafety.canonical(root).path
+        try f.service.store.save(record)
+        try #require(await f.service.createGroup("feature", repositoryIDs: ["repo"], at: root).status == .success)
+
+        let targets = try await f.service.previewDelete(.group("feature"), at: root)
+
+        #expect(targets.map(\.resource) == [.member(groupName: "feature", repositoryID: "repo"), .group("feature")])
+        #expect(targets.allSatisfy { $0.branch == "feature" && $0.exists && $0.gitRegistered })
+        #expect(PathSafety.exists(record.memberURL("feature", "repo")) && PathSafety.exists(record.groupURL("feature")))
+    }
     @Test func creationFailureRetainsSavedRootAndCleansNewBranch() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let failingStore = WorkspaceStore(support: f.service.store.support) { data, url in

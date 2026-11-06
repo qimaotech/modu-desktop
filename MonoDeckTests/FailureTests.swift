@@ -527,6 +527,115 @@ struct FailureTests {
             #expect(try String(contentsOf: existing.appending(path: "SKILL.md"), encoding: .utf8) == "old skill")
         }
     }
+    @Test func unreadableMemberHEADPreservesValidationErrorsAndWorktreeOriginPriority() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let member = record.memberURL("feature", "repo")
+        let resource = Resource.member(groupName: "feature", repositoryID: "repo")
+        _ = try await f.service.git.run(["config", "extensions.worktreeConfig", "true"], at: record.repositoryURL("repo"))
+        _ = try await f.service.git.run(["symbolic-ref", "HEAD", "refs/heads/missing"], at: member)
+
+        for overrideOrigin in [false, true] {
+            if overrideOrigin {
+                _ = try await f.service.git.run(["config", "--worktree", "remote.origin.url", "https://mono-deck-test.invalid/other.git"], at: member)
+            }
+            do { _ = try await f.service.checked(resource, in: record); Issue.record("Expected member validation to fail.") }
+            catch {
+                let failure = try #require(error as? MonoDeckError)
+                #expect(failure.code == (overrideOrigin ? "origin-mismatch" : "resource-unavailable"))
+                #expect(failure.userMessage == (overrideOrigin ? .repositoryOriginDoesNotMatchWorkspaceRecord(member.path) : .worktreeHEADIsUnavailable))
+            }
+        }
+    }
+
+    @Test(arguments: ["unreadable-commit", "invalid-index"])
+    func linkedDeletionKeepsStatusFailuresInformational(_ failure: String) async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let main = record.repositoryURL("repo"), member = record.memberURL("feature", "repo")
+        let branch = main.appending(path: ".git/refs/heads/feature")
+        _ = try await f.service.git.run(["config", "extensions.worktreeConfig", "true"], at: main)
+        _ = try await f.service.git.run(["config", "remote.origin.url", "https://mono-deck-test.invalid/changed-main.git"], at: main)
+        _ = try await f.service.git.run(["config", "--worktree", "remote.origin.url", "https://mono-deck-test.invalid/changed-member.git"], at: member)
+        if failure == "unreadable-commit" {
+            try Data((String(repeating: "1", count: 40) + "\n").utf8).write(to: branch)
+        } else {
+            let directory = try await f.service.git.run(["rev-parse", "--absolute-git-dir"], at: member).text
+            try Data("invalid index".utf8).write(to: URL(fileURLWithPath: directory).appending(path: "index"))
+        }
+        var statusFailure: MonoDeckError?
+        do { _ = try await f.service.git.changeCount(at: member) }
+        catch { statusFailure = .wrap(error) }
+        let statusMessage = try #require(statusFailure).userMessage
+
+        let targets = try await f.service.previewDelete(.group("feature"), at: f.root)
+        let target = try #require(targets.first { $0.resource == .member(groupName: "feature", repositoryID: "repo") })
+        #expect(target.dirty == nil && target.riskMessages.contains(statusMessage))
+        let result = await f.service.delete(.group("feature"), at: f.root, authorization: targets)
+
+        #expect(result.status == .success, "\(result.items)")
+        #expect(try f.service.store.load(f.root).groups["feature"] == nil)
+        #expect(!PathSafety.exists(record.groupURL("feature")) && PathSafety.exists(main))
+        #expect(!PathSafety.exists(branch))
+    }
+
+    @Test func branchDeletionHookFailureKeepsCompletedWorktreeAndRecordEffects() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let main = record.repositoryURL("repo")
+        let hook = main.appending(path: ".git/hooks/reference-transaction")
+        try Data("""
+        #!/bin/sh
+        read old new ref
+        if [ "$1" = prepared ] && [ "$ref" = refs/heads/feature ] && [ "$new" = "\(String(repeating: "0", count: 40))" ]; then
+          echo 'Injected branch deletion failure' >&2
+          exit 1
+        fi
+        """.utf8).write(to: hook)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+
+        let result = await f.service.delete(.group("feature"), at: f.root, confirmCurrentTargets: true)
+
+        #expect(result.status == .failed && result.exitCode == 1)
+        let item = try #require(result.items.first)
+        #expect(item.resource == .member(groupName: "feature", repositoryID: "repo") && item.reasonCode == "git-failed")
+        #expect(item.message?.contains("Injected branch deletion failure") == true)
+        #expect(item.effects.map(\.action) == ["remove-worktree", "remove-record-entry"] && item.effects.allSatisfy { $0.state == "applied" })
+        #expect(result.items.last?.resource == .group("feature") && result.items.last?.reasonCode == "not-processed")
+        #expect(!PathSafety.exists(record.memberURL("feature", "repo")) && PathSafety.exists(record.groupURL("feature")))
+        #expect(try f.service.store.load(f.root).groups["feature"]?.repositoryIDs == [])
+        #expect(try await f.service.git.oid("refs/heads/feature", at: main) != nil)
+    }
+
+    @Test func branchDisappearingDuringDeletionDoesNotReportAnAppliedBranchEffect() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let resource = Resource.member(groupName: "feature", repositoryID: "repo")
+        let directory = try await f.service.git.run(["rev-parse", "--absolute-git-dir"], at: record.memberURL("feature", "repo")).text
+        let head = URL(fileURLWithPath: directory).appending(path: "HEAD")
+        let branch = record.repositoryURL("repo").appending(path: ".git/refs/heads/feature")
+        try #require(PathSafety.exists(branch))
+
+        let result = await f.service.delete(.group("feature"), at: f.root, confirmCurrentTargets: true) { progress in
+            guard progress.phase == .deleting, progress.target == resource.path else { return }
+            do {
+                try Data("ref: refs/heads/missing\n".utf8).write(to: head)
+                try FileManager.default.removeItem(at: branch)
+            } catch { Issue.record(error) }
+        }
+
+        #expect(result.status == .success, "\(result.items)")
+        let item = try #require(result.items.first { $0.resource == resource })
+        #expect(item.effects.map(\.action) == ["remove-worktree", "remove-record-entry"])
+        #expect(item.effects.allSatisfy { $0.state == "applied" })
+        #expect(try f.service.store.load(f.root).groups["feature"] == nil)
+        #expect(!PathSafety.exists(record.groupURL("feature")) && !PathSafety.exists(branch))
+    }
+
     @Test func deletingAfterSaveFailureKeepsBranchAndDeclaration() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         try await f.prepareGroup("feature", repositoryIDs: ["repo"])

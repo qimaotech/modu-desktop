@@ -3,6 +3,34 @@ import Testing
 @testable import MonoDeckCore
 
 struct CLIContractTests {
+    @Test func confirmedGroupDeletionSkipsRiskScansWithoutChangingPreviewAuthorization() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        let record = try f.service.store.load(f.root)
+        let member = record.memberURL("feature", "repo")
+        let index = try await f.service.git.run(["rev-parse", "--path-format=absolute", "--git-path", "index"], at: member).text
+        try Data("invalid index".utf8).write(to: URL(fileURLWithPath: index))
+        _ = try await f.service.git.run(["config", "remote.origin.url", "https://mono-deck-test.invalid/renamed.git"], at: record.repositoryURL("repo"))
+        let command = ["group", "delete", "feature", "--json", "--workspace", f.root.path]
+
+        let pending = try await f.runCLI(command)
+        let preview = try JSONDecoder().decode(OperationResult.self, from: pending.stdout)
+        #expect(pending.status == 1 && preview.status == .confirmationRequired)
+        #expect(preview.plan?.deletions.first?.dirty == nil)
+        #expect(try f.service.store.load(f.root) == record && PathSafety.exists(member))
+
+        let trace = f.directory.appending(path: "confirmed-deletion-trace")
+        let applied = try await f.runCLI(command + ["--yes"], environment: ["GIT_TRACE": trace.path])
+        let result = try JSONDecoder().decode(OperationResult.self, from: applied.stdout)
+        #expect(applied.status == 0 && result.status == .success, "\(applied.text)")
+        #expect(!PathSafety.exists(record.groupURL("feature")))
+        #expect(try f.service.store.load(f.root).groups["feature"] == nil)
+        let commands = try String(contentsOf: trace, encoding: .utf8)
+        #expect(!commands.contains("built-in: git status "))
+        #expect(!commands.contains("built-in: git config --get remote.origin.url"))
+        #expect(!commands.contains("built-in: git show-ref "))
+    }
+
     @Test func everyMutationCanBePreviewedWithoutChangingResourcesOrTakingTheWorkspaceLock() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
         let other = try await addOtherRepository(f)

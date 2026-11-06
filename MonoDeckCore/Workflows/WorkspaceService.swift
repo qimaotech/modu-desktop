@@ -160,11 +160,19 @@ public struct WorkspaceService: Sendable {
     }
     func checkedRepository(for resource: Resource, in record: WorkspaceRecord) async throws -> RepositoryInspection {
         try store.checkBoundary(record.rootURL)
-        guard resources(record).contains(resource) else { throw MonoDeckError("target-not-configured", .resourceIsNotConfigured) }
+        let repository = resource.repositoryID.flatMap { id in record.repositories.first { $0.id == id } }
+        let configured: Bool
+        switch resource {
+        case .repository: configured = repository != nil
+        case .group(let name): configured = record.groups[name] != nil
+        case .member(let group, let repo): configured = record.groups[group]?.repositoryIDs.contains(repo) == true
+        case .workspace, .cli: configured = false
+        }
+        guard configured else { throw MonoDeckError("target-not-configured", .resourceIsNotConfigured) }
         let main: URL
         let origin: String?
         if let repo = resource.repositoryID {
-            guard let repository = record.repositories.first(where: { $0.id == repo }) else { throw MonoDeckError("target-not-configured", .repositoryIsNotConfigured) }
+            guard let repository else { throw MonoDeckError("target-not-configured", .repositoryIsNotConfigured) }
             main = try PathSafety.child("repositories/\(repo)", of: record.rootURL, allowMissing: false)
             origin = repository.url
         } else {
@@ -174,23 +182,32 @@ public struct WorkspaceService: Sendable {
         return try await inspectMainRepository(main, origin: origin)
     }
     func inspectMainRepository(_ main: URL, origin: String? = nil) async throws -> RepositoryInspection {
-        try await git.checkRepository(main, origin: origin, main: true)
+        let metadata = try await git.repositoryMetadata(at: main)
+        if let metadata { try await git.checkRepository(main, origin: origin, main: true, topLevel: metadata.topLevel) }
+        else { try await git.checkRepository(main, origin: origin, main: true) }
         let registrations = try await git.registrations(at: main)
-        let common = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text
+        let common: String
+        if let metadata { common = metadata.commonDirectory }
+        else { common = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: main).text }
         return .init(path: main, origin: origin, registrations: registrations, commonDirectory: common)
     }
     func checkWorktree(_ resource: Resource, at path: URL, repository: RepositoryInspection, validateHEAD: Bool = true) async throws {
         guard repository.registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }) else {
             throw MonoDeckError("resource-unavailable", resource.repositoryID == nil ? .groupRootRegistrationIsMissing : .worktreeRegistrationIsMissing(path.path))
         }
+        var headValidated = false
         if resource.kind != .repository {
-            try await git.checkRepository(path, origin: repository.origin)
-            let actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text
+            let metadata = try await git.repositoryMetadata(at: path, validateHEAD: validateHEAD)
+            if let metadata { try await git.checkRepository(path, origin: repository.origin, topLevel: metadata.topLevel) }
+            else { try await git.checkRepository(path, origin: repository.origin) }
+            let actual: String
+            if let metadata { actual = metadata.commonDirectory; headValidated = validateHEAD }
+            else { actual = try await git.run(["rev-parse", "--path-format=absolute", "--git-common-dir"], at: path).text }
             guard PathSafety.identity(URL(fileURLWithPath: repository.commonDirectory)) == PathSafety.identity(URL(fileURLWithPath: actual)) else {
                 throw MonoDeckError("resource-unavailable", resource.repositoryID == nil ? .groupRootBelongsAnotherRepository : .worktreeBelongsAnotherRepository)
             }
         }
-        if validateHEAD {
+        if validateHEAD && !headValidated {
             guard try await git.oid("HEAD", at: path) != nil else { throw MonoDeckError("resource-unavailable", .worktreeHEADIsUnavailable) }
         }
     }

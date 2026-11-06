@@ -31,7 +31,7 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 
 - Every write command accepts `--dry-run`, which takes precedence over `--yes`. It checks local prerequisites without changing workspace resources, cloning, or fetching; later network and file operations can still fail. Success has `status: "success"` and `dry-run: true`, with planned actions in `plan.actions` and deletion targets in `plan.deletions`. Plans are unlocked snapshots, not reservations or completed effects.
 - Without `--dry-run`, non-destructive commands execute immediately. Destructive commands prompt only in an interactive terminal; JSON or non-interactive calls without `--yes` return `confirmation-required` without executing any changes, including additions in a membership replacement.
-- `--yes` confirms the current command's freshly generated deletion plan. It does not bypass ownership checks, branch checks, or locked execution-time validation, and is not bound to an earlier dry run. Preview again after a delay, external changes, or `confirmation-changed`.
+- `--yes` authorizes the current command's deletion targets, not an earlier dry run. `group delete <group-name> --yes` determines current targets under the workspace lock and executes without the unlocked risk and local-change preview; use `--dry-run` to preview first. Ownership, target, and current-branch checks still apply. Preview again after a delay, external changes, or `confirmation-changed`.
 - Run a destructive command with `--yes` only when the user has authorized the current scope and risks. Reuse authorization while both remain unchanged; obtain approval for a revised scope. Do not treat the flag itself as authorization.
 
 ## Creating groups
@@ -52,6 +52,7 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 
 - `group delete <group-name>` deletes the group root and all members. `repo delete <repository-id>` deletes the repository's managed members, then moves its main repository directory to Trash.
 - Before authorizing deletion, review target paths, current branches, and risks in `--dry-run` output.
+- Unknown local-change status does not mean clean or prevent linked worktree deletion. The preview retains read failures as warnings and allows authorized cleanup when ownership and target checks pass; report those warnings when reviewing the preview.
 - Linked worktree deletion permanently removes its files and current local branch, including ignored files, reused branches, and unmerged commits. A detached HEAD has no branch to delete.
 - When a worktree directory and its Git registration are missing, deletion may only remove the workspace record entry.
 

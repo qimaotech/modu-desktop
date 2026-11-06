@@ -38,12 +38,28 @@ extension Git {
     public func checkRepository(_ path: URL, origin: String? = nil, main: Bool = false) async throws {
         try PathSafety.directory(path)
         let top = try await run(["rev-parse", "--show-toplevel"], at: path).text
-        guard PathSafety.identity(URL(fileURLWithPath: top)) == PathSafety.identity(path) else { throw MonoDeckError("resource-unavailable", .notRepositoryRoot2(path.path)) }
+        try await checkRepository(path, origin: origin, main: main, topLevel: top)
+    }
+    func checkRepository(_ path: URL, origin: String?, main: Bool = false, topLevel: String) async throws {
+        guard PathSafety.identity(URL(fileURLWithPath: topLevel)) == PathSafety.identity(path) else { throw MonoDeckError("resource-unavailable", .notRepositoryRoot2(path.path)) }
         if main { try PathSafety.directory(path.appending(path: ".git")) }
         if let origin {
             let actual = try await run(["config", "--get", "remote.origin.url"], at: path).text
             guard actual == origin else { throw MonoDeckError("origin-mismatch", .repositoryOriginDoesNotMatchWorkspaceRecord(path.path)) }
         }
+    }
+    func repositoryMetadata(at path: URL, validateHEAD: Bool = false) async throws -> (topLevel: String, commonDirectory: String)? {
+        try PathSafety.directory(path)
+        var arguments = ["rev-parse", "--show-toplevel", "--path-format=absolute", "--git-common-dir"]
+        if validateHEAD { arguments += ["--verify", "--end-of-options", "HEAD^{commit}"] }
+        let output = try await run(arguments, at: path, allowFailure: true)
+        guard !Task.isCancelled else { throw MonoDeckError("cancelled", .operationCancelled) }
+        // Ambiguous paths or failed HEAD checks must retain the original validation and errors.
+        guard output.status == 0, output.stdout.last == 10 else { return nil }
+        let fields = output.stdout.dropLast().split(separator: 10, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+        guard fields.count == (validateHEAD ? 3 : 2), fields[0].hasPrefix("/"), fields[1].hasPrefix("/") else { return nil }
+        if validateHEAD, fields[2].range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) == nil { return nil }
+        return (fields[0], fields[1])
     }
     public func validateRef(_ group: String, at root: URL) async throws {
         try PathSafety.groupName(group)

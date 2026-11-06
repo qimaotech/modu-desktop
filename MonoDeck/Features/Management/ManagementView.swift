@@ -146,18 +146,20 @@ struct ManagementView: View {
     }
 
     private var deletionForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if management.deletionPresentation.editingGroup { Text(presentation.text.string(.uiGroupRootWorktreeWillBeKept)).font(DialogTypography.auxiliary) }
+        let snapshot = management.deletionPresentation
+        let resources = snapshot.resources.filter { $0.kind != .member } + snapshot.resources.filter { $0.kind == .member }
+        let targetsByResource = Dictionary(snapshot.targets.map { ($0.resource, $0) }, uniquingKeysWith: { first, _ in first })
+        return VStack(alignment: .leading, spacing: 12) {
+            if snapshot.editingGroup { Text(presentation.text.string(.uiGroupRootWorktreeWillBeKept)).font(DialogTypography.auxiliary) }
             ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(deletionDisplayResources) { resource in deletionRow(resource) }
+                LazyVStack(spacing: 0) {
+                    ForEach(resources) { resource in deletionRow(resource, target: targetsByResource[resource]) }
                 }.padding(.vertical, 4)
-            }.frame(height: CGFloat(min(deletionDisplayResources.count, 7) * 28 + 8)).formPlate().textSelection(.enabled)
+            }.frame(height: CGFloat(min(resources.count, 7) * 28 + 8)).formPlate().textSelection(.enabled)
         }
     }
 
-    func deletionRow(_ resource: Resource) -> some View {
-        let target = management.deletionPresentation.targets.first { $0.resource == resource }
+    func deletionRow(_ resource: Resource, target: DeletionTarget?) -> some View {
         let risks = target?.riskMessages.map(presentation.text.message).joined(separator: "\n") ?? ""
         return HStack(spacing: 12) {
             Text(resource.path).font(DialogTypography.path).lineLimit(1).truncationMode(.middle)
@@ -168,11 +170,6 @@ struct ManagementView: View {
                 if let target { WorkingTreeStatus(text: presentation.text, status: deletionStatus(target)) }
             }.fixedSize()
         }.padding(.horizontal, 16).frame(height: 28)
-    }
-
-    var deletionDisplayResources: [Resource] {
-        let resources = management.deletionPresentation.resources
-        return resources.filter { $0.kind != .member } + resources.filter { $0.kind == .member }
     }
 
     private var actions: some View {
