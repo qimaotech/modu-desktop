@@ -151,10 +151,9 @@ def console_message(text, style=None):
 
 
 class TestProgress:
-    def __init__(self, enabled, started, interval=10):
+    def __init__(self, enabled, started, interval=None):
         self.enabled = enabled
         self.started = started
-        self.interval = interval
         self.stage = "Building"
         self.suite = ""
         self.running = {}
@@ -164,11 +163,17 @@ class TestProgress:
         self.lock = threading.Lock()
         self.stopped = threading.Event()
         self.thread = None
-        self.inline = False
+        self.inline_lines = 0
+        self.cursor_hidden = False
+        self.spinner_frame = 0
         self.terminal = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+        self.interval = interval if interval is not None else (0.1 if self.terminal else 10)
 
     def start(self):
         if self.enabled:
+            if self.terminal:
+                self.cursor_hidden = True
+                print("\033[?25l", end="", flush=True)
             self.thread = threading.Thread(target=self.heartbeat, daemon=True)
             self.thread.start()
 
@@ -219,41 +224,73 @@ class TestProgress:
                 console_message(f"Failure: {text[:800]}", "failure")
 
     def heartbeat(self):
+        next_render = 0
         while not self.stopped.wait(self.interval):
             with self.lock:
                 now = time.monotonic()
-                elapsed = int(now - self.started)
-                parts = [(f"[{elapsed // 60:02d}:{elapsed % 60:02d}] ", "muted"), (self.stage, "active")]
-                if self.stage == "Testing":
-                    parts += [(" | completed ", "muted"), (str(len(self.completed)), "success" if self.completed else "muted"),
-                              (" | failed ", "muted"), (str(len(self.failed)), "failure" if self.failed else "muted")]
-                    if self.running:
-                        (suite, name), began = min(self.running.items(), key=lambda item: item[1])
-                        current = f"{suite}/{name}" if suite else name
-                        parts += [(" | current ", "muted"), (current[:100], None), (f" ({int(now - began)}s)", "muted")]
-                        if len(self.running) > 1:
-                            parts.append((f" | {len(self.running)} running", "muted"))
-                    elif self.suite:
-                        parts += [(" | suite ", "muted"), (self.suite[:100], None)]
-                width = max(1, shutil.get_terminal_size().columns - 1) if self.terminal else None
-                rendered = []
-                for text, style in parts:
-                    if width is not None:
-                        text = text[:width]
-                        width -= len(text)
-                    if text:
-                        rendered.append(styled(text, style))
-                text = "".join(rendered)
-                if self.terminal:
-                    print("\r\033[2K" + text, end="", flush=True)
-                    self.inline = True
+                if not self.terminal or not self.inline_lines or now >= next_render:
+                    self.render(now)
+                    next_render = now + 1
                 else:
-                    print(text, flush=True)
+                    self.animate()
+
+    def render(self, now):
+        elapsed = int(now - self.started)
+        parts = []
+        if self.terminal:
+            parts.append((self.spinner() + " ", "active"))
+        parts += [(f"[{elapsed // 60:02d}:{elapsed % 60:02d}] ", "muted"), (self.stage, "active")]
+        rows = [parts]
+        width = max(1, shutil.get_terminal_size().columns - 1) if self.terminal else None
+        if self.stage == "Testing":
+            parts += [(" | completed ", "muted"), (str(len(self.completed)), "success" if self.completed else "muted"),
+                      (" | failed ", "muted"), (str(len(self.failed)), "failure" if self.failed else "muted")]
+            if self.running:
+                (suite, name), began = min(self.running.items(), key=lambda item: item[1])
+                current = f"{suite}/{name}" if suite else name
+                duration = f" ({int(now - began)}s)"
+                if width is not None:
+                    available = max(0, width - 4 - len(duration))
+                    if len(current) > available:
+                        current = current[:max(0, available - 1)] + ("…" if available else "")
+                rows.append([("  ↳ ", "muted"), (current, None), (duration, "muted")])
+                if len(self.running) > 1:
+                    parts.append((f" | {len(self.running)} running", "muted"))
+            elif self.suite:
+                rows.append([("  ↳ ", "muted"), (self.suite, None)])
+        rendered = []
+        for row in rows:
+            remaining = width
+            line = []
+            for text, style in row:
+                if remaining is not None:
+                    text = text[:remaining]
+                    remaining -= len(text)
+                if text:
+                    line.append(styled(text, style))
+            rendered.append("".join(line))
+        self.clear_line()
+        if self.terminal:
+            print("\n".join(rendered), end="", flush=True)
+            self.inline_lines = len(rendered)
+        else:
+            print("\n".join(rendered), flush=True)
+
+    def animate(self):
+        up = f"\033[{self.inline_lines - 1}A" if self.inline_lines > 1 else ""
+        down = f"\033[{self.inline_lines - 1}B" if self.inline_lines > 1 else ""
+        print("\r" + up + styled(self.spinner(), "active") + "\r" + down, end="", flush=True)
+
+    def spinner(self):
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        frame = frames[self.spinner_frame % len(frames)]
+        self.spinner_frame += 1
+        return frame
 
     def clear_line(self):
-        if self.inline:
-            print("\r\033[2K", end="", flush=True)
-            self.inline = False
+        if self.inline_lines:
+            print("\r\033[2K" + "\033[1A\r\033[2K" * (self.inline_lines - 1), end="", flush=True)
+            self.inline_lines = 0
 
     def close(self):
         self.stopped.set()
@@ -261,6 +298,9 @@ class TestProgress:
             self.thread.join()
         with self.lock:
             self.clear_line()
+            if self.cursor_hidden:
+                print("\033[?25h", end="", flush=True)
+                self.cursor_hidden = False
 
 
 def print_failure_summary(path, reported=()):
