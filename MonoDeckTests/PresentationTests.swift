@@ -4,6 +4,29 @@ import Testing
 @testable import MonoDeck
 
 @MainActor struct PresentationTests {
+    @Test(arguments: [AppLocale.english, .simplifiedChinese])
+    func workspaceOpeningTitlesDistinguishCancellationAndPartialCompletion(_ locale: AppLocale) {
+        let text = InterfaceText(locale: locale)
+        let cancelled = OperationResult(command: "workspace.open", workspace: nil, status: .cancelled)
+        let partial = OperationResult(command: "workspace.open", workspace: nil, status: .partialSuccess)
+        let failed = OperationResult(command: "workspace.open", workspace: nil, status: .failed)
+        #expect(text.resultTitle(cancelled) == (locale == .english ? "Opening the workspace was cancelled" : "已取消打开工作区"))
+        #expect(text.resultTitle(partial) == (locale == .english ? "Opening the workspace was partially completed" : "打开工作区的操作部分完成"))
+        #expect(text.resultTitle(cancelled) != text.resultTitle(failed))
+        #expect(text.resultTitle(partial) != text.resultTitle(failed))
+    }
+
+    @Test(arguments: [AppLocale.english, .simplifiedChinese])
+    func repositoryAdditionTitlePreservesTheCompletedAddition(_ locale: AppLocale) {
+        let text = InterfaceText(locale: locale)
+        var added = ItemResult(.repository("repo"), status: .failed)
+        added.data = ["disposition": "added"]
+        let retained = OperationResult(command: "repo.add", workspace: nil, status: .failed, items: [added])
+        let failed = OperationResult(command: "repo.add", workspace: nil, status: .failed)
+        #expect(text.resultTitle(retained) == (locale == .english ? "Repository added, but setup is incomplete" : "仓库已添加，但后续设置未完成"))
+        #expect(text.resultTitle(retained) != text.resultTitle(failed))
+    }
+
     @Test func repositoryAdditionFailureKeepsFormAndClearsDetailsWithTheError() async throws {
         try await withModel { model in
             let record = model.workspace.record
@@ -58,6 +81,8 @@ import Testing
                 await model.management.deletePreviewTask?.value
             }
             try #require(model.management.canConfirmDelete)
+            let progressTitle = model.text.string(model.management.deletionPresentation.progressTitle)
+            #expect(progressTitle == model.text.string(editing ? .uiEditingWorktreeGroup : .dialogDeletingRepository))
             model.management.sheet = nil
             #expect(!model.management.canConfirmDelete)
             #expect(!model.busy && model.operation == nil && model.management.progressPresentation == nil)

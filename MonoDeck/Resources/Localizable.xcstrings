@@ -41,13 +41,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t Create Group"
+            "value": "Can’t create the worktree group"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法创建分组"
+            "value": "无法创建工作树分组"
           }
         }
       }
@@ -218,6 +218,188 @@
           "stringUnit": {
             "state": "translated",
             "value": "工作区已切换，请关闭此表单后重新打开。"
+          }
+        }
+      }
+    },
+    "dialog.addRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加仓库"
+          }
+        }
+      }
+    },
+    "dialog.createWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create worktree group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建工作树分组"
+          }
+        }
+      }
+    },
+    "dialog.deleteMemberWorktrees": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete %lld member worktree?"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Delete %lld member worktrees?"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 个成员工作树？"
+          }
+        }
+      }
+    },
+    "dialog.deletingMemberWorktree": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting member worktree…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在删除成员工作树…"
+          }
+        }
+      }
+    },
+    "dialog.deletingMemberWorktrees": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting member worktrees…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在删除成员工作树…"
+          }
+        }
+      }
+    },
+    "dialog.deletingRepository": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting repository…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在删除仓库…"
+          }
+        }
+      }
+    },
+    "dialog.deletingWorktreeGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting worktree group…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在删除工作树分组…"
+          }
+        }
+      }
+    },
+    "dialog.editGroupMembership": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit group membership"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑分组成员"
+          }
+        }
+      }
+    },
+    "dialog.importRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入仓库"
+          }
+        }
+      }
+    },
+    "dialog.softwareUpdate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software update"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "软件更新"
           }
         }
       }
@@ -3443,6 +3625,1179 @@
         }
       }
     },
+    "result.cliInstallCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI installation cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消安装 CLI"
+          }
+        }
+      }
+    },
+    "result.cliInstallFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t install the CLI"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法安装 CLI"
+          }
+        }
+      }
+    },
+    "result.cliInstallSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI installed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI 已安装"
+          }
+        }
+      }
+    },
+    "result.groupCreateCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group creation cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消创建工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupCreateConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create worktree group?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建工作树分组？"
+          }
+        }
+      }
+    },
+    "result.groupCreateFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t create the worktree group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupCreatePartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group creation partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组创建部分完成"
+          }
+        }
+      }
+    },
+    "result.groupCreateSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group creation skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过创建工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupCreateSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group created"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组已创建"
+          }
+        }
+      }
+    },
+    "result.groupCreateWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group created with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组已创建，请查看提示"
+          }
+        }
+      }
+    },
+    "result.groupDeleteCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group deletion cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消删除工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupDeleteFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t delete the worktree group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法删除工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupDeletePartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group deletion partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组删除部分完成"
+          }
+        }
+      }
+    },
+    "result.groupDeleteSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group deletion skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过删除工作树分组"
+          }
+        }
+      }
+    },
+    "result.groupDeleteSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group deleted"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组已删除"
+          }
+        }
+      }
+    },
+    "result.groupDeleteWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree group deleted with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树分组已删除，请查看提示"
+          }
+        }
+      }
+    },
+    "result.groupEditCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership update cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消更新分组成员"
+          }
+        }
+      }
+    },
+    "result.groupEditConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership changed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组成员已变化，请重新确认"
+          }
+        }
+      }
+    },
+    "result.groupEditFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t update group membership"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法更新分组成员"
+          }
+        }
+      }
+    },
+    "result.groupEditPartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership update partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组成员更新部分完成"
+          }
+        }
+      }
+    },
+    "result.groupEditSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership update skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过更新分组成员"
+          }
+        }
+      }
+    },
+    "result.groupEditSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership updated"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组成员已更新"
+          }
+        }
+      }
+    },
+    "result.groupEditWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Group membership updated with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组成员已更新，请查看提示"
+          }
+        }
+      }
+    },
+    "result.memberDeleteCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member worktree deletion cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消删除成员工作树"
+          }
+        }
+      }
+    },
+    "result.memberDeleteFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t delete the member worktree"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法删除成员工作树"
+          }
+        }
+      }
+    },
+    "result.memberDeletePartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member worktree deletion partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成员工作树删除部分完成"
+          }
+        }
+      }
+    },
+    "result.memberDeleteSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member worktree deletion skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过删除成员工作树"
+          }
+        }
+      }
+    },
+    "result.memberDeleteSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member worktree deleted"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成员工作树已删除"
+          }
+        }
+      }
+    },
+    "result.memberDeleteWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Member worktree deleted with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成员工作树已删除，请查看提示"
+          }
+        }
+      }
+    },
+    "result.operationCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已取消"
+          }
+        }
+      }
+    },
+    "result.operationConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm operation?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认执行操作？"
+          }
+        }
+      }
+    },
+    "result.operationFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t complete the operation"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成操作"
+          }
+        }
+      }
+    },
+    "result.operationPartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作部分完成"
+          }
+        }
+      }
+    },
+    "result.operationSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已跳过"
+          }
+        }
+      }
+    },
+    "result.operationSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已完成"
+          }
+        }
+      }
+    },
+    "result.operationWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation completed with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已完成，请查看提示"
+          }
+        }
+      }
+    },
+    "result.repoAddCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository addition cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消添加仓库"
+          }
+        }
+      }
+    },
+    "result.repoAddFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t add the repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法添加仓库"
+          }
+        }
+      }
+    },
+    "result.repoAddSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository added"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库已添加"
+          }
+        }
+      }
+    },
+    "result.repoDeleteCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deletion cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消删除仓库"
+          }
+        }
+      }
+    },
+    "result.repoDeleteFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t delete the repository"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法删除仓库"
+          }
+        }
+      }
+    },
+    "result.repoDeletePartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deletion partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库删除部分完成"
+          }
+        }
+      }
+    },
+    "result.repoDeleteSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deletion skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过删除仓库"
+          }
+        }
+      }
+    },
+    "result.repoDeleteSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deleted"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库已删除"
+          }
+        }
+      }
+    },
+    "result.repoDeleteWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository deleted with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库已删除，请查看提示"
+          }
+        }
+      }
+    },
+    "result.repoImportCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository import cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消导入仓库"
+          }
+        }
+      }
+    },
+    "result.repoImportConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import repositories?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入仓库？"
+          }
+        }
+      }
+    },
+    "result.repoImportFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t import repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导入仓库"
+          }
+        }
+      }
+    },
+    "result.repoImportPartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository import partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库导入部分完成"
+          }
+        }
+      }
+    },
+    "result.repoImportSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repositories imported"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库导入完成"
+          }
+        }
+      }
+    },
+    "result.repoImportWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repositories imported with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓库导入完成，请查看提示"
+          }
+        }
+      }
+    },
+    "result.repoUpdateCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository update cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消更新主仓库"
+          }
+        }
+      }
+    },
+    "result.repoUpdateConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update repositories?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新主仓库？"
+          }
+        }
+      }
+    },
+    "result.repoUpdateFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t update repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法更新主仓库"
+          }
+        }
+      }
+    },
+    "result.repoUpdatePartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository update partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主仓库更新部分完成"
+          }
+        }
+      }
+    },
+    "result.repoUpdateSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository update skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过更新主仓库"
+          }
+        }
+      }
+    },
+    "result.repoUpdateSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repositories updated"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主仓库已更新"
+          }
+        }
+      }
+    },
+    "result.repoUpdateWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repositories updated with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主仓库已更新，请查看提示"
+          }
+        }
+      }
+    },
+    "result.workspaceImportCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace configuration import cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消导入工作区配置"
+          }
+        }
+      }
+    },
+    "result.workspaceImportConfirmationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import workspace configuration?"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入工作区配置？"
+          }
+        }
+      }
+    },
+    "result.workspaceImportFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t import the workspace configuration"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导入工作区配置"
+          }
+        }
+      }
+    },
+    "result.workspaceImportPartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace configuration import partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区配置导入部分完成"
+          }
+        }
+      }
+    },
+    "result.workspaceImportSkipped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace configuration import skipped"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过导入工作区配置"
+          }
+        }
+      }
+    },
+    "result.workspaceImportSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace configuration imported"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区配置导入完成"
+          }
+        }
+      }
+    },
+    "result.workspaceImportWarnings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace configuration imported with warnings"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区配置导入完成，请查看提示"
+          }
+        }
+      }
+    },
+    "result.workspaceOpenCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening the workspace was cancelled"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消打开工作区"
+          }
+        }
+      }
+    },
+    "result.workspaceOpenFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t open the workspace"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开工作区"
+          }
+        }
+      }
+    },
+    "result.workspaceOpenPartialSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening the workspace was partially completed"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开工作区的操作部分完成"
+          }
+        }
+      }
+    },
+    "result.workspaceOpenSuccess": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace opened"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区已打开"
+          }
+        }
+      }
+    },
     "ui.actions": {
       "extractionState": "manual",
       "localizations": {
@@ -3707,13 +5062,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$@ has %2$lld new commit"
+                  "value": "%2$lld commit behind %1$@"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%1$@ has %2$lld new commits"
+                  "value": "%2$lld commits behind %1$@"
                 }
               }
             }
@@ -3722,7 +5077,7 @@
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ 有 %2$lld 个新提交"
+            "value": "落后于 %1$@ %2$lld 个提交"
           }
         }
       }
@@ -3767,7 +5122,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t add repository"
+            "value": "Can’t add the repository"
           }
         },
         "zh-Hans-CN": {
@@ -3784,7 +5139,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t export configuration"
+            "value": "Can’t export the configuration"
           }
         },
         "zh-Hans-CN": {
@@ -3801,13 +5156,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t import into this workspace"
+            "value": "Can’t import configuration into this workspace"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法导入此工作区"
+            "value": "无法向此工作区导入配置"
           }
         }
       }
@@ -3829,30 +5184,13 @@
         }
       }
     },
-    "ui.canTOpenWorkspace": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can’t open workspace"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法打开工作区"
-          }
-        }
-      }
-    },
     "ui.canTReadConfigurationFile": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t read configuration file"
+            "value": "Can’t read the configuration file"
           }
         },
         "zh-Hans-CN": {
@@ -3869,7 +5207,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t Restart MonoDeck"
+            "value": "Can’t restart MonoDeck"
           }
         },
         "zh-Hans-CN": {
@@ -3886,7 +5224,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can’t set global shortcut"
+            "value": "Can’t set the global shortcut"
           }
         },
         "zh-Hans-CN": {
@@ -3988,13 +5326,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Change Language"
+            "value": "Restart to change language?"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改语言"
+            "value": "重新启动以更改语言？"
           }
         }
       }
@@ -4250,23 +5588,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除搜索"
-          }
-        }
-      }
-    },
-    "ui.cliInstallation": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CLI installation"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "安装 CLI"
           }
         }
       }
@@ -4833,7 +6154,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete Member Worktree?"
+            "value": "Delete member worktree?"
           }
         },
         "zh-Hans-CN": {
@@ -4850,7 +6171,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete Repository?"
+            "value": "Delete repository?"
           }
         },
         "zh-Hans-CN": {
@@ -4867,7 +6188,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete Worktree Group?"
+            "value": "Delete worktree group?"
           }
         },
         "zh-Hans-CN": {
@@ -5082,36 +6403,19 @@
         }
       }
     },
-    "ui.editWorktreeGroup2": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit Worktree Group"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "编辑工作树分组"
-          }
-        }
-      }
-    },
     "ui.editingWorktreeGroup": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editing worktree group…"
+            "value": "Updating group membership…"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在编辑工作树分组…"
+            "value": "正在更新分组成员…"
           }
         }
       }
@@ -5292,7 +6596,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Git Details Refresh Failed"
+            "value": "Git details refresh failed"
           }
         },
         "zh-Hans-CN": {
@@ -5337,70 +6641,19 @@
         }
       }
     },
-    "ui.groupCreation": {
+    "ui.groupMembershipChangedReviewAgain": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Group creation"
+            "value": "The group membership changed before this operation started. No changes were made. Close this dialog and edit the group again to review and confirm the current changes."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建分组"
-          }
-        }
-      }
-    },
-    "ui.groupDeletion": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete Worktree Group"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除工作树分组"
-          }
-        }
-      }
-    },
-    "ui.groupEdit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit Worktree Group"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "编辑工作树分组"
-          }
-        }
-      }
-    },
-    "ui.groupMemberAddition": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add Group Members"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加分组成员"
+            "value": "分组成员在操作开始前发生了变化，本次未执行任何更改。请关闭此窗口，重新编辑分组并确认当前变更。"
           }
         }
       }
@@ -5490,23 +6743,6 @@
         }
       }
     },
-    "ui.importRepositories": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Import Repositories"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入仓库"
-          }
-        }
-      }
-    },
     "ui.importYAML": {
       "extractionState": "manual",
       "localizations": {
@@ -5547,13 +6783,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Importing workspace…"
+            "value": "Importing workspace configuration…"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在导入工作区…"
+            "value": "正在导入工作区配置…"
           }
         }
       }
@@ -5966,23 +7202,6 @@
         }
       }
     },
-    "ui.memberWorktreeDeletion": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete Member Worktree"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除成员工作树"
-          }
-        }
-      }
-    },
     "ui.modified": {
       "extractionState": "manual",
       "localizations": {
@@ -6336,23 +7555,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在打开工作区…"
-          }
-        }
-      }
-    },
-    "ui.operation": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Operation"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "操作"
           }
         }
       }
@@ -6737,64 +7939,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Repository added with an issue"
+            "value": "Repository added, but setup is incomplete"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "仓库已添加，但有一项问题"
-          }
-        }
-      }
-    },
-    "ui.repositoryAddition": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repository addition"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加仓库"
-          }
-        }
-      }
-    },
-    "ui.repositoryDeletion": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repository deletion"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除仓库"
-          }
-        }
-      }
-    },
-    "ui.repositoryImport": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repository import"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入仓库"
+            "value": "仓库已添加，但后续设置未完成"
           }
         }
       }
@@ -6816,23 +7967,6 @@
         }
       }
     },
-    "ui.repositoryUpdate": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repository update"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更新主仓库"
-          }
-        }
-      }
-    },
     "ui.repositoryWillMoveTrashLinkedWorktreesAndCurrent": {
       "extractionState": "manual",
       "localizations": {
@@ -6846,23 +7980,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "仓库将移入废纸篓；关联工作树及其当前本地分支（包括未合并提交）将永久删除。"
-          }
-        }
-      }
-    },
-    "ui.resourceCheck": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Resource check"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "检查资源"
           }
         }
       }
@@ -7583,7 +8700,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn’t Check for Updates"
+            "value": "Couldn’t check for updates"
           }
         },
         "zh-Hans-CN": {
@@ -7634,7 +8751,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download Failed"
+            "value": "Download failed"
           }
         },
         "zh-Hans-CN": {
@@ -7668,7 +8785,7 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn’t Install Update"
+            "value": "Couldn’t install update"
           }
         },
         "zh-Hans-CN": {
@@ -7781,19 +8898,53 @@
         }
       }
     },
+    "ui.updateWaitingForOperationTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the current operation…"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待当前操作完成…"
+          }
+        }
+      }
+    },
     "ui.updateWaitingForResult": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Review the operation results to continue restarting."
+            "value": "Review and close the operation results to continue restarting."
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "请先处理操作结果，随后继续重启。"
+            "value": "查看并关闭操作结果后，将继续重启。"
+          }
+        }
+      }
+    },
+    "ui.updateWaitingForResultTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review and close operation results"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先查看并关闭操作结果"
           }
         }
       }
@@ -8087,57 +9238,6 @@
         }
       }
     },
-    "ui.workspaceImport": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Workspace import"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入工作区"
-          }
-        }
-      }
-    },
-    "ui.workspaceIsBusy": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Workspace is busy"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工作区正忙"
-          }
-        }
-      }
-    },
-    "ui.workspaceIsInUseReloadShortly": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Workspace is in use. Reload shortly."
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工作区正被其他操作使用，请稍后重新加载。"
-          }
-        }
-      }
-    },
     "ui.workspaceMustHaveNoRegisteredRepositoriesOrWorktree": {
       "extractionState": "manual",
       "localizations": {
@@ -8151,23 +9251,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "工作区不能包含已登记的仓库或工作树分组，repositories 和 worktrees 目录也必须为空。"
-          }
-        }
-      }
-    },
-    "ui.workspaceOpening": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Workspace opening"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开工作区"
           }
         }
       }

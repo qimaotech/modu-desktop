@@ -144,14 +144,17 @@ struct AppUpdateView: View {
     private var title: String {
         let resource: LocalizedStringResource
         switch model.phase {
-        case .idle: resource = .uiSoftwareUpdate
+        case .idle: resource = .dialogSoftwareUpdate
         case .checking: resource = .uiCheckingForUpdates
         case .available: resource = .uiMonoDeckIsAvailable(model.update?.version ?? "")
         case .upToDate: resource = .uiMonoDeckIsUpToDate
         case .downloading: resource = .uiDownloadingInstaller
         case .verifying: resource = .uiVerifyingInstaller
         case .preparing: resource = .uiPreparingUpdate
-        case .restarting: resource = .uiQuittingMonoDeck
+        case .restarting:
+            if waitingForOperation { resource = .uiUpdateWaitingForOperationTitle }
+            else if waitingForResult { resource = .uiUpdateWaitingForResultTitle }
+            else { resource = .uiQuittingMonoDeck }
         case .failed:
             if model.update == nil { resource = .uiUpdateCheckFailed }
             else if model.downloadFailed { resource = .uiUpdateDownloadFailed }

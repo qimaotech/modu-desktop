@@ -28,7 +28,7 @@ struct ResultView: View {
     private var resultHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: resultSymbol).font(DialogTypography.body).foregroundStyle(resultColor).accessibilityHidden(true)
-            Text(result.reasonCode == "workspace-not-empty" ? text.string(.uiCanTImportIntoWorkspace) : text.resultTitle(result)).font(DialogTypography.title)
+            Text(text.resultTitle(result)).font(DialogTypography.title)
         }
     }
     private var resultSymbol: String {
@@ -64,6 +64,9 @@ struct ResultView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         if result.command == "workspace.open", let workspace = result.workspace { Text(workspace).font(DialogTypography.path) }
+                        if result.command == "group.edit", result.status == .confirmationRequired {
+                            Text(text.string(.uiGroupMembershipChangedReviewAgain))
+                        }
                         if let raw = result.message { IssueDescriptionView(message: text.message(result), details: Git.sanitize(raw), text: text) }
                         if result.command == "repo.update", !items.isEmpty {
                             RepositoryUpdateResultsView(text: text, result: result)

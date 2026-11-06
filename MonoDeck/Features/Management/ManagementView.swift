@@ -14,7 +14,6 @@ struct ManagementView: View {
     @State var selected = Set<String>()
     @State var repositorySearch = ""
     @State private var repositorySearchFocused = false
-    @State private var error: String?
     @State private var fieldError: String?
     @FocusState private var focused: Bool
 
@@ -36,7 +35,7 @@ struct ManagementView: View {
                         case .create, .edit: groupForm
                         case .delete: deletionForm
                         }
-                        if let error = error ?? management.formError {
+                        if let error = management.formError {
                             FormErrorView(message: error,
                                           title: sheet == .add && management.formErrorDetails != nil ? presentation.text.string(.uiCanTAddRepository) : nil,
                                           details: management.formErrorDetails,
@@ -201,16 +200,11 @@ struct ManagementView: View {
 
     private var title: String {
         switch sheet {
-        case .add: presentation.text.string(.uiAddRepository2)
-        case .importRepositories: presentation.text.string(.uiImportRepositories)
-        case .create: presentation.text.string(.uiCreateWorktreeGroup2)
-        case .edit: presentation.text.string(.uiEditWorktreeGroup2)
-        case .delete:
-            switch management.deletionPresentation.request {
-            case .repository: presentation.text.string(.uiDeleteRepository)
-            case .group: presentation.text.string(.uiDeleteWorktreeGroup)
-            default: presentation.text.string(.uiDeleteMemberWorktree)
-            }
+        case .add: presentation.text.string(.dialogAddRepository)
+        case .importRepositories: presentation.text.string(.dialogImportRepositories)
+        case .create: presentation.text.string(.dialogCreateWorktreeGroup)
+        case .edit: presentation.text.string(.dialogEditGroupMembership)
+        case .delete: presentation.text.string(management.deletionPresentation.confirmationTitle)
         }
     }
 
@@ -234,7 +228,7 @@ struct ManagementView: View {
         case .importRepositories: return presentation.text.string(.uiImportingRepositories)
         case .create: return presentation.text.string(.uiCreatingWorktreeGroup)
         case .edit: return presentation.text.string(.uiEditingWorktreeGroup)
-        case .delete: return presentation.text.string(.uiDeleting)
+        case .delete: return presentation.text.string(management.deletionPresentation.progressTitle)
         }
     }
 
@@ -251,7 +245,7 @@ struct ManagementView: View {
         return state?.dirty == true ? "Dirty" : "Clean"
     }
     private func submit() {
-        error = nil; fieldError = nil; management.formError = nil
+        fieldError = nil; management.formError = nil
         let members = selectedRepositoryIDs
         switch sheet {
         case .add:
@@ -266,7 +260,7 @@ struct ManagementView: View {
 
     private func chooseRepositoryYAML() async {
         let root = workspace.record?.rootURL
-        error = nil; fieldError = nil; management.formError = nil
+        fieldError = nil; management.formError = nil
         do {
             guard let file = try await FilePanels.readYAML(prompt: presentation.text.string(.uiImport)),
                   management.sheet == .add, workspace.record?.rootURL == root else { return }
@@ -279,7 +273,7 @@ struct ManagementView: View {
 
     private func chooseLocalRepositories() async {
         let root = workspace.record?.rootURL
-        error = nil; fieldError = nil; management.formError = nil
+        fieldError = nil; management.formError = nil
         guard let directories = await FilePanels.repositoryDirectories(
             prompt: presentation.text.string(.uiScan),
             message: presentation.text.string(.uiSelectOneOrMoreFoldersFindGitRepositories)),

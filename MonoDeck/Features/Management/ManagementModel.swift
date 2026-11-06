@@ -393,7 +393,7 @@ enum ManagementFormAction {
 
     var sheet: ManagementSheet { self == .addRepository ? .add : .create }
     var failureTitle: LocalizedStringResource {
-        self == .addRepository ? .uiCanTAddRepository : .init("action.cannotCreateGroup", defaultValue: "Can’t Create Group")
+        self == .addRepository ? .uiCanTAddRepository : .init("action.cannotCreateGroup", defaultValue: "Can’t create the worktree group")
     }
 }
 struct ManagementFormSession {
@@ -418,6 +418,31 @@ struct DeletionPresentation {
     let editingGroup: Bool
     let targets: [DeletionTarget]
     let resources: [Resource]
+
+    var confirmationTitle: LocalizedStringResource {
+        switch request {
+        case .repository: .uiDeleteRepository
+        case .group: .uiDeleteWorktreeGroup
+        default: memberCount > 1 ? .dialogDeleteMemberWorktrees(memberCount) : .uiDeleteMemberWorktree
+        }
+    }
+
+    var progressTitle: LocalizedStringResource {
+        if editingGroup { return .uiEditingWorktreeGroup }
+        return switch request {
+        case .repository: .dialogDeletingRepository
+        case .group: .dialogDeletingWorktreeGroup
+        default: memberCount > 1 ? .dialogDeletingMemberWorktrees : .dialogDeletingMemberWorktree
+        }
+    }
+
+    private var memberCount: Int {
+        switch request {
+        case .member: 1
+        case .members(_, let repositoryIDs): repositoryIDs.count
+        default: resources.filter { $0.kind == .member }.count
+        }
+    }
 }
 extension Result where Failure == Error {
     init(catching body: () async throws -> Success) async { do { self = .success(try await body()) } catch { self = .failure(error) } }

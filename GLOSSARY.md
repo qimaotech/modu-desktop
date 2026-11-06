@@ -72,7 +72,7 @@ Sources: [Git models](MonoDeckCore/Models/GitModels.swift), [Git inspection](Mon
 
 ## UI elements
 
-These are names for discussing existing UI elements, including elements without a visible title. Literal English labels retain their current spelling and casing. Chinese names describe the element; where it has a localized label, they follow that label.
+These are names for discussing existing UI elements, including elements without a visible title. Literal English labels retain their current spelling and casing. Dialog titles use sentence case. Operation result titles describe outcomes; progress titles identify the action and target. Chinese names describe the element; where it has a localized label, they follow that label.
 
 Sources: [workspace UI](MonoDeck/Features/Workspace/), [Git Browser UI](MonoDeck/Features/GitBrowser/), [management UI](MonoDeck/Features/Management/), and [localized copy](MonoDeck/Resources/Localizable.xcstrings).
 
@@ -86,7 +86,7 @@ Sources: [workspace UI](MonoDeck/Features/Workspace/), [Git Browser UI](MonoDeck
 | Git summary | Git 摘要 | The card showing the resource path, base branch, current branch, and branch-comparison availability or behind count. | `GitBrowserView.summary`; `GitSummary` |
 | Local changes tree | 本地更改树 | The file tree under `local changes`, with staged and unstaged status indicators. Directory rows group changed paths. | `ChangeNode`; `GitBrowserView.localChangesSection` |
 | Unique commits list | 独有提交列表 | The list under `unique commits`, displaying subject, author, date, and abbreviated commit ID. | `GitBrowserView.uniqueCommitsSection` |
-| Behind commits popover | 落后提交弹出面板 | The list opened from the behind-count button beside the branch summary. | `BehindCommitsPopover` |
+| Behind commits popover | 落后提交弹出面板 | The list opened from the behind-count button beside the branch summary. | `BehindCommitsPopover`; `N commits behind {base}` |
 | External tool toolbar | 外部工具栏 | Tool buttons and their tool-selection menus. Categories are `Git GUI`, `Terminal`, `Editor`, and `Agent`; the target is the current directory. Opening the workspace explicitly targets its root. | `ToolBarView`; `ExternalTool`; `WorkspaceModel.currentURL` |
 | Management sheet | 管理表单 | The sheet for adding or importing repositories, creating or editing groups, or previewing deletion. **Sheet** describes the presentation; use the operation's name in user-facing copy. | `ManagementView`; `ManagementSheet` |
 | Operation progress / Result | 操作进度／操作结果 | Progress identifies the active phase and completed items; results describe per-resource outcomes, warnings, and effects. A result is not a promise that all resources changed together. | `OperationProgressView`; `ResultView`; `RepositoryUpdateResultsView` |
@@ -101,7 +101,7 @@ Sources: [workspace workflows](MonoDeckCore/Workflows/WorkspaceService.swift), [
 | English term | Chinese name | Meaning and boundary | Current code / UI / command |
 | --- | --- | --- | --- |
 | Add repository | 添加仓库 | Clone a remote repository into the workspace and register it. An optional display name does not change its ID. The operation also maintains the workspace ignore file and may automatically commit that file, including when the repository already exists. | `addRepository`; `Add Repository`; CLI `repo add` |
-| Import repositories | 导入仓库 | Select remote URLs extracted from YAML or discovered by scanning local repositories, then clone them into the workspace. Local scanning does not move the source directories or import their uncommitted changes. | `importRepositories`; `Import Repositories`; result command `repo.import` covers both import sources |
+| Import repositories | 导入仓库 | Select remote URLs extracted from YAML or discovered by scanning local repositories, then clone them into the workspace. Local scanning does not move the source directories or import their uncommitted changes. | `importRepositories`; `Import repositories`; result command `repo.import` covers both import sources |
 | Import / Export workspace configuration | 导入／导出工作区配置 | Recreate or share repository and group structure using YAML. Workspace import requires no registered resources and empty resource directories. Repository import in the Add Repository sheet is a separate operation. | `importWorkspaceYAML`, `exportYAML`; Settings `Import YAML…`, `Export YAML…` |
 | Create group | 创建分组 | Create the group root and selected members using the group name for their initial branches, reusing available local branches when present. The group name must not already exist; use member addition to extend an existing group. Creation uses locally known commits and does not fetch or update main repositories first. Resources are checked and created one at a time; later failures retain completed roots and members. | `createGroup(repositoryIDs:)`; `Create Worktree Group`; CLI `group create` |
 | Add group members | 添加分组成员 | Add missing member worktrees to an existing group, preserving all current members and the group root. Existing members are validated and kept. | `addGroupMembers`; CLI `group member add` |

@@ -33,41 +33,18 @@ struct InterfaceText {
         return overview + "\n\n" + diagnostic
     }
 
-    func resultTitle(_ result: OperationResult) -> String {
-        if result.command == "workspace.open", result.status != .success { return string(.uiCanTOpenWorkspace) }
-        if result.command == "repo.add", result.status == .failed {
-            if result.items.first?.data?["disposition"] == "added" { return string(.uiRepositoryAddedWithIssue) }
-            return string(.uiCanTAddRepository)
-        }
-        if result.status == .skipped, result.command == "repo.import" { return string(.uiNoRepositoriesWereAdded) }
-        let tasks: [String: LocalizedStringResource] = [
-            "repo.add": .uiRepositoryAddition, "repo.update": .uiRepositoryUpdate,
-            "repo.delete": .uiRepositoryDeletion, "repo.import": .uiRepositoryImport,
-            "workspace.configuration.import": .uiWorkspaceImport, "workspace.open": .uiWorkspaceOpening,
-            "workspace.inspect": .uiResourceCheck, "group.create": .uiGroupCreation,
-            "group.edit": .uiGroupEdit, "group.delete": .uiGroupDeletion, "group.member.delete": .uiMemberWorktreeDeletion, "group.member.add": .uiGroupMemberAddition,
-            "cli.install": .uiCliInstallation
-        ]
-        let task = tasks[result.command] ?? .uiOperation
-        let status: String
-        if result.status == .success, result.hasWarnings { status = "completed-with-warnings" }
-        else { status = result.status.rawValue }
-        return string(task) + " · " + statusText(status)
-    }
-
     func resultSummaryText(_ result: OperationResult) -> String? {
         let items = resultDisplayItems(result)
         guard items.count > 1 else { return nil }
         var counts: [String: Int] = [:]
         for item in items {
             let status: String
-            if result.command == "repo.update" { status = item.status == .success ? "updated" : "failed" }
-            else if item.reasonCode == "not-processed" { status = "not-processed" }
+            if item.reasonCode == "not-processed" { status = "not-processed" }
             else if item.status == .success, item.hasWarning { status = "warning" }
             else { status = item.status.rawValue }
             counts[status, default: 0] += 1
         }
-        return ["warning", "updated", "success", "skipped", "failed", "cancelled", "not-processed"].compactMap { status in
+        return ["warning", "success", "skipped", "failed", "cancelled", "not-processed"].compactMap { status in
             guard let count = counts[status], count > 0 else { return nil }
             let label: String
             if status == "warning" { label = string(.uiWarnings) }
