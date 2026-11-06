@@ -1,19 +1,20 @@
 ---
 name: check-mono-deck
-description: "Check and improve MonoDeck code, tests, documentation, and prompts, only when explicitly invoked as $check-mono-deck."
+description: "Check and improve MonoDeck tests, documentation, and prompts, only when explicitly invoked as $check-mono-deck."
 ---
 
 # Check MonoDeck
 
 ## Scope and changes
 
-- Determine this pass's scope at startup using `git status --short`, `git diff`, and `git diff --cached`, including untracked files. Review uncommitted changes when present; otherwise review the entire repository.
-- In change-scoped mode, read related callers and dependencies for context; modify other code, tests, documentation, or prompts only for fixes or synchronization required by the changes.
-- Make minimal fixes for confirmed issues while preserving intended behavior and public contracts. Report unresolved risks or product decisions instead of guessing. Preserve unrelated changes and the index; do not stage or commit.
+Determine this pass's scope before retrieving diffs:
 
-## Code
+1. Run `git status --short --untracked-files=all` to identify all uncommitted files. When changes exist, review tests, documentation, and prompts affected by them; otherwise review these areas across the repository.
+2. After determining scope, run `git diff HEAD` only if tracked changes need inspection; it includes both staged and unstaged changes.
+3. After determining scope, if untracked changes need inspection, run `git diff --no-index -- /dev/null <untracked-file>` separately for each `??` file reported in step 1, quoting the actual path as needed. Exit status 1 means differences were found, not that the command failed.
 
-- Inspect logical conflicts, defects, error and cancellation handling, asynchronous context validity, and dead code. Verify entry points, dynamic calls, and external uses before deleting code; missing search references alone do not prove it is unused.
+- Read related implementation, callers, and dependencies for context; limit edits to tests, documentation, and prompts. In change-scoped mode, modify related files only for fixes or synchronization required by the changes.
+- Make minimal fixes for confirmed issues while preserving intended behavior and public contracts. Report implementation defects, unresolved risks, or product decisions instead of guessing. Preserve unrelated changes and the index; do not stage or commit.
 
 ## Tests
 
