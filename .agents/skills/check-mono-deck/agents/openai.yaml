@@ -1,7 +1,0 @@
-interface:
-  display_name: "Check MonoDeck"
-  short_description: "Review tests and streamline documentation and prompts"
-  default_prompt: "Use $check-mono-deck to check and improve tests, documentation, and prompts affected by uncommitted changes when present, or across the repository otherwise."
-
-policy:
-  allow_implicit_invocation: false

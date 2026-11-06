@@ -152,7 +152,6 @@
 | --- | --- |
 | [内置工作流](MonoDeck/Resources/mono-deck-workflow/SKILL.md)、[调用配置](MonoDeck/Resources/mono-deck-workflow/agents/openai.yaml) | [CLI 命令](MonoDeckCLI/Commands/)与 [Core](MonoDeckCore/Workflows/) 操作结果 |
 | [发布流程](.agents/skills/release-mono-deck/SKILL.md)、[调用配置](.agents/skills/release-mono-deck/agents/openai.yaml) | `Version.xcconfig`、[发布说明脚本](script/release_notes.py)与 CI |
-| [手动自检](.agents/skills/check-mono-deck/SKILL.md)、[调用配置](.agents/skills/check-mono-deck/agents/openai.yaml) | 检查范围、测试取舍与交付约束 |
 
 - 内置工作流在 App 资源目录维护，工作区副本的覆盖与自定义规则见 [README](README.md#工作区文件与自动提交)，同步实现见 [WorkspaceService](MonoDeckCore/Workflows/WorkspaceService.swift)。
-- 内置工作流允许自动调用，发布和自检仅手动调用；修改 skill 时同步核对 description、`agents/openai.yaml` 的 default_prompt 与调用策略。
+- 内置工作流允许自动调用，发布仅手动调用；修改 skill 时同步核对 description、`agents/openai.yaml` 的 default_prompt 与调用策略。
