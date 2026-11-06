@@ -99,7 +99,7 @@ import Testing
         let fixture = try await Fixture(template: .emptyWorkspace); defer { fixture.remove() }
         var record = try fixture.service.store.load(fixture.root)
         let resource = Resource.group("missing")
-        record.groups["missing"] = WorktreeGroup()
+        record.groups["missing"] = WorktreeGroup(branchName: "missing")
         try fixture.service.store.save(record)
         let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }

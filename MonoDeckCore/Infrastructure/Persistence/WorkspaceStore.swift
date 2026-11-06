@@ -114,6 +114,7 @@ public struct WorkspaceStore: Sendable {
         var groups = Set<String>()
         for (name, group) in record.groups {
             try PathSafety.groupName(name)
+            try GitBranchName.validate(group.branchName)
             guard groups.insert(PathSafety.identity(record.groupURL(name))).inserted,
                   dateFormatter.date(from: group.createdAt) != nil || fractionalDateFormatter.date(from: group.createdAt) != nil,
                   group.repositoryIDs.count == Set(group.repositoryIDs).count,

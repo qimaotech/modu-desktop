@@ -24,17 +24,21 @@ extension WorkspaceService {
         record.repositories = repositories.map(\.repository)
         git.runner.diagnostics?.record("recovery.repositories.accepted", count: repositories.count)
         let createdAt = ISO8601DateFormatter().string(from: Date())
-        let groupCandidates = try await recoverResources(recoveryEntries("worktrees", at: root), phase: "groups") { entry -> String? in
+        let groupCandidates = try await recoverResources(recoveryEntries("worktrees", at: root), phase: "groups") { entry -> (String, WorktreeGroup)? in
             let name = entry.lastPathComponent
             do {
-                try await git.validateRef(name, at: root)
+                try PathSafety.groupName(name)
                 let path = try PathSafety.child("worktrees/\(name)", of: root, allowMissing: false)
                 try await checkWorktree(.group(name), at: path, repository: workspace)
-                return name
+                let registration = workspace.registrations.first { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(path) }
+                let branch = registration?.branch ?? name
+                try await git.validateRef(branch, at: root)
+                return (name, WorktreeGroup(branchName: branch, createdAt: createdAt))
             } catch { try checkCancellation(); return nil }
         }
-        let groups = groupCandidates.compactMap { $0 }
-        for name in groups { record.groups[name] = WorktreeGroup(createdAt: createdAt, repositoryIDs: []) }
+        let recoveredGroups = groupCandidates.compactMap { $0 }
+        let groups = recoveredGroups.map { $0.0 }
+        record.groups = Dictionary(uniqueKeysWithValues: recoveredGroups)
         git.runner.diagnostics?.record("recovery.groups.accepted", count: groups.count)
         let memberCandidates = groups.flatMap { name in
             repositories.map { RecoveryMember(groupName: name, repository: $0.repository.id, inspection: $0.inspection) }

@@ -235,7 +235,7 @@ public struct WorkspaceService: Sendable {
         return nil
     }
     private func validateAndClean(_ record: inout WorkspaceRecord) async throws -> Bool {
-        for name in record.groups.keys { try await git.validateRef(name, at: record.rootURL) }
+        for group in record.groups.values { try await git.validateRef(group.branchName, at: record.rootURL) }
         try checkCancellation()
         return try removeMissingResources(from: &record)
     }

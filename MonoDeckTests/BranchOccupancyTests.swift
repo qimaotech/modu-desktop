@@ -17,21 +17,21 @@ struct BranchOccupancyTests {
         }
         let rootHead = try #require(try await f.service.git.oid("HEAD", at: f.root))
         let repositoryHead = try #require(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")))
-        let result = await f.service.createGroup("Main", repositoryIDs: ["repo"], at: f.root)
+        let result = await f.service.createGroup("task", branchName: "Main", repositoryIDs: ["repo"], at: f.root)
 
         if caseSensitive {
             #expect(result.status == .success, "\(result.message ?? "") \(result.items)")
-            #expect(await f.service.deleteConfirmed(.group("Main"), at: f.root).status == .success)
+            #expect(await f.service.deleteConfirmed(.group("task"), at: f.root).status == .success)
         } else {
             #expect(result.status == (kind == "root" ? .failed : .partialSuccess), "\(result.message ?? "") \(result.items)")
-            let resource: Resource = kind == "root" ? .group("Main") : .member(groupName: "Main", repositoryID: "repo")
+            let resource: Resource = kind == "root" ? .group("task") : .member(groupName: "task", repositoryID: "repo")
             let item = try #require(result.items.first { $0.resource == resource })
             #expect(item.status == .failed && item.reasonCode == "branch-in-use" && item.effects.isEmpty)
-            #expect(PathSafety.exists(record.groupURL("Main")) == (kind == "member"))
-            #expect(!PathSafety.exists(record.memberURL("Main", "repo")))
+            #expect(PathSafety.exists(record.groupURL("task")) == (kind == "member"))
+            #expect(!PathSafety.exists(record.memberURL("task", "repo")))
         }
         let saved = try f.service.store.load(f.root)
-        if !caseSensitive && kind == "member" { #expect(saved.groups["Main"]?.repositoryIDs == []) }
+        if !caseSensitive && kind == "member" { #expect(saved.groups["task"]?.repositoryIDs == []) }
         else { #expect(saved == record) }
         #expect(try await f.service.git.oid("HEAD", at: f.root) == rootHead)
         #expect(try await f.service.git.oid("HEAD", at: record.repositoryURL("repo")) == repositoryHead)

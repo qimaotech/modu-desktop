@@ -250,7 +250,7 @@ import Testing
         version: 2
         repositories:
           - url: \(fixture.remoteURL)
-        \(other.map { "  - url: \($0)\n" } ?? "")groups: \(group || other != nil ? "\n  feature:\n    created-at: \"2026-10-10T00:00:00Z\"\n    repository-ids: [repo]" : "{}")
+        \(other.map { "  - url: \($0)\n" } ?? "")groups: \(group || other != nil ? "\n  feature:\n    branch-name: feature\n    created-at: \"2026-10-10T00:00:00Z\"\n    repository-ids: [repo]" : "{}")
         """
     }
 }

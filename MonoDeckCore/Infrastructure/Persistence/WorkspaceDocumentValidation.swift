@@ -32,7 +32,7 @@ public enum WorkspaceDocumentValidation {
                 try keys(groups, allowed: nil, code: code, invalidField: invalidField)
                 for group in groups {
                     guard let map = group.value.mapping else { throw MonoDeckError(code, .groupMustBeMapping) }
-                    try keys(map, allowed: ["created-at", "repository-ids"], code: code, invalidField: invalidField)
+                    try keys(map, allowed: ["branch-name", "created-at", "repository-ids"], code: code, invalidField: invalidField)
                 }
             }
         }

@@ -18,16 +18,42 @@ struct CoreModelTests {
     }
 
     @Test func workspaceStructureUsesCanonicalFieldNames() throws {
-        let json = #"{"version":2,"root":"/tmp/workspace","repositories":[{"url":"https://example.test/service.git","display-name":"Service"}],"groups":{"feature":{"created-at":"2026-11-05T00:00:00Z","repository-ids":["service"]}}}"#
+        let json = #"{"version":2,"root":"/tmp/workspace","repositories":[{"url":"https://example.test/service.git","display-name":"Service"}],"groups":{"feature":{"branch-name":"feature/login","created-at":"2026-11-05T00:00:00Z","repository-ids":["service"]}}}"#
         let record = try JSONDecoder().decode(WorkspaceRecord.self, from: Data(json.utf8))
         let repository = try #require(record.repositories.first)
         #expect(repository.id == "service" && repository.displayNameOverride == "Service" && repository.displayName == "Service")
         #expect(Repository(url: repository.url).displayName == "service")
         #expect(record.groups["feature"]?.repositoryIDs == ["service"])
+        #expect(record.groups["feature"]?.branchName == "feature/login")
 
         let encoded = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? NSDictionary)
         let expected = try #require(JSONSerialization.jsonObject(with: Data(json.utf8)) as? NSDictionary)
         #expect(encoded == expected)
+    }
+
+    @Test func missingOrInvalidBranchConfigurationIsRejectedWithoutChangingTheRecord() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        try await f.prepareEmptyGroup("task")
+        let url = f.service.store.recordURL(f.root)
+        let valid = try Data(contentsOf: url)
+        let record = try f.service.store.load(f.root)
+        var object = try #require(JSONSerialization.jsonObject(with: valid) as? [String: Any])
+        for branch in [nil, "", "/task", "task/", "feature//task", "feature/.task", "feature/task.lock", "feature/../task", "@{-1}", "-task", "feature/task "] as [String?] {
+            var group = try #require((object["groups"] as? [String: [String: Any]])?["task"])
+            group["branch-name"] = branch
+            object["groups"] = ["task": group]
+            let invalid = try JSONSerialization.data(withJSONObject: object)
+            try invalid.write(to: url)
+            #expect(throws: MonoDeckError.self) { try f.service.store.load(f.root) }
+            #expect(try Data(contentsOf: url) == invalid)
+            try valid.write(to: url)
+            if let branch {
+                var changed = record
+                changed.groups["task"]?.branchName = branch
+                #expect(throws: MonoDeckError.self) { try f.service.store.save(changed) }
+                #expect(try Data(contentsOf: url) == valid)
+            }
+        }
     }
 
     @Test func workspaceValidationPreservesDateFormatsAndRepositoryIDCaseRules() throws {
@@ -35,8 +61,8 @@ struct CoreModelTests {
         var record = WorkspaceRecord(root: PathSafety.canonical(URL(fileURLWithPath: "/tmp/workspace")).path)
         record.repositories = [Repository(url: "https://example.test/Service.git")]
         record.groups = [
-            "whole-seconds": .init(createdAt: "2026-11-05T00:00:00Z", repositoryIDs: ["Service"]),
-            "fractional-seconds": .init(createdAt: "2026-11-05T00:00:00.123Z", repositoryIDs: ["Service"])
+            "whole-seconds": .init(branchName: "whole-seconds", createdAt: "2026-11-05T00:00:00Z", repositoryIDs: ["Service"]),
+            "fractional-seconds": .init(branchName: "fractional-seconds", createdAt: "2026-11-05T00:00:00.123Z", repositoryIDs: ["Service"])
         ]
         try store.validate(record)
 

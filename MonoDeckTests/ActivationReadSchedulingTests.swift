@@ -227,7 +227,7 @@ import Testing
     @Test func failedActivationChecksHaveACooldown() async throws {
         let f = try await Fixture(template: .emptyWorkspace); defer { f.remove() }
         var record = try f.service.store.load(f.root)
-        record.groups["missing"] = WorktreeGroup()
+        record.groups["missing"] = WorktreeGroup(branchName: "missing")
         try f.service.store.save(record)
         let defaults = try #require(UserDefaults(suiteName: f.directory.lastPathComponent))
         defer { defaults.removePersistentDomain(forName: f.directory.lastPathComponent) }

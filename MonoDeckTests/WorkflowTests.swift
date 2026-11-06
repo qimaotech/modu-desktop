@@ -78,18 +78,18 @@ struct WorkflowTests {
     }
     @Test func actualBranchDeletionAndConfirmationChange() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareGroup("feature", repositoryIDs: ["repo"])
+        try await f.prepareGroup("feature", branchName: "feature/task", repositoryIDs: ["repo"])
         let member = f.root.appending(path: "worktrees/feature/repo")
         let old = try await f.service.previewDelete(.member(groupName: "feature", repositoryID: "repo"), at: f.root)
-        _ = try await f.service.git.run(["switch", "-c", "external-branch"], at: member)
+        _ = try await f.service.git.run(["switch", "-c", "external/task"], at: member)
         let changed = await f.service.delete(.member(groupName: "feature", repositoryID: "repo"), at: f.root, authorization: old)
         #expect(changed.reasonCode == "confirmation-changed")
         #expect(PathSafety.exists(member))
         let deleted = await f.service.deleteConfirmed(.member(groupName: "feature", repositoryID: "repo"), at: f.root)
         #expect(deleted.status == .success)
         let main = f.root.appending(path: "repositories/repo")
-        #expect(try await f.service.git.oid("refs/heads/feature", at: main) != nil)
-        #expect(try await f.service.git.oid("refs/heads/external-branch", at: main) == nil)
+        #expect(try await f.service.git.oid("refs/heads/feature/task", at: main) != nil)
+        #expect(try await f.service.git.oid("refs/heads/external/task", at: main) == nil)
 
         let record = try f.service.store.load(f.root)
         let changedEdit = await f.service.editGroup("feature", repositoryIDs: ["repo"], at: f.root, authorization: old)
@@ -157,9 +157,10 @@ struct WorkflowTests {
     }
     @Test func yamlRoundTripAndEmptyImportBoundary() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }
-        try await f.prepareEmptyGroup("feature")
+        #expect(await f.service.createGroup("feature", branchName: "feature/task", repositoryIDs: ["repo"], at: f.root).status == .success)
+        try await f.prepareEmptyGroup("empty", branchName: "feature/empty")
         let yaml = try await f.service.exportYAML(at: f.root)
-        #expect(!yaml.contains("root:")); #expect(!yaml.contains("branch:"))
+        #expect(!yaml.contains("root:")); #expect(yaml.contains("branch-name: feature/task"))
         let rejected = await f.service.importWorkspaceYAML(yaml, at: f.root)
         #expect(rejected.reasonCode == "workspace-not-empty")
         let second = f.directory.appending(path: "second")
@@ -169,9 +170,25 @@ struct WorkflowTests {
         let oldVersion = await f.service.importWorkspaceYAML("version: 1\nrepositories: []\ngroups: {}", at: second)
         #expect(oldVersion.reasonCode == "invalid-workspace-configuration" && oldVersion.items.isEmpty)
         #expect(try Data(contentsOf: f.service.store.recordURL(second)) == before)
+        for replacement in ["", "branch-name: ''", "branch-name: feature//task"] {
+            let invalid = yaml.replacingOccurrences(of: "branch-name: feature/task", with: replacement)
+            let rejected = await f.service.importWorkspaceYAML(invalid, at: second)
+            #expect(rejected.status == .failed && rejected.items.isEmpty)
+            #expect(try Data(contentsOf: f.service.store.recordURL(second)) == before)
+            #expect(!PathSafety.exists(second.appending(path: "repositories/repo")))
+        }
         let imported = await f.service.importWorkspaceYAML(yaml, at: second)
         #expect(imported.status == .success, "\(imported.message ?? "") \(imported.items)")
-        #expect(try await f.service.load(second).groups["feature"]?.repositoryIDs == [])
+        let restored = try await f.service.load(second)
+        #expect(restored.groups["feature"]?.repositoryIDs == ["repo"])
+        #expect(restored.groups["feature"]?.branchName == "feature/task")
+        #expect(restored.groups["empty"]?.repositoryIDs == [])
+        #expect(restored.groups["empty"]?.branchName == "feature/empty")
+        for (path, branch) in [(restored.groupURL("feature"), "feature/task"),
+                               (restored.memberURL("feature", "repo"), "feature/task"),
+                               (restored.groupURL("empty"), "feature/empty")] {
+            #expect(try await f.service.git.run(["symbolic-ref", "HEAD"], at: path).text == "refs/heads/\(branch)")
+        }
     }
     @Test func yamlAppendDeduplicatesAndDoesNotChangeName() async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }

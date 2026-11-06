@@ -62,9 +62,9 @@ import Testing
             Repository(url: "https://example.invalid/tie-a.git", displayNameOverride: "Shared")
         ]
         record.groups = [
-            "task10": WorktreeGroup(repositoryIDs: ["tie-b"]),
-            "task2": WorktreeGroup(repositoryIDs: ["tie-a", "repo10", "repo2"]),
-            "empty": WorktreeGroup(repositoryIDs: [])
+            "task10": WorktreeGroup(branchName: "task10", repositoryIDs: ["tie-b"]),
+            "task2": WorktreeGroup(branchName: "task2", repositoryIDs: ["tie-a", "repo10", "repo2"]),
+            "empty": WorktreeGroup(branchName: "empty", repositoryIDs: [])
         ]
         return record
     }

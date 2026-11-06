@@ -10,11 +10,12 @@ public struct Repository: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct WorktreeGroup: Codable, Equatable, Sendable {
+    public var branchName: String
     public var createdAt: String
     public var repositoryIDs: [String]
-    enum CodingKeys: String, CodingKey { case createdAt = "created-at", repositoryIDs = "repository-ids" }
-    public init(createdAt: String = ISO8601DateFormatter().string(from: Date()), repositoryIDs: [String] = []) {
-        self.createdAt = createdAt; self.repositoryIDs = repositoryIDs
+    enum CodingKeys: String, CodingKey { case branchName = "branch-name", createdAt = "created-at", repositoryIDs = "repository-ids" }
+    public init(branchName: String, createdAt: String = ISO8601DateFormatter().string(from: Date()), repositoryIDs: [String] = []) {
+        self.branchName = branchName; self.createdAt = createdAt; self.repositoryIDs = repositoryIDs
     }
 }
 

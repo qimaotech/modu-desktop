@@ -53,6 +53,8 @@ struct WorkspaceRecoveryTests {
         try await f.prepareGroup("feature", repositoryIDs: ["repo"])
         let record = try f.service.store.load(f.root)
         let main = record.repositoryURL("repo")
+        _ = try await f.service.git.run(["switch", "-c", "external/root"], at: record.groupURL("feature"))
+        _ = try await f.service.git.run(["switch", "-c", "external/member"], at: record.memberURL("feature", "repo"))
         _ = try await f.service.git.run(["config", "extensions.worktreeConfig", "true"], at: main)
         _ = try await f.service.git.run(["config", "--worktree", "remote.origin.url", "https://mono-deck-test.invalid/other.git"], at: record.memberURL("feature", "repo"))
         let file = f.service.store.recordURL(f.root)
@@ -70,6 +72,7 @@ struct WorkspaceRecoveryTests {
         let opened = await service.openWorkspaceWithRecord(f.root, recoverUnregisteredResources: true)
         #expect(opened.result.status == .success && opened.record?.repositories.map(\.id) == ["repo"])
         #expect(opened.record?.groups["feature"]?.repositoryIDs == [])
+        #expect(opened.record?.groups["feature"]?.branchName == "external/root")
     }
 
     @Test func recoveryPreservesGitStateAndRunsWorkspaceMaintenance() async throws {
@@ -90,7 +93,7 @@ struct WorkspaceRecoveryTests {
         previous.groups["feature"]?.createdAt = "2001-01-01T00:00:00Z"
         try f.service.store.save(previous)
         let main = previous.repositoryURL("repo")
-        _ = try await f.service.git.run(["checkout", "-b", "external-branch"], at: previous.groupURL("feature"))
+        _ = try await f.service.git.run(["checkout", "-b", "external/task"], at: previous.groupURL("feature"))
         _ = try await f.service.git.run(["checkout", "--detach"], at: previous.memberURL("feature", "repo"))
         _ = try await f.service.git.run(["checkout", "--detach"], at: previous.groupURL("review"))
         _ = try await f.service.git.run(["worktree", "lock", previous.memberURL("feature", "repo").path], at: main)
@@ -131,6 +134,8 @@ struct WorkspaceRecoveryTests {
             #expect(Set(group.repositoryIDs) == Set(previous.groups[name]!.repositoryIDs))
             #expect(try #require(ISO8601DateFormatter().date(from: group.createdAt)) >= started)
         }
+        #expect(restored.groups["feature"]?.branchName == "external/task")
+        #expect(restored.groups["review"]?.branchName == "review")
         #expect(try f.service.store.load(f.root) == restored)
         for (path, file) in files { #expect(try await gitState(at: path, file: file, git: f.service.git) == before[path]) }
         #expect(try await f.service.git.run(["for-each-ref", "--format=%(refname) %(objectname)"], at: main).stdout == refs)

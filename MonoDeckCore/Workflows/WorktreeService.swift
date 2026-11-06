@@ -12,9 +12,9 @@ struct WorktreeCreation {
 }
 
 extension WorkspaceService {
-    public func createGroup(_ groupName: String, repositoryIDs: [String], at root: URL, expectedRepositories: [Repository]? = nil, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
-        if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, expectedRepositories: expectedRepositories) }
-        return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, authorization: nil, expectedRepositories: expectedRepositories, progress: progress)
+    public func createGroup(_ groupName: String, branchName: String? = nil, repositoryIDs: [String], at root: URL, expectedRepositories: [Repository]? = nil, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
+        if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, branchName: branchName, expectedRepositories: expectedRepositories) }
+        return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, authorization: nil, branchName: branchName, expectedRepositories: expectedRepositories, progress: progress)
     }
     public func addGroupMembers(_ groupName: String, repositoryIDs: [String], at root: URL, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
         if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .addMembers) }
@@ -24,7 +24,7 @@ extension WorkspaceService {
         if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .edit) }
         return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .edit, authorization: authorization, progress: progress)
     }
-    private func changeGroup(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, authorization: [DeletionTarget]?, expectedRepositories: [Repository]? = nil, progress: ProgressHandler) async -> OperationResult {
+    private func changeGroup(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, authorization: [DeletionTarget]?, branchName: String? = nil, expectedRepositories: [Repository]? = nil, progress: ProgressHandler) async -> OperationResult {
         let command = change.command
         let replace = change == .edit
         var result = OperationResult(command: command, workspace: root.path)
@@ -37,7 +37,7 @@ extension WorkspaceService {
             let lease = try await store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
             if let expectedRepositories { try validateRepositorySelection(expectedRepositories, repositoryIDs: repositoryIDs, record: record) }
-            try await validateMembers(groupName, repositoryIDs: repositoryIDs, record: record)
+            try await validateMembers(groupName, branchName: branchName, repositoryIDs: repositoryIDs, record: record)
             try validateGroupChange(change, groupName: groupName, record: record)
             if !replace && repositoryIDs.isEmpty { throw MonoDeckError("invalid-input", .chooseAtLeastOneRepository) }
             let existing = record.groups[groupName]?.repositoryIDs ?? []
@@ -49,6 +49,7 @@ extension WorkspaceService {
             if !replace {
                 for repo in repositoryIDs where existing.contains(repo) { _ = try await checked(.member(groupName: groupName, repositoryID: repo), in: record) }
             }
+            let branch = branchName ?? record.groups[groupName]?.branchName ?? groupName
             let createsRoot = record.groups[groupName] == nil
             let creations = (createsRoot ? [Resource.group(groupName)] : []) + additions.map { Resource.member(groupName: groupName, repositoryID: $0) }
             var rootChecked = createsRoot
@@ -62,8 +63,8 @@ extension WorkspaceService {
                         rootChecked = true
                     }
                     let plan: WorktreeCreation
-                    if resource.kind == .group { plan = try await rootCreationPlan(groupName, members: additions, record: record) }
-                    else { plan = try await memberCreationPlan(groupName, member: resource.repositoryID!, record: record) }
+                    if resource.kind == .group { plan = try await rootCreationPlan(groupName, branchName: branch, members: additions, record: record) }
+                    else { plan = try await memberCreationPlan(groupName, branchName: branch, member: resource.repositoryID!, record: record) }
                     item = await create(plan, record: &record, progress: progress, completed: completedMembers, total: additions.count)
                 } catch {
                     item = ItemResult(resource)
@@ -95,7 +96,7 @@ extension WorkspaceService {
         return result
     }
 
-    private func previewGroupChange(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, expectedRepositories: [Repository]? = nil) async -> OperationResult {
+    private func previewGroupChange(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, branchName: String? = nil, expectedRepositories: [Repository]? = nil) async -> OperationResult {
         var result = OperationResult(command: change.command, workspace: root.path)
         result.dryRun = true
         do {
@@ -103,11 +104,11 @@ extension WorkspaceService {
             if let expectedRepositories { try validateRepositorySelection(expectedRepositories, repositoryIDs: repositoryIDs, record: record) }
             let reader = inspectionService()
             try validateGroupChange(change, groupName: groupName, record: record)
-            try await reader.validateMembers(groupName, repositoryIDs: repositoryIDs, record: record)
+            try await reader.validateMembers(groupName, branchName: branchName, repositoryIDs: repositoryIDs, record: record)
             guard change == .edit || !repositoryIDs.isEmpty else { throw MonoDeckError("invalid-input", .chooseAtLeastOneRepository) }
             let existing = record.groups[groupName]?.repositoryIDs ?? []
             for repositoryID in repositoryIDs where existing.contains(repositoryID) { _ = try await reader.checked(.member(groupName: groupName, repositoryID: repositoryID), in: record) }
-            let creations = try await reader.creationPlans(groupName, members: repositoryIDs.filter { !existing.contains($0) }, record: record)
+            let creations = try await reader.creationPlans(groupName, branchName: branchName, members: repositoryIDs.filter { !existing.contains($0) }, record: record)
             let removals = change == .edit ? existing.filter { !repositoryIDs.contains($0) }.map { Resource.member(groupName: groupName, repositoryID: $0) } : []
             let targets = try await reader.deletionTargets(removals, record: record)
             var plan = deletionPlan(targets)
@@ -136,27 +137,29 @@ extension WorkspaceService {
             guard record.groups[groupName] != nil else { throw MonoDeckError("target-not-configured", .groupIsNotConfigured) }
         }
     }
-    func validateMembers(_ groupName: String, repositoryIDs: [String], record: WorkspaceRecord) async throws {
-        try await git.validateRef(groupName, at: record.rootURL)
+    func validateMembers(_ groupName: String, branchName: String? = nil, repositoryIDs: [String], record: WorkspaceRecord) async throws {
+        try PathSafety.groupName(groupName)
+        try await git.validateRef(branchName ?? record.groups[groupName]?.branchName ?? groupName, at: record.rootURL)
         guard Set(repositoryIDs).count == repositoryIDs.count, repositoryIDs.allSatisfy({ repositoryID in record.repositories.contains { $0.id == repositoryID } }) else { throw MonoDeckError("invalid-input", .groupMembersMustReferenceDistinctConfiguredRepositories) }
         guard !record.groups.keys.contains(where: { $0 != groupName && PathSafety.identity(record.groupURL($0)) == PathSafety.identity(record.groupURL(groupName)) }) else { throw MonoDeckError("group-conflict", .groupNameConflictsWithExistingGroup) }
     }
-    func creationPlans(_ groupName: String, members: [String], record: WorkspaceRecord) async throws -> [WorktreeCreation] {
+    func creationPlans(_ groupName: String, branchName: String? = nil, members: [String], record: WorkspaceRecord) async throws -> [WorktreeCreation] {
+        let branch = branchName ?? record.groups[groupName]?.branchName ?? groupName
         var plans: [WorktreeCreation] = []
         if record.groups[groupName] == nil {
-            plans.append(try await rootCreationPlan(groupName, members: members, record: record))
+            plans.append(try await rootCreationPlan(groupName, branchName: branch, members: members, record: record))
         } else if !members.isEmpty {
             try await validateGroupRootForMembers(groupName, members: members, record: record)
         }
         for member in members {
-            plans.append(try await memberCreationPlan(groupName, member: member, record: record))
+            plans.append(try await memberCreationPlan(groupName, branchName: branch, member: member, record: record))
         }
         return plans
     }
-    private func rootCreationPlan(_ groupName: String, members: [String], record: WorkspaceRecord) async throws -> WorktreeCreation {
+    private func rootCreationPlan(_ groupName: String, branchName: String, members: [String], record: WorkspaceRecord) async throws -> WorktreeCreation {
         let repository = try await inspectMainRepository(record.rootURL)
         guard let head = try await git.oid("HEAD", at: record.rootURL) else { throw MonoDeckError("workspace-commit-required", .commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas) }
-        let plan = try await creationPlan(.group(groupName), repository: repository, defaultOID: head, record: record)
+        let plan = try await creationPlan(.group(groupName), branchName: branchName, repository: repository, defaultOID: head, record: record)
         try await git.checkRootCommit(plan.oid, members: members, at: record.rootURL)
         return plan
     }
@@ -165,33 +168,33 @@ extension WorkspaceService {
         guard let oid = try await git.oid("HEAD", at: root) else { throw MonoDeckError("resource-unavailable", .groupRootHEADIsUnavailable) }
         try await git.checkRootCommit(oid, members: members, at: record.rootURL)
     }
-    private func memberCreationPlan(_ groupName: String, member: String, record: WorkspaceRecord) async throws -> WorktreeCreation {
+    private func memberCreationPlan(_ groupName: String, branchName: String, member: String, record: WorkspaceRecord) async throws -> WorktreeCreation {
         let resource = Resource.repository(member)
         let repository = try await checkedRepository(for: resource, in: record)
         let path = try PathSafety.child(resource.path, of: record.rootURL, allowMissing: false)
         try await checkWorktree(resource, at: path, repository: repository, validateHEAD: false)
-        let plan = try await creationPlan(.member(groupName: groupName, repositoryID: member), repository: repository, defaultOID: nil, record: record)
+        let plan = try await creationPlan(.member(groupName: groupName, repositoryID: member), branchName: branchName, repository: repository, defaultOID: nil, record: record)
         let tree = try await git.run(["ls-tree", "-r", "-z", plan.oid], at: repository.path)
         guard !tree.stdout.split(separator: 0).contains(where: { $0.starts(with: Data("160000 ".utf8)) }) else { throw MonoDeckError("submodule-unsupported", .linkedWorktreesForRepositoriesContainingSubmodulesAreNot(member)) }
         return plan
     }
-    func creationPlan(_ resource: Resource, repository: RepositoryInspection, defaultOID: String?, record: WorkspaceRecord) async throws -> WorktreeCreation {
+    func creationPlan(_ resource: Resource, branchName: String, repository: RepositoryInspection, defaultOID: String?, record: WorkspaceRecord) async throws -> WorktreeCreation {
         let groupName = resource.groupName!
         let destination = try PathSafety.child(resource.path, of: record.rootURL)
         guard !PathSafety.exists(destination) else { throw MonoDeckError("path-conflict", .worktreePathAlreadyExists(destination.path)) }
         guard !repository.registrations.contains(where: { PathSafety.identity(URL(fileURLWithPath: $0.path)) == PathSafety.identity(destination) }) else { throw MonoDeckError("path-conflict", .worktreePathIsAlreadyRegistered) }
-        try await git.checkBranchNotInUse(groupName, registrations: repository.registrations, at: repository.path, commonDirectory: repository.commonDirectory)
-        let references = defaultOID == nil ? try await git.creationReferences(groupName, at: repository.path, commonDirectory: repository.commonDirectory) : nil
+        try await git.checkBranchNotInUse(branchName, registrations: repository.registrations, at: repository.path, commonDirectory: repository.commonDirectory)
+        let references = defaultOID == nil ? try await git.creationReferences(branchName, at: repository.path, commonDirectory: repository.commonDirectory) : nil
         let local: String?
-        if let references { local = references["refs/heads/\(groupName)"] }
-        else { local = try await git.oid("refs/heads/\(groupName)", at: repository.path) }
+        if let references { local = references["refs/heads/\(branchName)"] }
+        else { local = try await git.oid("refs/heads/\(branchName)", at: repository.path) }
         var upstream: String?
         var start = local ?? defaultOID
         if start == nil {
             let remote: String?
-            if let references { remote = references["refs/remotes/origin/\(groupName)"] }
-            else { remote = try await git.oid("refs/remotes/origin/\(groupName)", at: repository.path) }
-            if let remote { start = remote; upstream = "origin/\(groupName)" }
+            if let references { remote = references["refs/remotes/origin/\(branchName)"] }
+            else { remote = try await git.oid("refs/remotes/origin/\(branchName)", at: repository.path) }
+            if let remote { start = remote; upstream = "origin/\(branchName)" }
             else if let references { start = references["refs/remotes/origin/HEAD"] }
             else {
                 let base = try await git.run(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], at: repository.path, allowFailure: true)
@@ -200,9 +203,9 @@ extension WorkspaceService {
         }
         guard let start else { throw MonoDeckError("base-unavailable", .noLocalStartingCommitUpdateMainRepositoryFirst(resource.repositoryID ?? groupName)) }
         let warning: (message: String, userMessage: UserMessage?, data: [String: String])?
-        if let local { warning = try await branchReuseWarning(groupName, oid: local, defaultOID: defaultOID, at: repository.path) }
+        if let local { warning = try await branchReuseWarning(branchName, oid: local, defaultOID: defaultOID, at: repository.path) }
         else { warning = nil }
-        return .init(resource: resource, repository: repository.path, destination: destination, oid: start, branch: groupName, reused: local != nil, upstream: upstream, reuseWarning: warning)
+        return .init(resource: resource, repository: repository.path, destination: destination, oid: start, branch: branchName, reused: local != nil, upstream: upstream, reuseWarning: warning)
     }
     func create(_ plan: WorktreeCreation, record: inout WorkspaceRecord, createdAt: String? = nil, progress: ProgressHandler, completed: Int = 0, total: Int = 0) async -> ItemResult {
         var item = ItemResult(plan.resource)
@@ -229,7 +232,7 @@ extension WorkspaceService {
             var candidate = record
             let group = plan.resource.groupName!
             if let repo = plan.resource.repositoryID { candidate.groups[group]!.repositoryIDs.append(repo) }
-            else { candidate.groups[group] = WorktreeGroup(createdAt: createdAt ?? ISO8601DateFormatter().string(from: Date())) }
+            else { candidate.groups[group] = WorktreeGroup(branchName: plan.branch, createdAt: createdAt ?? ISO8601DateFormatter().string(from: Date())) }
             try persist(candidate, into: &record)
             item.effects = [.init("create-worktree", plan.destination.path), .init("save-workspace-record", plan.resource.path)]
             if !plan.reused { item.effects.append(.init("create-branch", plan.branch)) }

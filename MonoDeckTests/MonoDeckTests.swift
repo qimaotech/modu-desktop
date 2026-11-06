@@ -344,22 +344,22 @@ struct Fixture: Sendable {
         return InstallationService(support: service.store.support, executable: executable, runner: .init(environment: environment), home: directory, shell: shell.path)
     }
 
-    func prepareGroup(_ name: String, repositoryIDs: [String]) async throws {
+    func prepareGroup(_ name: String, branchName: String? = nil, repositoryIDs: [String]) async throws {
         // Deletion tests need real worktrees without repeating the group creation workflow.
-        try await prepareEmptyGroup(name)
+        try await prepareEmptyGroup(name, branchName: branchName)
         var record = try service.store.load(root)
         for repository in repositoryIDs {
-            _ = try await service.git.run(["worktree", "add", "--no-track", "-b", name,
+            _ = try await service.git.run(["worktree", "add", "--no-track", "-b", record.groups[name]!.branchName,
                                            record.memberURL(name, repository).path, "origin/main"], at: record.repositoryURL(repository))
         }
         record.groups[name]?.repositoryIDs = repositoryIDs
         try service.store.save(record)
     }
-    func prepareEmptyGroup(_ name: String) async throws {
+    func prepareEmptyGroup(_ name: String, branchName: String? = nil) async throws {
         var record = try service.store.load(root)
         // Empty groups are valid after member removal; prepare that state without creating and deleting a member.
-        _ = try await service.git.run(["worktree", "add", "-b", name, record.groupURL(name).path], at: root)
-        record.groups[name] = WorktreeGroup()
+        _ = try await service.git.run(["worktree", "add", "-b", branchName ?? name, record.groupURL(name).path], at: root)
+        record.groups[name] = WorktreeGroup(branchName: branchName ?? name)
         try service.store.save(record)
     }
     func commitWorkspace() async throws {

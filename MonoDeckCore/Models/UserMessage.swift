@@ -337,7 +337,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .branchIsAlreadyCheckedOut(let arg1): return "Branch is already checked out: \(arg1)"
         case .notRepositoryRoot2(let arg1): return "Not a repository root: \(arg1)"
         case .repositoryOriginDoesNotMatchWorkspaceRecord(let arg1): return "Repository origin does not match the workspace record: \(arg1)"
-        case .invalidGroupBranchName(let arg1): return "Invalid group branch name: \(arg1)"
+        case .invalidGroupBranchName(let arg1): return "Invalid initial branch name: \(arg1)"
         case .invalidGitStatusRecord: return "Invalid Git status record."
         case .missingRenameSourcePath: return "Missing rename source path."
         case .headDoesNotIdentifyCommit: return "HEAD does not identify a commit."

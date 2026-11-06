@@ -2084,13 +2084,13 @@
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Invalid group branch name: %1$@"
+            "value": "Invalid initial branch name: %1$@"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "分组分支名称无效：%1$@"
+            "value": "初始分支名无效：%1$@"
           }
         }
       }
@@ -5099,6 +5099,23 @@
         }
       }
     },
+    "ui.branchName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch Name"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分支名称"
+          }
+        }
+      }
+    },
     "ui.bundledUpdateInstallerIsMissingReinstallMonoDeckAnd": {
       "extractionState": "manual",
       "localizations": {
@@ -5575,19 +5592,19 @@
         }
       }
     },
-    "ui.clearSearch": {
+    "ui.clearFilter": {
       "extractionState": "manual",
       "localizations": {
         "en-US": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clear Search"
+            "value": "Clear filter"
           }
         },
         "zh-Hans-CN": {
           "stringUnit": {
             "state": "translated",
-            "value": "清除搜索"
+            "value": "清除筛选"
           }
         }
       }
@@ -6539,6 +6556,23 @@
         }
       }
     },
+    "ui.filterRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter repositories"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选仓库"
+          }
+        }
+      }
+    },
     "ui.finishingCurrentItemBeforeCancellation": {
       "extractionState": "manual",
       "localizations": {
@@ -7185,23 +7219,6 @@
         }
       }
     },
-    "ui.matches": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld matches"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匹配 %1$lld 个"
-          }
-        }
-      }
-    },
     "ui.modified": {
       "extractionState": "manual",
       "localizations": {
@@ -7453,23 +7470,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已选择 %1$lld / %2$lld 个"
-          }
-        }
-      }
-    },
-    "ui.ofSelected2": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld of %2$lld selected"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已选择 %1$lld / %2$lld"
           }
         }
       }
@@ -7899,23 +7899,6 @@
         }
       }
     },
-    "ui.repositories": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repositories"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仓库"
-          }
-        }
-      }
-    },
     "ui.repository": {
       "extractionState": "manual",
       "localizations": {
@@ -8214,23 +8197,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在扫描本地仓库…"
-          }
-        }
-      }
-    },
-    "ui.searchRepositories": {
-      "extractionState": "manual",
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search repositories"
-          }
-        },
-        "zh-Hans-CN": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索仓库"
           }
         }
       }

@@ -238,10 +238,10 @@ final class ManagementModel {
             await service.addRepository(.init(url: url, displayNameOverride: displayName.isEmpty ? nil : displayName), at: root, progress: progress)
         }, select: try? Resource.repository(RepositoryIdentity(url).id))
     }
-    func create(_ group: String, members: [String]) {
+    func create(_ group: String, branchName: String? = nil, members: [String]) {
         guard let formSession, formSession.action == .createGroup, sheet == .create else { presentError(WorkspaceActionIssue.workspaceChanged); return }
         let expected = formSession.record.repositories.filter { members.contains($0.id) }
-        run({ service, root, progress in await service.createGroup(group, repositoryIDs: members, at: root, expectedRepositories: expected, progress: progress) }, select: .group(group), members: members)
+        run({ service, root, progress in await service.createGroup(group, branchName: branchName, repositoryIDs: members, at: root, expectedRepositories: expected, progress: progress) }, select: .group(group), members: members)
     }
     func edit(_ group: String, members: [String]) {
         guard let root = session.record?.rootURL, session.canManage else { return }

@@ -13,7 +13,7 @@ struct ResourceReadSessionTests {
         let first = try await session.prepare(resource, in: record)
         try Data().write(to: trace)
         var unrelated = record
-        unrelated.groups["unrelated"] = WorktreeGroup()
+        unrelated.groups["unrelated"] = WorktreeGroup(branchName: "unrelated")
         let reused = try await session.prepare(resource, in: unrelated)
         #expect(reused.workspace == unrelated && reused.isValid(in: unrelated))
         #expect(try String(contentsOf: trace, encoding: .utf8).isEmpty)

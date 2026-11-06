@@ -71,7 +71,7 @@ import SwiftUI
         do {
             try await firstGate.waitUntilStarted()
             var latest = try fixture.service.store.load(fixture.root)
-            latest.groups["latest"] = WorktreeGroup()
+            latest.groups["latest"] = WorktreeGroup(branchName: "latest")
             try fixture.service.store.save(latest)
             for name in ["one", "two", "cancelled"] {
                 following.append(Task {
@@ -123,7 +123,7 @@ import SwiftUI
             if !busy, followupGate == nil {
                 do {
                     var changed = try fixture.service.store.load(fixture.root)
-                    changed.groups["followup"] = WorktreeGroup()
+                    changed.groups["followup"] = WorktreeGroup(branchName: "followup")
                     try fixture.service.store.save(changed)
                     followupGate = try ReloadValidationGate(fixture.root)
                 }
@@ -611,7 +611,7 @@ import SwiftUI
         let skill = fixture.root.appending(path: ".agents/skills/mono-deck-workflow/SKILL.md")
         try Data("user edit".utf8).write(to: skill)
         var record = try #require(model.workspace.record)
-        record.groups["missing"] = WorktreeGroup()
+        record.groups["missing"] = WorktreeGroup(branchName: "missing")
         try fixture.service.store.save(record)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         now = now.advanced(by: .seconds(10))
@@ -633,7 +633,7 @@ import SwiftUI
         await model.workspace.detailPreloadTask?.value
         let head = try #require(await fixture.service.git.oid("HEAD", at: fixture.root))
         var record = try fixture.service.store.load(fixture.root)
-        record.groups["missing"] = WorktreeGroup()
+        record.groups["missing"] = WorktreeGroup(branchName: "missing")
         try fixture.service.store.save(record)
         let skill = fixture.root.appending(path: ".agents/skills/mono-deck-workflow/SKILL.md")
         let installedSkill = try Data(contentsOf: skill)
@@ -704,7 +704,7 @@ import SwiftUI
         #expect(presentation.wrappedValue)
 
         var record = try #require(model.workspace.record)
-        record.groups["missing"] = WorktreeGroup()
+        record.groups["missing"] = WorktreeGroup(branchName: "missing")
         try fixture.service.store.save(record)
         let lease = try fixture.service.store.tryLock(fixture.root)
         defer { lease.unlock() }
@@ -1312,7 +1312,7 @@ import SwiftUI
         let empty = try fixture.service.store.load(fixture.root)
         var record = empty
         record.repositories = [.init(url: fixture.remoteURL)]
-        record.groups["feature"] = WorktreeGroup(repositoryIDs: ["repo"])
+        record.groups["feature"] = WorktreeGroup(branchName: "feature", repositoryIDs: ["repo"])
         try fixture.service.store.save(record)
         let original = try Data(contentsOf: fixture.service.store.recordURL(fixture.root))
         switch entry {
@@ -1734,7 +1734,7 @@ import SwiftUI
         let fixture = try await Fixture(createRemote: false)
         defer { fixture.remove() }
         var original = WorkspaceRecord(root: PathSafety.canonical(fixture.root).path)
-        original.groups["feature"] = WorktreeGroup()
+        original.groups["feature"] = WorktreeGroup(branchName: "feature")
         try FileManager.default.createDirectory(at: original.groupURL("feature"), withIntermediateDirectories: true)
         try fixture.service.store.save(original)
         let nextRoot = fixture.directory.appending(path: "next-workspace")

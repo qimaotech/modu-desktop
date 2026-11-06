@@ -61,9 +61,9 @@ extension Git {
         if validateHEAD, fields[2].range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) == nil { return nil }
         return (fields[0], fields[1])
     }
-    public func validateRef(_ group: String, at root: URL) async throws {
-        try PathSafety.groupName(group)
-        guard try await run(["check-ref-format", "refs/heads/\(group)"], at: root, allowFailure: true).status == 0 else { throw MonoDeckError("invalid-input", .invalidGroupBranchName(group)) }
+    public func validateRef(_ branch: String, at root: URL) async throws {
+        try GitBranchName.validate(branch)
+        guard try await run(["check-ref-format", "refs/heads/\(branch)"], at: root, allowFailure: true).status == 0 else { throw MonoDeckError("invalid-input", .invalidGroupBranchName(branch)) }
     }
     public func oid(_ ref: String, at root: URL, cancellable: Bool = true) async throws -> String? {
         let output = try await run(["rev-parse", "--verify", "--end-of-options", "\(ref)^{commit}"], at: root, allowFailure: true, cancellable: cancellable)

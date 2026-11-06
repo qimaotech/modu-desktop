@@ -137,7 +137,7 @@ extension WorkspaceService {
         try checkWorkspaceImportDestination(record, staging: nil)
         try await git.checkRepository(root, main: true)
         for group in desired.groups.keys.sorted() {
-            try await validateMembers(group, repositoryIDs: desired.groups[group]!.repositoryIDs, record: desired)
+            try await validateMembers(group, branchName: desired.groups[group]!.branchName, repositoryIDs: desired.groups[group]!.repositoryIDs, record: desired)
         }
         for name in ["repositories", "worktrees"] { try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true) }
         return desired.repositories.isEmpty ? nil : try RepositoryStaging(at: root)
@@ -173,7 +173,7 @@ extension WorkspaceService {
             if stopped { result.items += resources.map(ItemResult.notProcessed); continue }
             do {
                 progress(.init(Resource.group(name).path, .checkingRepository))
-                let plans = try await creationPlans(name, members: group.repositoryIDs, record: record)
+                let plans = try await creationPlans(name, branchName: group.branchName, members: group.repositoryIDs, record: record)
                 for plan in plans {
                     if stopped { result.items.append(.notProcessed(plan.resource)); continue }
                     let item = await create(plan, record: &record, createdAt: group.createdAt, progress: progress)

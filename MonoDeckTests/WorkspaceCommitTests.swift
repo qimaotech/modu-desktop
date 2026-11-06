@@ -392,6 +392,7 @@ struct WorkspaceCommitTests {
           - url: \(f.remoteURL)
         \(other.map { "  - url: \($0)\n" } ?? "")groups:
           feature:
+            branch-name: feature
             created-at: "2026-10-10T00:00:00Z"
             repository-ids: [repo\(other == nil ? "" : ", other")]
         """

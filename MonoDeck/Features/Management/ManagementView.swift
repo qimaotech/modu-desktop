@@ -11,9 +11,10 @@ struct ManagementView: View {
     @State private var url = ""
     @State private var displayName = ""
     @State private var group = ""
+    @State private var branchName = ""
     @State var selected = Set<String>()
-    @State var repositorySearch = ""
-    @State private var repositorySearchFocused = false
+    @State var repositoryFilter = ""
+    @State private var repositoryFilterFocused = false
     @State private var fieldError: String?
     @FocusState private var focused: Bool
 
@@ -75,63 +76,75 @@ struct ManagementView: View {
     }
 
     private var groupForm: some View {
-        let repositories = matchingRepositories
-        return VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(presentation.text.string(.uiGroupName)).frame(height: 18)
-                Group {
-                    if sheet == .edit { Text(group).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).foregroundStyle(DesignStyle.secondary) }
+        let repositories = filteredRepositories
+        let reservedRowCount = min(formRepositories.count, 7)
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(spacing: 0) {
+                HStack(spacing: 16) {
+                    Text(presentation.text.string(.uiGroupName)).fixedSize()
+                    if sheet == .edit { Text(group).frame(maxWidth: .infinity, alignment: .trailing).textSelection(.enabled).foregroundStyle(DesignStyle.secondary) }
                     else {
-                        TextField(String("feature-name"), text: $group).textFieldStyle(.plain).focused($focused).accessibilityIdentifier("groupName")
-                            .accessibilityLabel(presentation.text.string(.uiGroupName)).onChange(of: group) { fieldError = nil }
+                        TextField(String("feature-name"), text: $group).focused($focused).accessibilityIdentifier("groupName")
+                            .accessibilityLabel(presentation.text.string(.uiGroupName)).onChange(of: group) { fieldError = nil; management.formError = nil }
+                            .multilineTextAlignment(.trailing)
                     }
-                }.padding(.horizontal, 12).frame(height: 36).formPlate()
-                if let fieldError { FormErrorView(message: fieldError) }
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(presentation.text.string(.uiRepositories))
-                    Spacer()
-                    if !repositorySearch.isEmpty {
-                        Text(presentation.text.string(.uiMatches(Int(repositories.count)))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
-                            .accessibilityIdentifier("repositoryMatches")
+                }.padding(.horizontal, 16).frame(height: 36)
+                if let fieldError { FormErrorView(message: fieldError).padding(.horizontal, 16).padding(.bottom, 8) }
+                Divider().padding(.leading, 16)
+                HStack(spacing: 16) {
+                    Text(presentation.text.string(.uiBranchName)).fixedSize()
+                    if sheet == .edit {
+                        Text(workspace.record?.groups[group]?.branchName ?? "").frame(maxWidth: .infinity, alignment: .trailing).textSelection(.enabled).foregroundStyle(DesignStyle.secondary)
+                    } else {
+                        TextField(presentation.text.string(.uiOptional), text: $branchName).multilineTextAlignment(.trailing)
+                            .accessibilityIdentifier("branchName").accessibilityLabel(presentation.text.string(.uiBranchName))
+                            .onChange(of: branchName) { management.formError = nil }
                     }
-                    Text(presentation.text.string(.uiOfSelected2(selected.count, formRepositories.count))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
-                        .accessibilityIdentifier("repositorySelectionCount")
-                }.frame(height: 18)
-                RepositorySearchField(text: $repositorySearch, focused: $repositorySearchFocused, placeholder: presentation.text.string(.uiSearchRepositories))
-                    .frame(height: 22)
+                }.padding(.horizontal, 16).frame(height: 36)
+            }.textFieldStyle(.plain).formPlate()
+            VStack(alignment: .leading, spacing: 12) {
+                RepositoryFilterField(text: $repositoryFilter, focused: $repositoryFilterFocused, placeholder: presentation.text.string(.uiFilterRepositories))
+                    .padding(.horizontal, 8).frame(height: 28)
+                    .background(DesignStyle.background, in: Capsule())
+                    .overlay {
+                        Capsule().strokeBorder(repositoryFilterFocused ? Color.accentColor : DesignStyle.secondary.opacity(0.4), lineWidth: 1)
+                            .allowsHitTesting(false)
+                    }
                     .background {
-                        Button(presentation.text.string(.uiSearchRepositories)) { focused = false; repositorySearchFocused = true }
+                        Button(presentation.text.string(.uiFilterRepositories)) { focused = false; repositoryFilterFocused = true }
                             .keyboardShortcut("f").hidden().accessibilityHidden(true)
                     }
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(repositories) { repo in
-                            HStack {
-                                Toggle(repo.displayName, isOn: Binding(get: { selected.contains(repo.id) }, set: { if $0 { selected.insert(repo.id) } else { selected.remove(repo.id) } })).toggleStyle(.checkbox)
-                                    .accessibilityIdentifier("repository-\(repo.id)")
-                                Spacer(minLength: 8)
-                                if sheet == .edit { WorkingTreeStatus(text: presentation.text, status: memberStatus(repo.id)) }
-                            }.padding(.horizontal, 16).frame(height: 28)
-                                .overlay(alignment: .bottom) { if repo.id != repositories.last?.id { Divider().opacity(0.3) } }
+                            Toggle(isOn: Binding(get: { selected.contains(repo.id) }, set: { if $0 { selected.insert(repo.id) } else { selected.remove(repo.id) } })) {
+                                HStack {
+                                    Text(repo.displayName).padding(.leading, 2)
+                                    Spacer(minLength: 8)
+                                    if sheet == .edit { WorkingTreeStatus(text: presentation.text, status: memberStatus(repo.id)) }
+                                }.frame(maxWidth: .infinity, minHeight: 28).contentShape(Rectangle())
+                            }.toggleStyle(.checkbox).accessibilityIdentifier("repository-\(repo.id)")
+                                .padding(.horizontal, 16).frame(height: 28).contentShape(Rectangle())
+                                .overlay(alignment: .bottom) {
+                                    if repo.id != repositories.last?.id || repositories.count < reservedRowCount { Divider().opacity(0.3) }
+                                }
                         }
                     }
                 }.frame(maxWidth: .infinity).overlay {
                     if repositories.isEmpty {
                         HStack(spacing: 8) {
                             Text(presentation.text.string(.uiNoMatchingRepositories)).foregroundStyle(DesignStyle.secondary)
-                            Button(presentation.text.string(.uiClearSearch)) { repositorySearch = "" }.buttonStyle(.link)
-                                .accessibilityIdentifier("clearRepositorySearch")
+                            Button(presentation.text.string(.uiClearFilter)) { repositoryFilter = "" }.buttonStyle(.link)
+                                .accessibilityIdentifier("clearRepositoryFilter")
                         }.font(DialogTypography.auxiliary)
                     }
-                }.frame(height: CGFloat(min(formRepositories.count, 7) * 28)).formPlate()
+                }.frame(height: CGFloat(reservedRowCount * 28)).formPlate()
             }
         }
     }
 
-    var matchingRepositories: [Repository] {
-        let query = repositorySearch.trimmingCharacters(in: .whitespacesAndNewlines)
+    var filteredRepositories: [Repository] {
+        let query = repositoryFilter.trimmingCharacters(in: .whitespacesAndNewlines)
         return formRepositories.filter { query.isEmpty || $0.displayName.localizedStandardContains(query) }
     }
 
@@ -195,7 +208,7 @@ struct ManagementView: View {
 
     private var submitButton: some View {
         Button(role: sheet == .delete ? .destructive : nil) { submit() } label: { Text(actionTitle).padding(.horizontal, 4) }
-            .keyboardShortcut(sheet == .delete || repositorySearchFocused ? nil : .defaultAction).disabled(disabled)
+            .keyboardShortcut(sheet == .delete || repositoryFilterFocused ? nil : .defaultAction).disabled(disabled)
     }
 
     private var title: String {
@@ -252,7 +265,7 @@ struct ManagementView: View {
             do { _ = try RepositoryIdentity(url.trimmingCharacters(in: .whitespacesAndNewlines)); management.add(url, displayName: displayName) } catch { fieldError = presentation.text.message(error) }
         case .importRepositories: management.confirmRepositoryImport()
         case .create:
-            do { try PathSafety.groupName(group); management.create(group, members: members) } catch { fieldError = presentation.text.message(error) }
+            do { try PathSafety.groupName(group); management.create(group, branchName: branchName.isEmpty ? nil : branchName, members: members) } catch { fieldError = presentation.text.message(error) }
         case .edit: management.edit(group, members: members)
         case .delete: management.confirmDelete()
         }

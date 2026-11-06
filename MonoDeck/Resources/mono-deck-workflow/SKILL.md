@@ -13,7 +13,7 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 - **Main repository:** A registered business repository's main worktree at `repositories/<repository-id>`, separate from the workspace repository. “Main” describes the worktree role, not a branch name.
 - **Worktree Group (group) / Group root worktree:** A task context containing selected members and a root at `worktrees/<group-name>`. The root is the workspace repository's linked worktree, included implicitly; `--repo` selects business repositories only.
 - **Group member / Member worktree:** A business repository's linked worktree at `worktrees/<group-name>/<repository-id>`, identified by group name and repository ID. It shares Git data with its main repository but has its own checkout and index; members are not submodules.
-- **Group name / Current branch:** The group name determines its directory and initial local branch names. Each worktree can later switch branches independently; deletion targets the current branch.
+- **Group name / Initial branch name / Current branch:** The group name determines identity and directory. The initial branch name defaults to the group name or is set with `group create --branch`; it is read-only after creation and also applies to future members. Each worktree can later switch branches independently without changing that setting; deletion targets its actual current branch.
 - **Workspace record / Git worktree registration:** MonoDeck's private repository and membership metadata is separate from Git's worktree registration and from on-disk files.
 
 ## Context and commands
@@ -23,7 +23,7 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 - Tree types are `workspace`, `auxiliary-directory` (`repositories` and `worktrees`), `group`, `main-worktree`, and `linked-worktree`. Registered resources appear when their directories and `.git` entry types exist as expected. Missing, mistyped, or symlink paths are omitted; absence does not imply unregistered, and presence does not certify Git health or ownership.
 - Queries read workspace record snapshots without acquiring the workspace lock, removing record entries, or fetching repositories. `workspace tree` checks directory and `.git` entry types, not child Git health, remotes, or registration ownership; use the relevant details or operation to diagnose those issues. Filesystem checks can observe concurrent changes; refresh the relevant list before management actions when needed.
 - Read repository IDs from `repo list --json` (`items[].resource["repository-id"]`) and group names from `group list --json` (`items[].resource["group-name"]`). Lists report per-resource status and errors; `resource.path` is workspace-relative, not a command argument. IDs are URL path basenames without a trailing `.git`, unique ignoring case. `repo add --display-name` sets a label without changing identity.
-- Workspace records and exported YAML use version 2 with repository `display-name` and group `repository-ids` fields. Old commands, options, and field names are not accepted. Do not try legacy spellings after a failure.
+- Workspace records and exported YAML use version 2 with repository `display-name` and required group `branch-name` and `repository-ids` fields. YAML preserves the configured initial branch, not current checkouts. Record recovery uses the group root’s current branch, falling back to the group name for detached HEAD. Old commands, options, and field names are not accepted. Do not try legacy spellings after a failure.
 - `repo add` prepares clones outside the workspace lock, then rechecks registration and paths under the lock before publishing. Its `maintain-workspace-ignore` plan action covers maintaining and automatically committing the entire workspace `.gitignore` when it differs from HEAD, including pre-existing manual edits.
 - Workspace initialization, repository updates, local scanning, and YAML import/export require the App; do not invent CLI equivalents.
 
@@ -37,16 +37,16 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 ## Creating groups
 
 - Preserve a valid user-supplied group name; otherwise propose `<type>-<task>` with a prefix such as `feature-` or `fix-` and a concise task description in the user's language.
-- Names must be single directory names and valid Git branch names, without `/` or whitespace. Explain invalid names and confirm an alternative; do not silently rewrite them.
-- Present the group name, workspace root, and complete member repository IDs, and wait for explicit confirmation before `group create <group-name> --repo <repository-id>...`. Reuse confirmation for the same name and repository set; confirm again if either changes.
+- Group names must be single directory names and valid Git branch names, without `/` or whitespace. The initial branch name is separate and permits valid Git slashes, such as `feature/checkout`. Explain invalid input and confirm an alternative; do not silently rewrite either name.
+- Present the group name, resolved initial branch name, workspace root, and complete member repository IDs, and wait for explicit confirmation before `group create <group-name> [--branch <branch-name>] --repo <repository-id>...`. Omit `--branch` to use the group name. Reuse confirmation for the same names and repository set; confirm again if any change.
 - `group create` requires a new group name and at least one member. Creation and member addition check and create each resource in order; later failures keep completed roots and members and leave the rest unprocessed. Extend existing or partially created groups through `group member add`.
-- Creation uses local refs without updating repositories. Group roots reuse an available same-named local branch or start from workspace HEAD. Report branch-reuse warnings; do not reset reused branches or claim they include the latest base commits.
+- Creation uses local refs without updating repositories. Group roots reuse an available local branch with the initial branch name or start from workspace HEAD. Members reuse the matching local branch, otherwise start from the locally known matching origin branch or fall back to the locally known remote default branch. Report branch-reuse warnings; do not reset reused branches or claim they include the latest base commits.
 
 ## Editing membership
 
 - `group edit <group-name> --repo <repository-id>...` replaces the complete member set. Omitted members are deleted with their current local branches; it does not rename the group or synchronize branches. Preview and review the entire replacement before authorizing deletions.
 - `group edit <group-name> --clear-members` deletes all members while keeping the group root. It cannot be combined with `--repo`.
-- `group member add <group-name> <repository-id>...` adds missing members and preserves the rest. `group member delete <group-name> <repository-id>...` deletes only the named member worktrees and their current local branches.
+- `group member add <group-name> <repository-id>...` adds missing members using the saved initial branch name and preserves the rest. Membership edits also use that value for additions; neither command accepts a branch override. `group member delete <group-name> <repository-id>...` deletes only the named member worktrees and their current local branches.
 
 ## Destructive changes
 

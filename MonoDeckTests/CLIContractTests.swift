@@ -3,6 +3,28 @@ import Testing
 @testable import MonoDeckCore
 
 struct CLIContractTests {
+    @Test func customBranchCreationPreviewsAndRejectsInvalidNamesWithoutEffects() async throws {
+        let f = try await Fixture(template: .singleRepository); defer { f.remove() }
+        let record = try f.service.store.load(f.root)
+        let before = try Data(contentsOf: f.service.store.recordURL(f.root))
+        let refs = try await f.service.git.run(["show-ref"], at: f.root).stdout
+        let command = ["group", "create", "login", "--repo", "repo", "--json", "--workspace", f.root.path]
+        for branch in ["", "feature//login", "feature/.login", "feature/login.lock", "@{-1}"] {
+            let output = try await f.runCLI(command + ["--branch", branch])
+            let result = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+            #expect(output.status == 2 && result.reasonCode == "invalid-input")
+            #expect(result.items.allSatisfy { $0.effects.isEmpty })
+        }
+        let output = try await f.runCLI(command + ["--branch", "feature/login", "--dry-run"])
+        let preview = try JSONDecoder().decode(OperationResult.self, from: output.stdout)
+        #expect(output.status == 0 && preview.dryRun && preview.status == .success)
+        #expect(preview.plan?.actions.filter { $0.action == "create-branch" }.map(\.target) == ["feature/login", "feature/login"])
+        #expect(preview.plan?.actions.filter { $0.action == "create-worktree" }.map(\.target) == [record.groupURL("login").path, record.memberURL("login", "repo").path])
+        #expect(try Data(contentsOf: f.service.store.recordURL(f.root)) == before)
+        #expect(try await f.service.git.run(["show-ref"], at: f.root).stdout == refs)
+        #expect(!PathSafety.exists(record.groupURL("login")))
+    }
+
     @Test(arguments: [false, true])
     func additiveGroupCommandsValidateOnceAndReuseRepositoryInspection(_ addingMembers: Bool) async throws {
         let f = try await Fixture(template: .singleRepository); defer { f.remove() }

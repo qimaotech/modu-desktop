@@ -25,12 +25,13 @@ struct Group: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Create a new group from selected repositories.", discussion: "The group must not already exist. Uses local Git refs without fetching. Use group member add to extend an existing group.")
         @OptionGroup var options: Options
         @OptionGroup var mutation: MutationOptions
-        @Argument(help: ArgumentHelp("The group name and initial branch name.", valueName: "group-name")) var groupName: String
+        @Argument(help: ArgumentHelp("The group name used for its directory and identity.", valueName: "group-name")) var groupName: String
+        @Option(name: .customLong("branch"), help: ArgumentHelp("The initial branch for the group root and members, also used for future members. Defaults to the group name; allows '/' and cannot be changed after creation.", valueName: "branch-name")) var branchName: String?
         @Option(name: .customLong("repo"), parsing: .singleValue, help: ArgumentHelp("A member repository ID. Repeat for multiple repositories.", valueName: "repository-id")) var repositoryIDs: [String] = []
         mutating func validate() throws { guard !repositoryIDs.isEmpty else { throw ValidationError("At least one --repo is required.") } }
         mutating func run() async throws {
             let service = WorkspaceService(), root = try await options.root(service)
-            finish(await service.createGroup(groupName, repositoryIDs: repositoryIDs, at: root, dryRun: mutation.dryRun, progress: reportProgress), json: options.json)
+            finish(await service.createGroup(groupName, branchName: branchName, repositoryIDs: repositoryIDs, at: root, dryRun: mutation.dryRun, progress: reportProgress), json: options.json)
         }
     }
 

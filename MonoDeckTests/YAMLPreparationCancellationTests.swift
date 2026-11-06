@@ -27,6 +27,7 @@ struct YAMLPreparationCancellationTests {
           - url: \(other)
         groups:
           feature:
+            branch-name: feature
             created-at: '2026-01-01T00:00:00Z'
             repository-ids: [repo, other]
         """

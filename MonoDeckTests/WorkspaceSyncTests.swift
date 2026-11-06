@@ -16,7 +16,7 @@ import Testing
             try await eventually { !model.workspace.detailLoading && model.workspace.detail.summary != nil }
             let previous = model.workspace.detail.summary?.headOID
             var changed = try fixture.service.store.load(fixture.root)
-            changed.groups["external"] = WorktreeGroup()
+            changed.groups["external"] = WorktreeGroup(branchName: "external")
             try fixture.service.store.save(changed)
             let file = fixture.service.store.recordURL(fixture.root)
             let bytes = try Data(contentsOf: file)
@@ -47,7 +47,7 @@ import Testing
         if busy { #expect(operation != nil) }
         if !busy { model.workspace.setActive(false) }
         var changed = original
-        changed.groups["external"] = WorktreeGroup()
+        changed.groups["external"] = WorktreeGroup(branchName: "external")
         do {
             try fixture.service.store.save(changed)
             monitor.emit()
@@ -120,7 +120,7 @@ import Testing
         let original = try #require(model.workspace.record)
         let resource = Resource.group("visible")
         var changed = original
-        changed.groups["external"] = WorktreeGroup()
+        changed.groups["external"] = WorktreeGroup(branchName: "external")
         var gate: ReloadValidationGate?
         defer { try? gate?.resume() }
         var callbacks: [String] = []
@@ -174,7 +174,7 @@ import Testing
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         let original = try #require(model.workspace.record)
         var latest = original
-        latest.groups["external"] = WorktreeGroup()
+        latest.groups["external"] = WorktreeGroup(branchName: "external")
         do {
             try fixture.service.store.save(latest)
             monitor.emit()
@@ -215,7 +215,7 @@ import Testing
             try await model.switchTo(next, loaded: nextRecord)
             #expect(monitor.recordURL == fixture.service.store.recordURL(next))
             var changed = nextRecord
-            changed.groups["external"] = WorktreeGroup()
+            changed.groups["external"] = WorktreeGroup(branchName: "external")
             try fixture.service.store.save(changed)
             oldCallback()
             try await Task.sleep(for: .milliseconds(300))
@@ -225,7 +225,7 @@ import Testing
             let stoppedCallback = try #require(monitor.callback)
             await model.workspace.stopReads()
             var afterStop = changed
-            afterStop.groups["after-stop"] = WorktreeGroup()
+            afterStop.groups["after-stop"] = WorktreeGroup(branchName: "after-stop")
             try fixture.service.store.save(afterStop)
             stoppedCallback()
             try await Task.sleep(for: .milliseconds(300))
@@ -251,7 +251,7 @@ import Testing
             let previous = model.workspace.record
             #expect(model.workspace.blocked == nil && (model.workspace.notice != nil) == fails)
             #expect(model.workspace.canManage == !fails)
-            changed.groups["external"] = WorktreeGroup()
+            changed.groups["external"] = WorktreeGroup(branchName: "external")
             try fixture.service.store.save(changed)
 
             clock.now = clock.now.advanced(by: .milliseconds(9_999))
@@ -262,12 +262,12 @@ import Testing
             #expect(model.workspace.record == changed && model.workspace.blocked == nil)
             #expect(model.workspace.canManage && model.workspace.notice == nil)
 
-            changed.groups["manual"] = WorktreeGroup()
+            changed.groups["manual"] = WorktreeGroup(branchName: "manual")
             try fixture.service.store.save(changed)
             await model.workspace.refreshRecord(refreshingSidebar: false)
             #expect(model.workspace.record == changed)
 
-            changed.groups["event"] = WorktreeGroup()
+            changed.groups["event"] = WorktreeGroup(branchName: "event")
             try fixture.service.store.save(changed)
             monitor.emit()
             try await eventually { model.workspace.record == changed }
@@ -285,7 +285,7 @@ import Testing
         let model = try makeModel(fixture, monitor: WorkspaceRecordMonitorStub(), now: { clock.now })
         defer { model.defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
         var changed = try #require(model.workspace.record)
-        changed.groups["first"] = WorktreeGroup()
+        changed.groups["first"] = WorktreeGroup(branchName: "first")
         try fixture.service.store.save(changed)
         let first = changed
         var gate = try ReloadValidationGate(fixture.root)
@@ -300,7 +300,7 @@ import Testing
                 await model.workspace.activate()
             }
             try await eventually { requested }
-            changed.groups["latest"] = WorktreeGroup()
+            changed.groups["latest"] = WorktreeGroup(branchName: "latest")
             try fixture.service.store.save(changed)
             if cancels { model.workspace.invalidateReads(cancelReload: true) }
             try gate.resume()
@@ -332,7 +332,7 @@ import Testing
         let original = try #require(model.workspace.record)
         let resource = Resource.group("visible")
         var changed = original
-        changed.groups["external"] = WorktreeGroup()
+        changed.groups["external"] = WorktreeGroup(branchName: "external")
         var gate: ReloadValidationGate?
         defer { try? gate?.resume() }
         var activation: Task<Void, Never>?
@@ -364,7 +364,7 @@ import Testing
                 model.workspace.record == changed && model.workspace.state(for: resource)?.dirty == true && !model.workspace.hasActiveReads
             }
             let retried = changed
-            changed.groups["latest"] = WorktreeGroup()
+            changed.groups["latest"] = WorktreeGroup(branchName: "latest")
             try fixture.service.store.save(changed)
             clock.now = clock.now.advanced(by: .milliseconds(9_999))
             await model.activate()
@@ -396,7 +396,7 @@ import Testing
             try await model.switchTo(next, loaded: fixture.service.store.load(next))
             try await model.switchTo(fixture.root, loaded: original)
             var changed = original
-            changed.groups["external"] = WorktreeGroup()
+            changed.groups["external"] = WorktreeGroup(branchName: "external")
             try fixture.service.store.save(changed)
             await model.activate()
             #expect(model.workspace.record == changed)
