@@ -5,8 +5,6 @@ import MonoDeckCore
 struct ToolBarView: View {
     var tools: [ExternalTool]
     var preferredToolIDs: [String: String]
-    var directory: URL?
-    var gitUnavailable: Bool
     var text: InterfaceText
     var open: (ExternalTool) -> Void
     var category: String?
@@ -55,6 +53,5 @@ struct ToolBarView: View {
         .background(DesignStyle.background, in: RoundedRectangle(cornerRadius: 10))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(DesignStyle.border, lineWidth: 1))
-        .disabled(directory.map { !FileManager.default.isReadableFile(atPath: $0.path) } ?? true || (tool.category == "Git GUI" && gitUnavailable))
     }
 }

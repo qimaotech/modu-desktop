@@ -54,6 +54,7 @@ struct ContentView: View {
         .sheet(isPresented: mainSheetPresentation, onDismiss: {
             model.presentation.mainSheetVisible = false
             model.management.finishDismissal()
+            model.presentActionFailureIfPossible()
             model.presentMaintenanceFailureIfPossible()
         }) {
             Group {
@@ -67,6 +68,9 @@ struct ContentView: View {
                     ManagementView(management: model.management, workspace: model.workspace, operations: model.operations, presentation: model.presentation, sheet: sheet).id(sheet)
                 }
             }.onAppear { model.presentation.mainSheetVisible = true }
+        }
+        .onChange(of: model.actionFailurePresentationID, initial: true) { _, id in
+            if id != nil { model.presentActionFailureIfPossible() }
         }
         .onChange(of: model.canPresentMaintenanceFailure, initial: true) { _, canPresent in
             if canPresent { model.presentMaintenanceFailureIfPossible() }
@@ -113,13 +117,13 @@ struct ContentView: View {
             VStack(spacing: 32) {
                 Text(model.text.string(.uiLetSStart)).font(DesignStyle.welcomeTitle).frame(height: 32)
                 HStack(spacing: 12) {
-                    Button(model.text.string(.uiAddRepository2)) { model.management.sheet = .add }
-                    Button(model.text.string(.uiCreateGroup)) { model.management.sheet = .create }.disabled(model.workspace.sortedRepositories.isEmpty)
-                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 120 : 128)).disabled(!model.workspace.canManage)
+                    Button(model.text.string(.uiAddRepository2)) { model.management.requestForm(.addRepository) }
+                    Button(model.text.string(.uiCreateGroup)) { model.management.requestForm(.createGroup) }
+                }.buttonStyle(StartButtonStyle(width: model.preferences.activeLocale == .simplifiedChinese ? 120 : 128))
                 HStack(spacing: 12) {
                     ForEach(["Git GUI", "Editor", "Agent"], id: \.self) { category in
                         if model.tools.contains(where: { $0.category == category }) {
-                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, directory: model.workspace.currentURL, gitUnavailable: model.workspace.selection.map { model.workspace.state(for: $0)?.available == false } == true, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136).disabled(!model.workspace.canManage)
+                            ToolBarView(tools: model.tools, preferredToolIDs: model.preferredToolIDs, text: model.presentation.text, open: { model.openTool($0) }, category: category, fixedButtonWidth: 136)
                         }
                     }
                 }

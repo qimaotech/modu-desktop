@@ -13,8 +13,7 @@ struct GitBrowserView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 12) {
-                ToolBarView(tools: tools, preferredToolIDs: preferredToolIDs, directory: workspace.currentURL, gitUnavailable: workspace.selection.map { workspace.state(for: $0)?.available == false } == true, text: preferences.text, open: openTool, availableWidth: geometry.size.width - 36)
-                    .disabled(!workspace.canManage)
+                ToolBarView(tools: tools, preferredToolIDs: preferredToolIDs, text: preferences.text, open: openTool, availableWidth: geometry.size.width - 36)
                     .textSelection(.disabled)
                 VStack(spacing: 12) {
                     summary(compact: geometry.size.width < 760)

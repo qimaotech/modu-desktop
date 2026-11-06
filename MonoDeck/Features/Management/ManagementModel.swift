@@ -14,8 +14,16 @@ final class ManagementModel {
     var importFileName: String?
     var formError: String? { didSet { formErrorDetails = nil } }
     var formErrorDetails: String?
+    private(set) var formSession: ManagementFormSession?
+    private(set) var openingFormTask: Task<Void, Never>?
+    private var openingFormAction: ManagementFormAction?
+    private var openingFormID = UUID()
     var sheet: ManagementSheet? {
         didSet {
+            if sheet != oldValue, let action = ManagementFormAction(sheet: sheet),
+               !(sheet == .add && oldValue == .importRepositories), let record = session.record {
+                formSession = .init(action: action, contextID: session.contextID, record: record)
+            }
             if sheet != .add, progressPresentation?.scanningRepositories == true { operations.cancel() }
             if sheet == nil, oldValue == .delete {
                 dismissedDeletion = deletionPresentation
@@ -56,16 +64,87 @@ final class ManagementModel {
 
     func contextChanged(rootChanged: Bool) {
         cancelEditPreview()
+        if rootChanged {
+            cancelOpeningForm()
+            if let formSession, formSession.contextID != session.contextID, sheet == .add || sheet == .create {
+                formError = text.message(WorkspaceActionIssue.workspaceChanged)
+            }
+        }
         if rootChanged, progressPresentation?.scanningRepositories == true { operations.cancel() }
         if rootChanged, sheet == .delete || sheet == .importRepositories { sheet = nil }
     }
 
     func finishDismissal() {
         guard sheet == nil, !busy else { return }
+        formSession = nil
         deleteRequest = nil; pendingEdit = nil; deletion = []
     }
 
-    func run(_ body: @escaping @Sendable (WorkspaceService, URL, ProgressHandler) async -> OperationResult, select: Resource? = nil) {
+    func requestForm(_ action: ManagementFormAction) {
+        guard sheet == nil, presentation.result == nil, presentation.message == nil, !presentation.mainSheetVisible else { return }
+        if openingFormAction == action, openingFormTask?.isCancelled == false { return }
+        cancelOpeningForm()
+        if let issue = session.managementIssue {
+            presentEntryError(issue, action: action, contextID: session.contextID)
+            return
+        }
+        guard let root = session.record?.rootURL else { return }
+        let contextID = session.contextID
+        let previous = openingFormTask
+        let id = UUID(); openingFormID = id; openingFormAction = action
+        openingFormTask = Task {
+            defer { if openingFormID == id { openingFormTask = nil; openingFormAction = nil } }
+            await previous?.value
+            do {
+                try Task.checkCancellation()
+                let record = try await service.read(root)
+                try checkActionDirectory(root)
+                try await service.git.checkRepository(root, main: true)
+                try Task.checkCancellation()
+                guard session.contextID == contextID, sheet == nil, presentation.result == nil,
+                      presentation.message == nil, !presentation.mainSheetVisible else { return }
+                if let issue = session.managementIssue { throw issue }
+                if action == .createGroup, record.repositories.isEmpty { throw WorkspaceActionIssue.noRepositories }
+                formError = nil
+                sheet = action.sheet
+                formSession = .init(action: action, contextID: contextID, record: record)
+            } catch {
+                guard !Task.isCancelled, openingFormID == id, session.contextID == contextID,
+                      !presentation.quitPending, !(error is CancellationError),
+                      (error as? MonoDeckError)?.code != "cancelled" else { return }
+                presentEntryError(error, action: action, contextID: contextID)
+            }
+        }
+    }
+
+    func cancelOpeningForm() { openingFormTask?.cancel() }
+
+    var creationRepositories: [Repository] {
+        (formSession?.record.repositories ?? session.sortedRepositories).sorted {
+            $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    private func presentEntryError(_ error: Error, action: ManagementFormAction, contextID: UUID) {
+        presentation.enqueueActionError(error, title: text.string(action.failureTitle), contextID: contextID)
+        if sheet == nil { presentation.presentNextActionMessage(in: session.contextID) }
+    }
+
+    private func validateForm(_ form: ManagementFormSession) throws {
+        guard session.contextID == form.contextID, formSession?.id == form.id,
+              sheet == form.action.sheet || (form.action == .addRepository && sheet == .importRepositories) else {
+            throw WorkspaceActionIssue.workspaceChanged
+        }
+    }
+
+    func run(_ body: @escaping @Sendable (WorkspaceService, URL, ProgressHandler) async -> OperationResult, select: Resource? = nil, members: [String]? = nil) {
+        let form = sheet == .add || sheet == .create || sheet == .importRepositories ? formSession : nil
+        if let form {
+            do {
+                try validateForm(form)
+                if let issue = session.managementIssue { throw issue }
+            } catch { presentError(error); return }
+        }
         guard let root = session.record?.rootURL, session.canManage else { return }
         let previousEdit = editPreviewTask
         cancelEditPreview()
@@ -87,6 +166,30 @@ final class ManagementModel {
         let task = Task {
             await previousEdit?.value
             await session.waitForReadCancellation()
+            if let form {
+                do {
+                    try Task.checkCancellation()
+                    try validateForm(form)
+                    let actual = try await service.read(root)
+                    try Task.checkCancellation()
+                    try validateForm(form)
+                    if let members {
+                        let expected = form.record.repositories.filter { members.contains($0.id) }
+                        try service.validateRepositorySelection(expected, repositoryIDs: members, record: actual)
+                    }
+                    if let issue = session.managementIssue(allowing: operationID) { throw issue }
+                } catch {
+                    if formSession?.id == form.id {
+                        progressPresentation = nil
+                        if Task.isCancelled { sheet = nil }
+                        else { presentError(error) }
+                    }
+                    operations.finish(operationID)
+                    session.startDetailPreload()
+                    if presentation.quitPending { presentation.finishQuitIfPossible() }
+                    return
+                }
+            }
             let outcome = await body(service, root, report)
             let isGroupOperation = ["group.create", "group.edit", "group.delete", "group.member.add", "group.member.delete"].contains(outcome.command)
             let noEffects = outcome.items.allSatisfy { $0.effects.isEmpty }
@@ -129,12 +232,17 @@ final class ManagementModel {
         operations.attach(task, to: operationID)
     }
     func add(_ url: String, displayName: String) {
+        guard formSession?.action == .addRepository, sheet == .add else { presentError(WorkspaceActionIssue.workspaceChanged); return }
         let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
         run({ service, root, progress in
             await service.addRepository(.init(url: url, displayNameOverride: displayName.isEmpty ? nil : displayName), at: root, progress: progress)
         }, select: try? Resource.repository(RepositoryIdentity(url).id))
     }
-    func create(_ group: String, members: [String]) { run({ service, root, progress in await service.createGroup(group, repositoryIDs: members, at: root, progress: progress) }, select: .group(group)) }
+    func create(_ group: String, members: [String]) {
+        guard let formSession, formSession.action == .createGroup, sheet == .create else { presentError(WorkspaceActionIssue.workspaceChanged); return }
+        let expected = formSession.record.repositories.filter { members.contains($0.id) }
+        run({ service, root, progress in await service.createGroup(group, repositoryIDs: members, at: root, expectedRepositories: expected, progress: progress) }, select: .group(group), members: members)
+    }
     func edit(_ group: String, members: [String]) {
         guard let root = session.record?.rootURL, session.canManage else { return }
         let previous = editPreviewTask
@@ -257,7 +365,7 @@ final class ManagementModel {
 
     func presentError(_ error: Error) {
         formError = text.message(error)
-        formErrorDetails = Git.sanitize(error.localizedDescription)
+        if !(error is WorkspaceActionIssue) { formErrorDetails = Git.sanitize(error.localizedDescription) }
     }
 
     private func cancelDeletePreview() {
@@ -272,6 +380,28 @@ final class ManagementModel {
 }
 
 enum ManagementSheet: String, Identifiable { case add, importRepositories, create, edit, delete; var id: String { rawValue } }
+enum ManagementFormAction {
+    case addRepository, createGroup
+
+    init?(sheet: ManagementSheet?) {
+        switch sheet {
+        case .add: self = .addRepository
+        case .create: self = .createGroup
+        default: return nil
+        }
+    }
+
+    var sheet: ManagementSheet { self == .addRepository ? .add : .create }
+    var failureTitle: LocalizedStringResource {
+        self == .addRepository ? .uiCanTAddRepository : .init("action.cannotCreateGroup", defaultValue: "Can’t Create Group")
+    }
+}
+struct ManagementFormSession {
+    let id = UUID()
+    let action: ManagementFormAction
+    let contextID: UUID
+    let record: WorkspaceRecord
+}
 struct RepositoryImportSelection {
     let root: URL
     let filename: String

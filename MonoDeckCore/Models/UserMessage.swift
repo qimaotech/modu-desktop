@@ -40,6 +40,7 @@ public indirect enum UserMessage: Sendable, Equatable {
     case couldNotVerifyBranchDeletion(String)
     case chooseAtLeastOneRepository
     case groupMembersMustReferenceDistinctConfiguredRepositories
+    case selectedRepositoriesChanged
     case groupNameConflictsWithExistingGroup
     case commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas
     case groupRootHEADIsUnavailable
@@ -235,6 +236,7 @@ public indirect enum UserMessage: Sendable, Equatable {
         case .couldNotVerifyBranchDeletion(let arg1): return "Could not verify branch deletion: \(arg1)"
         case .chooseAtLeastOneRepository: return "Choose at least one repository."
         case .groupMembersMustReferenceDistinctConfiguredRepositories: return "Group members must reference distinct configured repositories."
+        case .selectedRepositoriesChanged: return "A selected repository was removed or changed. Close this form and select the repositories again."
         case .groupNameConflictsWithExistingGroup: return "Group name conflicts with an existing group."
         case .commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas: return "Commit the workspace .gitignore before creating this group. The workspace has no first commit."
         case .groupRootHEADIsUnavailable: return "Group root HEAD is unavailable."

@@ -44,6 +44,7 @@ extension InterfaceText {
         case .couldNotVerifyBranchDeletion(let arg1): return string(.messageCouldNotVerifyBranchDeletion(arg1))
         case .chooseAtLeastOneRepository: return string(.messageChooseAtLeastOneRepository)
         case .groupMembersMustReferenceDistinctConfiguredRepositories: return string(.messageGroupMembersMustReferenceDistinctConfiguredRepositories)
+        case .selectedRepositoriesChanged: return string(.init("message.selectedRepositoriesChanged", defaultValue: "A selected repository was removed or changed. Close this form and select the repositories again."))
         case .groupNameConflictsWithExistingGroup: return string(.messageGroupNameConflictsWithExistingGroup)
         case .commitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas: return string(.messageCommitWorkspaceGitignoreBeforeCreatingGroupWorkspaceHas)
         case .groupRootHEADIsUnavailable: return string(.messageGroupRootHEADIsUnavailable)

@@ -19,13 +19,13 @@ struct AppCommands: Commands {
         }
         CommandGroup(after: .newItem) {
             Button(model.text.string(.uiRefreshGitDetails)) { model.workspace.refreshDetail(userInitiated: true) }.keyboardShortcut("r").disabled(model.workspace.selection == nil)
-            Button(model.text.string(.uiOpenWorkspaceInCodex)) { if let codex = model.tools.first(where: { $0.id == "codex" }) { model.openTool(codex, workspaceRoot: true) } }.disabled(!model.workspace.canManage || !model.tools.contains { $0.id == "codex" })
+            Button(model.text.string(.uiOpenWorkspaceInCodex)) { openWindow(id: "main"); if let codex = ExternalTool.builtIn.first(where: { $0.id == "codex" }) { model.openTool(codex, workspaceRoot: true) } }
                 .help(model.text.string(.uiStartCodexFromWorkspaceRootDiscoverWorkflowSkill))
                 .accessibilityHint(model.text.string(.uiStartCodexFromWorkspaceRootDiscoverWorkflowSkill))
         }
         CommandMenu(model.text.string(.uiActions)) {
-            Button(model.text.string(.uiAddRepository)) { model.management.sheet = .add }.keyboardShortcut("n").disabled(!model.workspace.canManage)
-            Button(model.text.string(.uiCreateWorktreeGroup)) { model.management.sheet = .create }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(!model.workspace.canManage || model.workspace.sortedRepositories.isEmpty)
+            Button(model.text.string(.uiAddRepository)) { openWindow(id: "main"); model.management.requestForm(.addRepository) }.keyboardShortcut("n")
+            Button(model.text.string(.uiCreateWorktreeGroup)) { openWindow(id: "main"); model.management.requestForm(.createGroup) }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button(model.text.string(.uiUpdateRepositories)) { model.management.updateRepositories() }.disabled(!model.workspace.canManage || model.workspace.sortedRepositories.isEmpty)
             Divider()
             ResourceActions(workspace: model.workspace, management: model.management, operations: model.operations, text: model.presentation.text, resource: model.workspace.selection)

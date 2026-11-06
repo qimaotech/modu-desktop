@@ -1,6 +1,227 @@
 {
   "sourceLanguage": "en-US",
   "strings": {
+    "action.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another operation is in progress. Please try again when it finishes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在执行其他操作，请完成后重试。"
+          }
+        }
+      }
+    },
+    "action.cancelling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current operation is finishing cancellation. Please try again when it finishes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前操作正在取消收尾，请完成后重试。"
+          }
+        }
+      }
+    },
+    "action.cannotCreateGroup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t Create Group"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建分组"
+          }
+        }
+      }
+    },
+    "action.directoryMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The target directory does not exist: %@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标目录不存在：%@"
+          }
+        }
+      }
+    },
+    "action.directoryUnreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The target directory cannot be accessed: %@"
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法访问目标目录：%@"
+          }
+        }
+      }
+    },
+    "action.maintenanceFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace maintenance failed. Retry maintenance before starting this operation."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区维护失败，请重试维护后再执行此操作。"
+          }
+        }
+      }
+    },
+    "action.noRepositories": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add at least one repository before creating a group."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先添加至少一个仓库，再创建分组。"
+          }
+        }
+      }
+    },
+    "action.noWorkspace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No workspace is selected. Set up a workspace first."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择工作区，请先设置工作区。"
+          }
+        }
+      }
+    },
+    "action.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace is being prepared. Please try again when it finishes."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区正在准备，请完成后重试。"
+          }
+        }
+      }
+    },
+    "action.quitting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MonoDeck is quitting and cannot start a new operation."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MonoDeck 正在退出，无法开始新操作。"
+          }
+        }
+      }
+    },
+    "action.recordUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace record could not be read or validated. Reload the workspace and try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取或验证工作区登记，请重新加载工作区后重试。"
+          }
+        }
+      }
+    },
+    "action.targetUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No target directory has been loaded yet. Please select a workspace and try again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未加载可打开的目标目录，请选择工作区后重试。"
+          }
+        }
+      }
+    },
+    "action.workspaceChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace has changed. Close this form and open it again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区已切换，请关闭此表单后重新打开。"
+          }
+        }
+      }
+    },
     "message.appSBundledCLICouldNotRun": {
       "extractionState": "manual",
       "localizations": {
@@ -2606,6 +2827,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "已复用分支“%1$@”，无法判断它是否落后于“%2$@”。%3$@"
+          }
+        }
+      }
+    },
+    "message.selectedRepositoriesChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A selected repository was removed or changed. Close this form and select the repositories again."
+          }
+        },
+        "zh-Hans-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选仓库已移除或发生变化，请关闭此表单后重新选择仓库。"
           }
         }
       }

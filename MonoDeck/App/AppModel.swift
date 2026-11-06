@@ -17,6 +17,7 @@ final class AppModel {
     let management: ManagementModel
     var tools: [ExternalTool] = []
     private(set) var preferredToolIDs: [String: String] = [:]
+    private var toolLaunches: [ToolLaunchKey: ToolLaunch] = [:]
     private(set) var started = false
     private(set) var startupCLIInstallation: CLIInstallation?
     #if DEBUG
@@ -48,15 +49,23 @@ final class AppModel {
     var canShowMaintenanceFailure: Bool {
         workspace.maintenanceState == .failed && workspace.maintenanceFailure != nil && !busy && !presentation.quitPending
             && management.sheet == nil && presentation.result == nil && presentation.message == nil && !presentation.mainSheetVisible
+            && presentation.actionMessages.isEmpty
     }
     var canPresentMaintenanceFailure: Bool { workspace.maintenanceFailurePending && canShowMaintenanceFailure }
     var detailFailurePresentationID: UUID? {
         guard !busy, !presentation.quitPending, management.sheet == nil, presentation.result == nil,
               presentation.message == nil, !presentation.mainSheetVisible, !workspace.maintenanceFailurePending,
+              presentation.actionMessages.isEmpty,
               let failure = workspace.details.failureForPresentation,
               workspace.record?.root == failure.workspace, workspace.selection == failure.resource else { return nil }
         return failure.id
     }
+    var actionFailurePresentationID: UUID? {
+        guard management.sheet == nil, presentation.result == nil,
+              presentation.message == nil, !presentation.mainSheetVisible else { return nil }
+        return presentation.nextActionMessage(in: workspace.contextID)?.id
+    }
+    var hasPendingActions: Bool { management.openingFormTask != nil || !toolLaunches.isEmpty }
 
     init(defaults: UserDefaults? = nil, service: WorkspaceService = .init(), toolService: ExternalTools? = nil, installer: InstallationService? = nil,
          cache: (any RepositoryDetailCaching)? = nil,
@@ -84,7 +93,14 @@ final class AppModel {
         operations.onBusyChange = { [weak workspace] busy in workspace?.operationsChanged(busy) }
         let management = ManagementModel(service: service, session: workspace, operations: operations, presentation: presentation)
         self.management = management
-        workspace.onContextChange = { [weak management] rootChanged in management?.contextChanged(rootChanged: rootChanged) }
+        workspace.onContextChange = { [weak self] rootChanged in
+            guard let self else { return }
+            self.management.contextChanged(rootChanged: rootChanged)
+            if rootChanged {
+                self.cancelToolLaunches()
+                self.presentation.discardActionMessages(outside: self.workspace.contextID)
+            }
+        }
         workspace.onMaintenanceFailure = { [weak self] in self?.presentMaintenanceFailureIfPossible() }
         self.updates.onRestartFailure = { [weak self] in self?.resumeAfterFailedQuit() }
         self.relaunch.onFailure = { [weak self] error in
@@ -161,10 +177,12 @@ final class AppModel {
         management.cancelEditPreview()
         if management.sheet == .delete { management.sheet = nil }
         guard let operationID = operations.begin(.workspace, cancellable: cancellable) else { return false }
+        cancelPendingActions()
         presentation.completionMessage = nil; presentation.resultHost = .settings
         workspace.invalidateReads(cancelReload: true)
         let task = Task {
             await previousEdit?.value
+            await waitForPendingActions()
             await workspace.waitForReadCancellation()
             let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "mono-deck-workflow")
             let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: requireExistingRecord)
@@ -205,6 +223,9 @@ final class AppModel {
     func switchTo(_ root: URL, loaded: WorkspaceRecord? = nil) async throws {
         try service.store.checkBoundary(root)
         if let loaded { try service.store.checkBoundary(loaded.rootURL) }
+        cancelPendingActions()
+        await waitForPendingActions()
+        try Task.checkCancellation()
         let previousEdit = management.editPreviewTask
         management.cancelEditPreview()
         try await workspace.switchTo(root, loaded: loaded, waitingFor: previousEdit)
@@ -242,6 +263,11 @@ final class AppModel {
         presentation.message = nil
     }
 
+    func presentActionFailureIfPossible() {
+        guard management.sheet == nil else { return }
+        presentation.presentNextActionMessage(in: workspace.contextID)
+    }
+
     func showMaintenanceFailure() {
         if canShowMaintenanceFailure { workspace.showMaintenanceFailure() }
     }
@@ -277,15 +303,54 @@ final class AppModel {
     }
 
     func openTool(_ tool: ExternalTool, workspaceRoot: Bool = false) {
-        guard workspace.canManage, let url = workspaceRoot ? workspace.record?.rootURL : workspace.currentURL else { return }
-        Task {
+        let contextID = workspace.contextID
+        let title = text.string(.uiCanTOpen(tool.name))
+        let directory: URL
+        do {
+            if presentation.quitPending { throw WorkspaceActionIssue.quitting }
+            directory = try workspace.toolDirectory(workspaceRoot: workspaceRoot)
+        } catch {
+            presentation.enqueueActionError(error, title: title, contextID: contextID)
+            presentActionFailureIfPossible()
+            return
+        }
+        let key = ToolLaunchKey(toolID: tool.id, directory: directory.path)
+        guard toolLaunches[key] == nil else { return }
+        let id = UUID()
+        let task = Task {
+            defer { if toolLaunches[key]?.id == id { toolLaunches[key] = nil } }
             do {
-                try await toolService.open(tool, directory: url)
+                try Task.checkCancellation()
+                try await toolService.open(tool, directory: directory)
+                try Task.checkCancellation()
+                guard workspace.contextID == contextID, !presentation.quitPending else { return }
                 preferredToolIDs[tool.category] = tool.id
                 defaults.set(tool.id, forKey: "tool.\(tool.category)")
+            } catch {
+                guard !Task.isCancelled, workspace.contextID == contextID, !presentation.quitPending,
+                      !(error is CancellationError),
+                      (error as? MonoDeckError)?.code != "cancelled" else { return }
+                presentation.enqueueActionError(error, title: title, contextID: contextID, target: directory.path)
+                presentActionFailureIfPossible()
             }
-            catch { presentation.presentMessage(error, title: text.string(.uiCanTOpen("\(tool.name)"))) }
         }
+        toolLaunches[key] = .init(id: id, task: task)
+    }
+
+    func cancelPendingActions() {
+        management.cancelOpeningForm()
+        cancelToolLaunches()
+    }
+
+    func waitForPendingActions() async {
+        let opening = management.openingFormTask
+        let launches = toolLaunches.values.map(\.task)
+        await opening?.value
+        for task in launches { await task.value }
+    }
+
+    private func cancelToolLaunches() {
+        for launch in toolLaunches.values { launch.task.cancel() }
     }
 
     static func launchDefaults() -> UserDefaults {
@@ -325,4 +390,14 @@ final class AppModel {
         }
     }
     #endif
+}
+
+private struct ToolLaunchKey: Hashable {
+    let toolID: String
+    let directory: String
+}
+
+private struct ToolLaunch {
+    let id: UUID
+    let task: Task<Void, Never>
 }

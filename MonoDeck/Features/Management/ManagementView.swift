@@ -97,7 +97,7 @@ struct ManagementView: View {
                         Text(presentation.text.string(.uiMatches(Int(repositories.count)))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                             .accessibilityIdentifier("repositoryMatches")
                     }
-                    Text(presentation.text.string(.uiOfSelected2(selected.count, workspace.sortedRepositories.count))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
+                    Text(presentation.text.string(.uiOfSelected2(selected.count, formRepositories.count))).font(DialogTypography.auxiliary).foregroundStyle(DesignStyle.secondary)
                         .accessibilityIdentifier("repositorySelectionCount")
                 }.frame(height: 18)
                 RepositorySearchField(text: $repositorySearch, focused: $repositorySearchFocused, placeholder: presentation.text.string(.uiSearchRepositories))
@@ -126,18 +126,23 @@ struct ManagementView: View {
                                 .accessibilityIdentifier("clearRepositorySearch")
                         }.font(DialogTypography.auxiliary)
                     }
-                }.frame(height: CGFloat(min(workspace.sortedRepositories.count, 7) * 28)).formPlate()
+                }.frame(height: CGFloat(min(formRepositories.count, 7) * 28)).formPlate()
             }
         }
     }
 
     var matchingRepositories: [Repository] {
         let query = repositorySearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        return workspace.sortedRepositories.filter { query.isEmpty || $0.displayName.localizedStandardContains(query) }
+        return formRepositories.filter { query.isEmpty || $0.displayName.localizedStandardContains(query) }
+    }
+
+    private var formRepositories: [Repository] {
+        sheet == .create ? management.creationRepositories : workspace.sortedRepositories
     }
 
     var selectedRepositoryIDs: [String] {
-        workspace.sortedRepositories.filter { selected.contains($0.id) }.map(\.id)
+        let ordered = formRepositories.filter { selected.contains($0.id) }.map(\.id)
+        return sheet == .create ? ordered + selected.subtracting(ordered).sorted() : ordered
     }
 
     private var deletionForm: some View {

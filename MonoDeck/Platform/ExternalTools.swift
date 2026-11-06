@@ -42,8 +42,11 @@ public final class ExternalTools {
         ExternalTool.builtIn.filter { tool in tool.bundleID.map { applicationURL($0) != nil } ?? false }
     }
     public func open(_ tool: ExternalTool, directory: URL) async throws {
-        try PathSafety.directory(directory)
+        try Task.checkCancellation()
+        try checkActionDirectory(directory)
         if tool.category == "Git GUI" { try await git.checkRepository(directory) }
+        try Task.checkCancellation()
+        try checkActionDirectory(directory)
         guard let id = tool.bundleID, let application = applicationURL(id) else { throw MonoDeckError("tool-unavailable", .isNotInstalled("\(tool.name)")) }
         var target = directory
         if tool.id == "xcode" { target = try xcodeTarget(directory) }
@@ -56,6 +59,7 @@ public final class ExternalTools {
             guard let url = link.url else { throw MonoDeckError("tool-launch-failed", .couldNotCreateClaudeCodeDesktopLink) }
             target = url
         }
+        try Task.checkCancellation()
         try await openURL(target, application)
     }
 

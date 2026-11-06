@@ -12,7 +12,10 @@ struct InterfaceText {
 
     func number(_ value: Int) -> String { value.formatted(.number.locale(locale.locale)) }
 
-    func message(_ error: Error) -> String { message(MonoDeckError.wrap(error).userMessage) }
+    func message(_ error: Error) -> String {
+        if let issue = error as? WorkspaceActionIssue { return string(issue.message) }
+        return message(MonoDeckError.wrap(error).userMessage)
+    }
 
     func message(_ item: ItemResult) -> String {
         guard let value = item.userMessage ?? item.message.map(UserMessage.diagnostic) else { return "" }

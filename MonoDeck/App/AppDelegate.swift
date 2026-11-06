@@ -55,6 +55,7 @@ import Observation
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationTask != nil { return .terminateCancel }
+        model?.cancelPendingActions()
         if let model, model.busy {
             if model.updates.restartPending || model.relaunch.restartPending { model.presentation.quitPending = true }
             if model.workspace.isReloading && !model.operations.canCancel {
@@ -67,7 +68,7 @@ import Observation
         }
         if model?.presentation.result != nil { model?.presentation.quitPending = true; return .terminateCancel }
         if terminationPrepared { return .terminateNow }
-        if startupTask != nil || model?.workspace.needsReadTermination == true || model?.updates.needsTerminationPreparation == true || model?.relaunch.restartPending == true {
+        if startupTask != nil || model?.hasPendingActions == true || model?.workspace.needsReadTermination == true || model?.updates.needsTerminationPreparation == true || model?.relaunch.restartPending == true {
             let model = model
             model?.presentation.quitPending = true
             let startupTask = startupTask
@@ -75,6 +76,7 @@ import Observation
             startupTask?.cancel()
             terminationTask = Task {
                 await startupTask?.value
+                await model?.waitForPendingActions()
                 await model?.workspace.stopReads()
                 var canTerminate = await model?.updates.prepareToTerminate() ?? true
                 if canTerminate { canTerminate = await model?.relaunch.prepareToTerminate() ?? true }

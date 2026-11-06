@@ -35,7 +35,22 @@ final class WorkspaceModel {
     private(set) var maintenanceFailure: OperationResult?
     private(set) var maintenanceFailurePending = false
     @ObservationIgnored var onMaintenanceFailure: (() -> Void)?
-    var canManage: Bool { record != nil && readsAllowed && maintenanceState == .ready && !busy && !presentation.quitPending }
+    private(set) var contextID = UUID()
+    var canManage: Bool { managementIssue == nil }
+    var managementIssue: WorkspaceActionIssue? { managementIssue(allowing: nil) }
+    func managementIssue(allowing operationID: Int?) -> WorkspaceActionIssue? {
+        if presentation.quitPending { return .quitting }
+        guard record != nil else {
+            if blocked != nil { return .recordUnavailable }
+            return maintenanceState == .pending ? .preparing : .noWorkspace
+        }
+        if operations.cancelling { return .cancelling }
+        if maintenanceState == .pending || maintenanceState == .maintaining || switchingGeneration != nil { return .preparing }
+        if maintenanceState == .failed { return .maintenanceFailed }
+        if !readsAllowed { return .recordUnavailable }
+        if busy, operationID.map(operations.isCurrent) != true { return .busy }
+        return nil
+    }
     enum MaintenanceTrigger { case startup, manual }
     var hasActiveReads: Bool { details.hasActiveReads || reloadTask != nil }
     var needsReadTermination: Bool { hasActiveReads || recordMonitoring || recordDebounceTask != nil || details.needsCacheTermination }
@@ -134,6 +149,15 @@ final class WorkspaceModel {
         guard let record else { return nil }
         if let selection { return try? PathSafety.child(selection.path, of: record.rootURL, allowMissing: false) }
         return record.rootURL
+    }
+
+    func toolDirectory(workspaceRoot: Bool = false) throws -> URL {
+        guard let record else { throw WorkspaceActionIssue.targetUnavailable }
+        try checkActionDirectory(record.rootURL)
+        guard let selection, !workspaceRoot else { return record.rootURL }
+        let directory = try PathSafety.child(selection.path, of: record.rootURL, allowMissing: false)
+        try checkActionDirectory(directory)
+        return directory
     }
 
     var text: InterfaceText { preferences.text }
@@ -605,6 +629,7 @@ final class WorkspaceModel {
         let rootChanged = previous?.root != record?.root
         recordContextChanged = details.applyWorkspace(record)
         if rootChanged {
+            contextID = UUID()
             onContextChange?(true)
             sidebarResources = []
         }

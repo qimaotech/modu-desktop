@@ -12,9 +12,9 @@ struct WorktreeCreation {
 }
 
 extension WorkspaceService {
-    public func createGroup(_ groupName: String, repositoryIDs: [String], at root: URL, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
-        if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .create) }
-        return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, authorization: nil, progress: progress)
+    public func createGroup(_ groupName: String, repositoryIDs: [String], at root: URL, expectedRepositories: [Repository]? = nil, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
+        if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, expectedRepositories: expectedRepositories) }
+        return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .create, authorization: nil, expectedRepositories: expectedRepositories, progress: progress)
     }
     public func addGroupMembers(_ groupName: String, repositoryIDs: [String], at root: URL, dryRun: Bool = false, progress: ProgressHandler = { _ in }) async -> OperationResult {
         if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .addMembers) }
@@ -24,7 +24,7 @@ extension WorkspaceService {
         if dryRun { return await previewGroupChange(groupName, repositoryIDs: repositoryIDs, root: root, change: .edit) }
         return await changeGroup(groupName, repositoryIDs: repositoryIDs, root: root, change: .edit, authorization: authorization, progress: progress)
     }
-    private func changeGroup(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, authorization: [DeletionTarget]?, progress: ProgressHandler) async -> OperationResult {
+    private func changeGroup(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, authorization: [DeletionTarget]?, expectedRepositories: [Repository]? = nil, progress: ProgressHandler) async -> OperationResult {
         let command = change.command
         let replace = change == .edit
         var result = OperationResult(command: command, workspace: root.path)
@@ -35,6 +35,7 @@ extension WorkspaceService {
         do {
             let lease = try await store.lock(root); defer { lease.unlock() }
             var record = try store.load(root)
+            if let expectedRepositories { try validateRepositorySelection(expectedRepositories, repositoryIDs: repositoryIDs, record: record) }
             try await validateMembers(groupName, repositoryIDs: repositoryIDs, record: record)
             try validateGroupChange(change, groupName: groupName, record: record)
             if !replace && repositoryIDs.isEmpty { throw MonoDeckError("invalid-input", .chooseAtLeastOneRepository) }
@@ -75,11 +76,12 @@ extension WorkspaceService {
         return result
     }
 
-    private func previewGroupChange(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange) async -> OperationResult {
+    private func previewGroupChange(_ groupName: String, repositoryIDs: [String], root: URL, change: GroupChange, expectedRepositories: [Repository]? = nil) async -> OperationResult {
         var result = OperationResult(command: change.command, workspace: root.path)
         result.dryRun = true
         do {
             let record = try await read(root)
+            if let expectedRepositories { try validateRepositorySelection(expectedRepositories, repositoryIDs: repositoryIDs, record: record) }
             let reader = inspectionService()
             try validateGroupChange(change, groupName: groupName, record: record)
             try await reader.validateMembers(groupName, repositoryIDs: repositoryIDs, record: record)
@@ -99,6 +101,13 @@ extension WorkspaceService {
             result.plan = plan
         } catch { result.status = .failed; let failure = MonoDeckError.wrap(error); result.reasonCode = failure.code; result.message = failure.message; result.userMessage = failure.userMessage; if failure.code == "cancelled" { result.status = .cancelled } }
         return result
+    }
+
+    public func validateRepositorySelection(_ expected: [Repository], repositoryIDs: [String], record: WorkspaceRecord) throws {
+        guard Set(expected.map(\.id)) == Set(repositoryIDs),
+              expected.allSatisfy({ repository in record.repositories.contains { $0.id == repository.id && $0.url == repository.url } }) else {
+            throw MonoDeckError("repository-selection-changed", .selectedRepositoriesChanged)
+        }
     }
 
     private func validateGroupChange(_ change: GroupChange, groupName: String, record: WorkspaceRecord) throws {
