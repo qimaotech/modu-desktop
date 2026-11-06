@@ -1592,6 +1592,63 @@ import SwiftUI
         #expect(model.workspace.record == original && model.presentation.result == nil)
     }
 
+    @Test(arguments: ["missing", "saved", "corrupt", "unsupported", "required"])
+    func changingWorkspaceRecoversMissingRecordsAndPreservesExistingRegistration(_ kind: String) async throws {
+        let fixture = try await Fixture(template: .singleRepository)
+        defer { fixture.remove() }
+        try await fixture.prepareGroup("feature", repositoryIDs: ["repo"])
+        var saved = try fixture.service.store.load(fixture.root)
+        let file = fixture.service.store.recordURL(fixture.root)
+        switch kind {
+        case "saved":
+            saved.repositories[0].displayNameOverride = "Custom"
+            saved.groups.removeValue(forKey: "feature")
+            try fixture.service.store.save(saved)
+        case "corrupt": try Data("invalid".utf8).write(to: file)
+        case "unsupported":
+            saved.version = 1
+            try JSONEncoder().encode(saved).write(to: file)
+        default: try FileManager.default.removeItem(at: file)
+        }
+        let before = PathSafety.exists(file) ? try Data(contentsOf: file) : nil
+        let current = fixture.directory.appending(path: "current-workspace")
+        try FileManager.default.createDirectory(at: current, withIntermediateDirectories: false)
+        let opened = await fixture.service.openWorkspaceWithRecord(current)
+        try #require(opened.result.status == .success)
+        let original = try #require(opened.record)
+        let defaults = try #require(UserDefaults(suiteName: fixture.directory.lastPathComponent))
+        defer { defaults.removePersistentDomain(forName: fixture.directory.lastPathComponent) }
+        let model = AppModel(defaults: defaults, service: fixture.service)
+        model.workspace.record = original
+        defaults.set(original.root, forKey: "workspace")
+
+        try #require(model.changeWorkspace(fixture.root, requireExistingRecord: kind == "required", cancellable: false))
+        #expect(model.workspace.record == original && defaults.string(forKey: "workspace") == original.root)
+        await model.operation?.value
+        await model.workspace.stopReads()
+
+        if kind == "missing" || kind == "saved" {
+            let restored = try #require(model.workspace.record)
+            #expect(restored.root == PathSafety.canonical(fixture.root).path)
+            #expect(defaults.string(forKey: "workspace") == restored.root && model.presentation.result == nil)
+            #expect(try fixture.service.store.load(fixture.root) == restored)
+            if kind == "missing" {
+                #expect(restored.repositories.map(\.id) == ["repo"])
+                #expect(restored.groups["feature"]?.repositoryIDs == ["repo"])
+            } else {
+                #expect(restored == saved)
+            }
+        } else {
+            #expect(model.workspace.record == original && defaults.string(forKey: "workspace") == original.root)
+            #expect(model.presentation.result?.status == .failed && model.presentation.resultHost == .settings)
+            #expect(model.presentation.result?.items.first?.reasonCode == (kind == "required" ? "workspace-record-missing" : "invalid-workspace-record"))
+            #expect(model.presentation.result?.items.allSatisfy { $0.effects.isEmpty } == true)
+        }
+        if kind != "missing" { #expect((PathSafety.exists(file) ? try Data(contentsOf: file) : nil) == before) }
+        #expect(try fixture.service.store.load(current) == original)
+        #expect(!model.busy && !model.openingWorkspace)
+    }
+
     @Test func invalidLockedAndCancelledChangesKeepTheCurrentWorkspace() async throws {
         let fixture = try await Fixture(template: .singleRepository)
         defer { fixture.remove() }

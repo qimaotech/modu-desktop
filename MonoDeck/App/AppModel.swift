@@ -185,7 +185,7 @@ final class AppModel {
             await waitForPendingActions()
             await workspace.waitForReadCancellation()
             let skill = Bundle.main.url(forResource: "SKILL", withExtension: "md", subdirectory: "mono-deck-workflow")
-            let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: requireExistingRecord)
+            let opened = await service.openWorkspaceWithRecord(root, skill: skill, installer: installer, requireExistingRecord: requireExistingRecord, recoverUnregisteredResources: true)
             var outcome = opened.result
             if let record = opened.record, outcome.status == .success, !presentation.quitPending {
                 do {
