@@ -9,6 +9,11 @@ struct MonoDeck: AsyncParsableCommand {
 let original = Array(CommandLine.arguments.dropFirst())
 let task = Task {
     do {
+        if original.first == "--internal-cleanup-worktrees" {
+            guard original.count >= 3 else { throw MonoDeckError("invalid-input", "Invalid worktree cleanup arguments.") }
+            try await WorktreeCleanup.run(directory: URL(fileURLWithPath: original[1]), entries: Array(original.dropFirst(2)))
+            return
+        }
         if original.first == "--internal-relaunch" {
             guard original.count >= 4, let pid = Int32(original[3]) else {
                 throw MonoDeckError("invalid-input", "Invalid relaunch arguments.")

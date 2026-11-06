@@ -53,7 +53,7 @@ Do not edit this skill's workspace copies of `SKILL.md` or `agents/openai.yaml`:
 - `group delete <group-name>` deletes the group root and all members. `repo delete <repository-id>` deletes the repository's managed members, then moves its main repository directory to Trash.
 - Before authorizing deletion, review target paths, current branches, and risks in `--dry-run` output.
 - Unknown local-change status does not mean clean or prevent linked worktree deletion. The preview retains read failures as warnings and allows authorized cleanup when ownership and target checks pass; report those warnings when reviewing the preview.
-- Linked worktree deletion permanently removes its files and current local branch, including ignored files, reused branches, and unmerged commits. A detached HEAD has no branch to delete.
+- Linked worktree deletion permanently removes its files and current local branch, including ignored files, reused branches, and unmerged commits. Success completes original-path removal, Git deregistration, and current-branch handling; files and disk space may still await best-effort background cleanup. A detached HEAD has no branch to delete.
 - When a worktree directory and its Git registration are missing, deletion may only remove the workspace record entry.
 
 ## Results and failures

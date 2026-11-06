@@ -28,6 +28,7 @@ extension WorkspaceService {
         let command = change.command
         let replace = change == .edit
         var result = OperationResult(command: command, workspace: root.path)
+        var cleanup = WorktreeRemovalBatch(removal: worktreeRemoval)
         if replace, authorization == nil {
             let preview = await editGroupPreview(groupName, repositoryIDs: repositoryIDs, at: root)
             guard preview.status == .success else { return preview }
@@ -61,11 +62,13 @@ extension WorkspaceService {
                 }
             }
             for (index, target) in deletion.enumerated() {
-                let item = await delete(target, record: &record, progress: progress)
+                let item = await delete(target, record: &record, cleanup: &cleanup, progress: progress)
                 result.items.append(item)
                 if item.status != .success {
                     result.items += deletion.dropFirst(index + 1).map { .notProcessed($0.resource) }
-                    result.summarize(cancelled: item.status == .cancelled); return result
+                    result.summarize(cancelled: item.status == .cancelled)
+                    await cleanup.finish()
+                    return result
                 }
             }
             if result.items.isEmpty {
@@ -73,6 +76,7 @@ extension WorkspaceService {
             }
             result.summarize()
         } catch { result = .init(command: command, workspace: root.path, status: .failed, error: .wrap(error)) }
+        await cleanup.finish()
         return result
     }
 

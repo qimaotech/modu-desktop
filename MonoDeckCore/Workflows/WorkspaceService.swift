@@ -3,8 +3,9 @@ import Foundation
 public struct WorkspaceService: Sendable {
     public let store: WorkspaceStore
     public let git: Git
+    var worktreeRemoval: WorktreeRemoval
     let trashDirectory: @Sendable (URL) throws -> URL
-    public init(store: WorkspaceStore = .init(), git: Git = .init(), trash: @escaping @Sendable (URL) throws -> URL = { try PathSafety.trash($0) }) { self.store = store; self.git = git; self.trashDirectory = trash }
+    public init(store: WorkspaceStore = .init(), git: Git = .init(), trash: @escaping @Sendable (URL) throws -> URL = { try PathSafety.trash($0) }) { self.store = store; self.git = git; self.trashDirectory = trash; self.worktreeRemoval = .init(runner: git.runner) }
 
     public func candidate(_ url: URL, requireExistingRecord: Bool = false, recoverUnregisteredResources: Bool = false) async throws -> URL {
         try checkCancellation()

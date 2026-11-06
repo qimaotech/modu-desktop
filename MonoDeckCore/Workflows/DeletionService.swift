@@ -26,6 +26,7 @@ extension WorkspaceService {
         let command: String
         switch request { case .repository: command = "repo.delete"; case .group: command = "group.delete"; case .member, .members: command = "group.member.delete" }
         var result = OperationResult(command: command, workspace: root.path)
+        var cleanup = WorktreeRemovalBatch(removal: worktreeRemoval)
         do {
             if dryRun || (authorization == nil && !confirmCurrentTargets) {
                 let preview = try await previewDelete(request, at: root)
@@ -39,7 +40,7 @@ extension WorkspaceService {
             let targets = try await deletionTargets(deleteResources(request, record: record), record: record, readRisks: false)
             if let authorization { try verifyAuthorization(authorization, actual: targets) }
             for (index, target) in targets.enumerated() {
-                let item = await delete(target, record: &record, progress: progress)
+                let item = await delete(target, record: &record, cleanup: &cleanup, progress: progress)
                 result.items.append(item)
                 if item.status != .success {
                     result.items += targets.dropFirst(index + 1).map { .notProcessed($0.resource) }
@@ -48,6 +49,7 @@ extension WorkspaceService {
             }
             result.summarize(cancelled: result.items.contains { $0.status == .cancelled })
         } catch { result = .init(command: command, workspace: root.path, status: .failed, error: .wrap(error)); result.dryRun = dryRun }
+        await cleanup.finish()
         return result
     }
 
@@ -161,7 +163,7 @@ extension WorkspaceService {
         let others = repository.registrations.filter { !allowed.contains(PathSafety.identity(URL(fileURLWithPath: $0.path))) }
         guard others.isEmpty else { throw MonoDeckError("unmanaged-worktree", .unmanagedWorktrees(others.map(\.path))) }
     }
-    func delete(_ target: DeletionTarget, record: inout WorkspaceRecord, progress: ProgressHandler) async -> ItemResult {
+    func delete(_ target: DeletionTarget, record: inout WorkspaceRecord, cleanup: inout WorktreeRemovalBatch, progress: ProgressHandler) async -> ItemResult {
         var item = ItemResult(target.resource)
         do {
             try checkCancellation()
@@ -185,7 +187,9 @@ extension WorkspaceService {
                 let repository = resource.repositoryID.map { record.repositoryURL($0) } ?? record.rootURL
                 if target.gitRegistered || target.exists {
                     item.effects.append(.init("remove-worktree", path.path, state: "unknown"))
+                    let staged = cleanup.stage(path)
                     _ = try await git.run(["worktree", "remove", "--force", "--", path.path], at: repository, cancellable: false)
+                    if let staged { cleanup.didUnregister(staged) }
                     item.effects[item.effects.count - 1].state = "applied"
                 }
                 var candidate = record

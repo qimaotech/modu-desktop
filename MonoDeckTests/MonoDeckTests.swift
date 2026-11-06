@@ -276,16 +276,20 @@ struct Fixture: Sendable {
         environment["GIT_CONFIG_GLOBAL"] = directory.appending(path: "gitconfig").path
         environment["GIT_AUTHOR_NAME"] = "MonoDeck Test"; environment["GIT_AUTHOR_EMAIL"] = "test@example.invalid"
         environment["GIT_COMMITTER_NAME"] = "MonoDeck Test"; environment["GIT_COMMITTER_EMAIL"] = "test@example.invalid"
+        environment["TMPDIR"] = TestEnvironment.temporaryDirectory.path
         let remote = directory.appending(path: "repo.git")
         try Data("[url \"\(remote.path)\"]\n    insteadOf = \(remoteURL)\n[protocol \"file\"]\n    allow = always\n[init]\n    defaultBranch = main\n".utf8).write(to: directory.appending(path: "gitconfig"))
         let git = Git(runner: CommandRunner(environment: environment))
         let trash = directory.appending(path: "trash")
-        service = WorkspaceService(store: .init(support: directory.appending(path: "support")), git: git, trash: { source in
+        var service = WorkspaceService(store: .init(support: directory.appending(path: "support")), git: git, trash: { source in
             try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
             let target = trash.appending(path: UUID().uuidString)
             try FileManager.default.moveItem(at: source, to: target)
             return target
         })
+        // Fast-removal tests opt in with a fixture-owned helper and temporary directory.
+        service.worktreeRemoval.helper = nil
+        self.service = service
     }
     func runCLI(_ arguments: [String], environment: [String: String] = [:]) async throws -> CommandOutput {
         let executable = try #require(Bundle.main.url(forResource: "mono-deck", withExtension: nil))
