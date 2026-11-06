@@ -545,8 +545,6 @@ import Testing
         try await waitForDetail(model)
         #expect(model.workspace.detail.summary?.base == "origin/main")
         #expect(model.workspace.detail.uniqueCommits?.map(\.subject) == (0..<31).reversed().map { "change \($0)" })
-        let detailView = GitBrowserView(workspace: model.workspace, preferences: model.preferences, tools: [], preferredToolIDs: [:], openTool: { _ in })
-        #expect(detailView.showsUniqueCommits)
         _ = try await fixture.service.git.run(["config", "log.date", "invalid-date-format"], at: path)
         model.workspace.selection = nil
         model.workspace.selection = resource

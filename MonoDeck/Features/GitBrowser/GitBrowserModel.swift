@@ -31,7 +31,7 @@ final class GitBrowserModel {
     var needsCacheTermination: Bool { diskCache != nil }
     var snapshotLoading: Bool { changesLoading || summaryLoading }
     var detailLoading: Bool { detailTask != nil }
-    func state(for resource: Resource) -> ResourceState? { resources[resource]?.state }
+    func state(for resource: Resource) -> ResourceState? { sidebarStates[resource]?.value }
 
     private(set) var detailTask: Task<Void, Never>?
     private(set) var detailPreloadTask: Task<Void, Never>?
@@ -62,7 +62,8 @@ final class GitBrowserModel {
     private var suspended = false
     private var active = true
     private var detailWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
-    private var resources: [Resource: ResourceCacheEntry] = [:]
+    @ObservationIgnored private var resources: [Resource: ResourceCacheEntry] = [:]
+    private var sidebarStates: [Resource: SidebarState] = [:]
     private var histories: [RepositoryHistoryCacheKey: HistoryCacheEntry] = [:]
     private var pendingDetailInvalidations = Set<RepositoryCacheIdentity>()
     private var historyUse = 0
@@ -115,6 +116,13 @@ final class GitBrowserModel {
             pendingSnapshots.formIntersection(configured)
             preloadScope.formIntersection(configured)
             if let selection, let current = currentIdentities[selection], current != previousIdentities[selection] { clearDetail() }
+        }
+        if rootChanged || previousIdentities != currentIdentities || Set(sidebarStates.keys) != Set(currentIdentities.keys) {
+            let previousStates = sidebarStates
+            sidebarStates = Dictionary(uniqueKeysWithValues: currentIdentities.keys.map { resource in
+                let retained = !rootChanged && previousIdentities[resource] == currentIdentities[resource] ? previousStates[resource] : nil
+                return (resource, retained ?? SidebarState())
+            })
         }
         self.workspace = workspace
         if rootChanged { collapsedPaths = Set(collapsedPathsPreferenceKey.flatMap { defaults.stringArray(forKey: $0) } ?? []) }
@@ -902,6 +910,8 @@ final class GitBrowserModel {
         entry.state = state; entry.lastAttempt = now(); entry.invalidated = invalidated
         entry.statusIdentity = statusIdentity(for: state.resource)
         resources[state.resource] = entry
+        if let sidebarState = sidebarStates[state.resource] { sidebarState.update(state) }
+        else { sidebarStates[state.resource] = SidebarState(value: state) }
     }
 
     private func updateState(_ resource: Resource, changes: [FileChange]?, error: MonoDeckError?, invalidated: Bool = false) {
@@ -946,6 +956,18 @@ final class GitBrowserModel {
         case restored(GitBrowserState)
         case prepared(ResourceReadContext, GitBrowserState)
         case statusRead, readingSummary, summaryRead
+    }
+
+    @MainActor @Observable fileprivate final class SidebarState {
+        private(set) var value: ResourceState?
+
+        init(value: ResourceState? = nil) { self.value = value }
+
+        func update(_ state: ResourceState) {
+            guard value?.resource != state.resource || value?.available != state.available || value?.dirty != state.dirty
+                || value?.reason != state.reason || value?.reasonMessage != state.reasonMessage else { return }
+            value = state
+        }
     }
 
     private struct ResourceCacheEntry {

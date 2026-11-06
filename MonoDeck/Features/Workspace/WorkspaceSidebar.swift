@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import UniformTypeIdentifiers
 import MonoDeckCore
 
 // Expansion state belongs inside the AppKit-hosted sidebar so root-view updates preserve its animation history.
@@ -25,42 +24,14 @@ struct WorkspaceSidebar: View {
     }
 
     var body: some View {
+        // Build rows outside the geometry closure; width changes only need to resize the viewport.
+        let sections = sections
+        let resources = Set(visibleResources)
+        let workspaceRoot = workspace.record?.root
         GeometryReader { geometry in
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 8) {
-                        VStack(spacing: 0) {
-                            sectionHeader("repositories", expanded: $repositoriesExpanded, add: .add)
-                            if repositoriesExpanded {
-                                VStack(spacing: 1) {
-                                    ForEach(workspace.sortedRepositories) { repo in resourceRow(.repository(repo.id), title: repo.displayName) }
-                                }.transition(.opacity)
-                            }
-                        }.clipped()
-                        VStack(spacing: 0) {
-                            sectionHeader("worktrees", expanded: $groupsExpanded, add: .create)
-                            if groupsExpanded {
-                                VStack(spacing: 1) {
-                                    ForEach(workspace.sortedGroups, id: \.self) { group in
-                                        VStack(spacing: 1) {
-                                            resourceRow(.group(group), title: group)
-                                            if workspace.expandedGroups.contains(group) {
-                                                VStack(spacing: 1) {
-                                                    ForEach(workspace.sortedRepositories.filter { workspace.record?.groups[group]?.repositoryIDs.contains($0.id) == true }) { repo in
-                                                        resourceRow(.member(groupName: group, repositoryID: repo.id), title: repo.displayName)
-                                                    }
-                                                }.transition(.opacity)
-                                            }
-                                        }.clipped()
-                                    }
-                                }.transition(.opacity)
-                            }
-                        }.clipped()
-                    }
-                    .animation(expansionAnimation, value: repositoriesExpanded)
-                    .animation(expansionAnimation, value: groupsExpanded)
-                    .animation(expansionAnimation, value: workspace.expandedGroups)
-                    .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12)
+                    sections
                     .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .top)
                     .background {
                         Button { workspace.selection = nil; sidebarFocused = true } label: {
@@ -69,14 +40,18 @@ struct WorkspaceSidebar: View {
                     }
                 }
                 .onChange(of: workspace.selection, initial: true) { _, selection in if let selection { proxy.scrollTo(selection.id) } }
-                .onChange(of: visibleResources, initial: true) { _, resources in
-                    if let root = workspace.record?.root { workspace.setVisibleResources(Set(resources), in: root) }
+                .onChange(of: resources, initial: true) { _, resources in
+                    if let workspaceRoot { workspace.setVisibleResources(resources, in: workspaceRoot) }
                 }
             }
         }
         .background(DesignStyle.sidebar)
         .buttonStyle(SidebarButtonStyle())
         .focusable().focused($sidebarFocused).focusEffectDisabled()
+        .onAppear { workspace.refreshSidebarStructure() }
+        .onReceive(NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)) { _ in
+            workspace.refreshSidebarStructure()
+        }
         .onKeyPress(.downArrow) { moveSelection(1) }
         .onKeyPress(.upArrow) { moveSelection(-1) }
         .onKeyPress(.rightArrow) {
@@ -87,6 +62,48 @@ struct WorkspaceSidebar: View {
             guard let group = workspace.selection?.groupName else { return .ignored }
             workspace.expandedGroups.remove(group); workspace.selection = .group(group); return .handled
         }
+    }
+
+    private var sections: some View {
+        let structure = workspace.sidebarStructure
+        return VStack(spacing: 8) {
+            VStack(spacing: 0) {
+                sectionHeader("repositories", expanded: $repositoriesExpanded, add: .add)
+                if repositoriesExpanded {
+                    VStack(spacing: 1) {
+                        ForEach(structure.repositories) { repo in
+                            WorkspaceSidebarRow(workspace: workspace, management: management, operations: operations, preferences: preferences,
+                                                resource: .repository(repo.id), title: repo.title, sidebarFocused: $sidebarFocused)
+                        }
+                    }.transition(.opacity)
+                }
+            }.clipped()
+            VStack(spacing: 0) {
+                sectionHeader("worktrees", expanded: $groupsExpanded, add: .create)
+                if groupsExpanded {
+                    VStack(spacing: 1) {
+                        ForEach(structure.groups) { group in
+                            VStack(spacing: 1) {
+                                WorkspaceSidebarRow(workspace: workspace, management: management, operations: operations, preferences: preferences,
+                                                    resource: .group(group.name), title: group.name, sidebarFocused: $sidebarFocused)
+                                if workspace.expandedGroups.contains(group.name) {
+                                    VStack(spacing: 1) {
+                                        ForEach(group.members) { repo in
+                                            WorkspaceSidebarRow(workspace: workspace, management: management, operations: operations, preferences: preferences,
+                                                                resource: .member(groupName: group.name, repositoryID: repo.id), title: repo.title, sidebarFocused: $sidebarFocused)
+                                        }
+                                    }.transition(.opacity)
+                                }
+                            }.clipped()
+                        }
+                    }.transition(.opacity)
+                }
+            }.clipped()
+        }
+        .animation(expansionAnimation, value: repositoriesExpanded)
+        .animation(expansionAnimation, value: groupsExpanded)
+        .animation(expansionAnimation, value: workspace.expandedGroups)
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12)
     }
 
     private func sectionHeader(_ title: String, expanded: Binding<Bool>, add: ManagementSheet) -> some View {
@@ -106,7 +123,7 @@ struct WorkspaceSidebar: View {
                 }
                     .buttonStyle(HoverPlainButtonStyle(shape: Circle(), foreground: DesignStyle.secondary, hoverForeground: DesignStyle.secondary))
                     .help(preferences.text.string(.uiUpdateRepositories)).accessibilityLabel(preferences.text.string(.uiUpdateRepositories))
-                    .disabled(!workspace.canManage || workspace.sortedRepositories.isEmpty)
+                    .disabled(!workspace.canManage || workspace.sidebarStructure.repositories.isEmpty)
             }
             Button { management.requestForm(add == .add ? .addRepository : .createGroup) } label: {
                 Image(systemName: "plus")
@@ -118,40 +135,9 @@ struct WorkspaceSidebar: View {
         }.frame(height: 32)
     }
 
-    private func resourceRow(_ resource: Resource, title: String) -> some View {
-        let state = workspace.state(for: resource)
-        return HStack(spacing: 6) {
-            if resource.kind == .group {
-                Button { workspace.toggleGroup(title); sidebarFocused = true } label: {
-                    DisclosureIcon(expanded: workspace.expandedGroups.contains(title))
-                }.accessibilityLabel(preferences.text.string(.uiExpandOrCollapse) + " " + title)
-            }
-            Button { workspace.selectSidebarRow(resource); sidebarFocused = true } label: {
-                HStack(spacing: 6) {
-                    if resource.kind == .group { SidebarFolderIcon() }
-                    else { DesignIcon(name: "FolderGit") }
-                    Text(title).font(.system(size: 13, weight: resource.kind == .group ? .medium : .regular)).lineLimit(1)
-                    Spacer(minLength: 4)
-                    if state?.available == false {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary).frame(width: 24)
-                            .help(state?.reasonMessage.map(preferences.text.message) ?? preferences.text.string(.uiUnavailable)).accessibilityLabel(preferences.text.string(.uiUnavailable))
-                    } else if state?.dirty == true {
-                        Circle().fill(.tertiary).frame(width: 7, height: 7).frame(width: 24, height: 20)
-                            .accessibilityLabel(preferences.text.string(.uiWorkingTreeHasChanges))
-                    }
-                }.frame(height: 28).contentShape(Rectangle())
-            }.accessibilityLabel(title).accessibilityAddTraits(workspace.selection == resource ? [.isSelected] : [])
-                .accessibilityValue(resource.kind == .group ? (workspace.expandedGroups.contains(title) ? preferences.text.string(.uiExpanded) : preferences.text.string(.uiCollapsed)) : "")
-        }
-        .padding(.leading, resource.kind == .member ? 32 : 16)
-        .frame(height: 28)
-        .modifier(SidebarRowBackground(selected: workspace.selection == resource))
-        .id(resource.id).help(workspace.record?.rootURL.appending(path: resource.path).path ?? resource.path)
-        .contextMenu { ResourceActions(workspace: workspace, management: management, operations: operations, text: preferences.text, resource: resource) }
-    }
-
     private var visibleResources: [Resource] {
-        workspace.visibleResources.filter { $0.kind == .repository ? repositoriesExpanded : groupsExpanded }
+        workspace.sidebarStructure.resources(expandedGroups: workspace.expandedGroups,
+                                             repositoriesExpanded: repositoriesExpanded, groupsExpanded: groupsExpanded)
     }
 
     private func moveSelection(_ offset: Int) -> KeyPress.Result {
@@ -161,13 +147,4 @@ struct WorkspaceSidebar: View {
         workspace.selection = resources[min(resources.count - 1, max(0, current + offset))]
         return .handled
     }
-}
-
-private struct SidebarFolderIcon: View {
-    var body: some View {
-        Image(nsImage: Self.folderImage).renderingMode(.original).resizable().scaledToFit()
-            .frame(width: 16, height: 16).scaleEffect(0.92).accessibilityHidden(true)
-    }
-
-    private static let folderImage = NSWorkspace.shared.icon(for: .folder)
 }

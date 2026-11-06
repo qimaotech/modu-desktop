@@ -112,6 +112,7 @@ final class WorkspaceModel {
     var record: WorkspaceRecord? {
         didSet { applyRecord(previous: oldValue) }
     }
+    private(set) var sidebarStructure = WorkspaceSidebarStructure()
 
     var blocked: String?
     var blockedDetails: String?
@@ -119,9 +120,12 @@ final class WorkspaceModel {
     var noticeDetails: String?
     var selection: Resource? {
         didSet {
-            if record != nil, let data = try? JSONEncoder().encode(selection) {
+            if record != nil {
                 // An explicit nil distinguishes the home page from a workspace without saved navigation.
-                defaults.set(data, forKey: sidebarPreferenceKey("selection"))
+                let key = sidebarPreferenceKey("selection")
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                if let data = try? encoder.encode(selection), defaults.data(forKey: key) != data { defaults.set(data, forKey: key) }
             }
             if oldValue != selection { onContextChange?(false); refreshDetail() }
         }
@@ -185,9 +189,11 @@ final class WorkspaceModel {
     func sidebarPreferenceKey(_ name: String) -> String { "sidebar.\(record?.root ?? defaults.string(forKey: "workspace") ?? "").\(name)" }
 
     var visibleResources: [Resource] {
-        sortedRepositories.map { .repository($0.id) } + sortedGroups.flatMap { group in
-            [Resource.group(group)] + (expandedGroups.contains(group) ? sortedRepositories.filter { record?.groups[group]?.repositoryIDs.contains($0.id) == true }.map { .member(groupName: group, repositoryID: $0.id) } : [])
-        }
+        sidebarStructure.resources(expandedGroups: expandedGroups)
+    }
+
+    func refreshSidebarStructure() {
+        if let updated = sidebarStructure.updated(for: record) { sidebarStructure = updated }
     }
     func selectSidebarRow(_ resource: Resource) {
         let wasSelected = selection == resource
@@ -626,6 +632,7 @@ final class WorkspaceModel {
     func cancelDetailPreload() { details.cancelPreload() }
 
     private func applyRecord(previous: WorkspaceRecord?) {
+        refreshSidebarStructure()
         let rootChanged = previous?.root != record?.root
         recordContextChanged = details.applyWorkspace(record)
         if rootChanged {
@@ -647,7 +654,8 @@ final class WorkspaceModel {
             previousGroups = Set(previous?.groups.keys ?? [:].keys)
         }
         expandedGroups = expanded.union(groups.subtracting(previousGroups)).intersection(groups)
-        defaults.set(groups.sorted(), forKey: sidebarPreferenceKey("knownGroups"))
+        let knownKey = sidebarPreferenceKey("knownGroups"), knownGroups = groups.sorted()
+        if defaults.stringArray(forKey: knownKey) != knownGroups { defaults.set(knownGroups, forKey: knownKey) }
         if rootChanged { restoreSelection(in: record) }
         else if let selection, !service.resources(record).contains(selection) { self.selection = nil }
         ensureRecordMonitoring()

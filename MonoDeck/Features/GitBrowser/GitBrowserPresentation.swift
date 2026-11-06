@@ -5,6 +5,7 @@ import MonoDeckCore
     struct CommitRow: Identifiable {
         let commit: GitCommit
         let date: String
+        let index: Int
         var id: String { commit.id }
     }
 
@@ -50,7 +51,9 @@ import MonoDeckCore
         guard self.uniqueCommits != commits || self.locale != locale || self.timeZone != timeZone.identifier || self.fonts != fonts else { return commitPresentation }
         let started = ContinuousClock.now
         self.uniqueCommits = commits; self.locale = locale; self.timeZone = timeZone.identifier; self.fonts = fonts
-        let rows = commits.map { CommitRow(commit: $0, date: $0.displayDate(locale: locale, timeZone: timeZone)) }
+        let rows = commits.enumerated().map { index, commit in
+            CommitRow(commit: commit, date: commit.displayDate(locale: locale, timeZone: timeZone), index: index)
+        }
         var author: CGFloat = 0, date: CGFloat = 0, hash: CGFloat = 0
         for row in rows {
             author = max(author, ceil((row.commit.author as NSString).size(withAttributes: [.font: font]).width))

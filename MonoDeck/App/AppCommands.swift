@@ -26,7 +26,7 @@ struct AppCommands: Commands {
         CommandMenu(model.text.string(.uiActions)) {
             Button(model.text.string(.uiAddRepository)) { openWindow(id: "main"); model.management.requestForm(.addRepository) }.keyboardShortcut("n")
             Button(model.text.string(.uiCreateWorktreeGroup)) { openWindow(id: "main"); model.management.requestForm(.createGroup) }.keyboardShortcut("n", modifiers: [.command, .shift])
-            Button(model.text.string(.uiUpdateRepositories)) { model.management.updateRepositories() }.disabled(!model.workspace.canManage || model.workspace.sortedRepositories.isEmpty)
+            Button(model.text.string(.uiUpdateRepositories)) { model.management.updateRepositories() }.disabled(!model.workspace.canManage || model.workspace.sidebarStructure.repositories.isEmpty)
             Divider()
             ResourceActions(workspace: model.workspace, management: model.management, operations: model.operations, text: model.presentation.text, resource: model.workspace.selection)
         }

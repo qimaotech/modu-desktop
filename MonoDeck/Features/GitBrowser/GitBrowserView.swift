@@ -8,7 +8,6 @@ struct GitBrowserView: View {
     var tools: [ExternalTool]
     var preferredToolIDs: [String: String]
     var openTool: (ExternalTool) -> Void
-    private var presentation: GitBrowserPresentation { workspace.details.presentationCache }
 
     var body: some View {
         GeometryReader { geometry in
@@ -17,10 +16,7 @@ struct GitBrowserView: View {
                     .textSelection(.disabled)
                 VStack(spacing: 12) {
                     summary(compact: geometry.size.width < 760)
-                    if showsLocalChanges && showsUniqueCommits { GitSplitView(upper: localChangesSection, lower: uniqueCommitsSection, defaults: preferences.defaults) }
-                    else if showsLocalChanges { localChangesSection }
-                    else if showsUniqueCommits { uniqueCommitsSection }
-                    else { Spacer() }
+                    GitBrowserSections(workspace: workspace, preferences: preferences)
                 }
             }.padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }.overlay(alignment: .bottomLeading) {
@@ -37,14 +33,14 @@ struct GitBrowserView: View {
         }.textSelection(.enabled)
     }
 
-    var showsLocalChanges: Bool { workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil }
-    var showsUniqueCommits: Bool { workspace.detail.summary?.baseOID != nil && workspace.detail.uniqueCommits?.isEmpty == false }
-
     private func summary(compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let path = workspace.record.map { record in
+            workspace.selection.map { record.rootURL.appending(path: $0.path).path } ?? record.root
+        } ?? ""
+        return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(workspace.selection?.path ?? "").font(.system(size: 13)).lineLimit(1).truncationMode(.middle)
-                    .help(workspace.currentURL?.path ?? "").accessibilityValue(workspace.currentURL?.path ?? "")
+                    .help(path).accessibilityValue(path)
                 ZStack {
                     if workspace.detailLoading {
                         ProgressView().controlSize(.mini)
@@ -84,23 +80,44 @@ struct GitBrowserView: View {
                 .accessibilityLabel(preferences.text.string(.uiLoadingSummary)) }
         }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading).detailCard()
     }
+}
 
-    private var localChangesSection: some View {
+private struct GitBrowserSections: View {
+    @Bindable var workspace: WorkspaceModel
+    var preferences: AppPreferences
+    private var presentation: GitBrowserPresentation { workspace.details.presentationCache }
+    private static let rowHeight: CGFloat = 22
+    private static let verticalPadding: CGFloat = 8
+
+    var body: some View {
+        let rows = workspace.detail.changes.map { presentation.changeRows($0, collapsed: workspace.details.collapsedPaths) } ?? []
+        let showsLocalChanges = workspace.detail.changes?.isEmpty == false || workspace.detail.changesError != nil
+        let showsUniqueCommits = workspace.detail.summary?.baseOID != nil && workspace.detail.uniqueCommits?.isEmpty == false
+        if showsLocalChanges && showsUniqueCommits {
+            GitSplitView(upper: localChangesSection(rows), lower: uniqueCommitsSection,
+                         upperHeight: workspace.detail.changesError == nil ? sectionHeight(rowCount: rows.count) : nil,
+                         lowerHeight: sectionHeight(rowCount: workspace.detail.uniqueCommits?.count ?? 0),
+                         defaults: preferences.defaults)
+        } else if showsLocalChanges { localChangesSection(rows) }
+        else if showsUniqueCommits { uniqueCommitsSection }
+        else { Spacer() }
+    }
+
+    private func localChangesSection(_ rows: [ChangeNode.Row]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(preferences.text.string(.uiLocalChanges)).font(.system(size: 13)).frame(height: 22)
+            Text(preferences.text.string(.uiLocalChanges)).font(.system(size: 13)).frame(height: Self.rowHeight)
             if let error = workspace.detail.changesError { unavailable(error) }
-            else if let changes = workspace.detail.changes {
-                let rows = presentation.changeRows(changes, collapsed: workspace.details.collapsedPaths)
+            else if workspace.detail.changes != nil {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(rows) { row in
                             changeRow(row.node, depth: row.depth)
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }.frame(idealHeight: CGFloat(rows.count) * 22, maxHeight: CGFloat(rows.count) * 22)
+                }.frame(idealHeight: CGFloat(rows.count) * Self.rowHeight, maxHeight: CGFloat(rows.count) * Self.rowHeight)
                     .padding(.leading, -6)
             }
-        }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
+        }.padding(.horizontal, 12).padding(.vertical, Self.verticalPadding).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
     }
 
     private func changeRow(_ node: ChangeNode, depth: Int) -> some View {
@@ -123,7 +140,7 @@ struct GitBrowserView: View {
                     .help(node.change?.originalPath.map { "\($0) → \(node.id)" } ?? node.id)
                 Spacer(minLength: 0)
             }
-        }.padding(.leading, CGFloat(depth) * 14).frame(height: 22)
+        }.padding(.leading, CGFloat(depth) * 14).frame(height: Self.rowHeight)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(node.change.map { "\($0.path), \(preferences.text.string(.uiStaged)): \(preferences.text.fileStatus($0.index)), \(preferences.text.string(.uiUnstaged)): \(preferences.text.fileStatus($0.workingTree))" } ?? node.id)
         .contextMenu {
@@ -135,18 +152,18 @@ struct GitBrowserView: View {
 
     private var uniqueCommitsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(preferences.text.string(.uiUniqueCommits)).font(.system(size: 13)).frame(height: 22)
+            Text(preferences.text.string(.uiUniqueCommits)).font(.system(size: 13)).frame(height: Self.rowHeight)
             if let commits = workspace.detail.uniqueCommits {
-                let contentHeight = CGFloat(commits.count) * 22
+                let contentHeight = CGFloat(commits.count) * Self.rowHeight
                 let content = presentation.commitRows(commits, locale: preferences.activeLocale)
                 GeometryReader { geometry in
                     let columnSpacing = min(36, max(12, 12 + (geometry.size.width - 640) / 20))
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(content.rows.enumerated()), id: \.element.id) { index, row in
+                            ForEach(content.rows) { row in
                                 let commit = row.commit
                                 HStack(spacing: 2) {
-                                    CommitLaneView(index: index, count: commits.count, rowHeight: 22)
+                                    CommitLaneView(index: row.index, count: commits.count, rowHeight: Self.rowHeight)
                                         .offset(x: 1)
                                     HStack(spacing: columnSpacing) {
                                         Text(commit.subject).truncationMode(.tail)
@@ -161,14 +178,18 @@ struct GitBrowserView: View {
                                             .fixedSize(horizontal: true, vertical: false)
                                             .frame(width: content.hashWidth, alignment: .trailing).help(commit.id)
                                     }.lineLimit(1)
-                                }.font(.system(size: 13)).frame(height: 22)
+                                }.font(.system(size: 13)).frame(height: Self.rowHeight)
                                     .accessibilityElement(children: .combine)
                             }
                         }
                     }.padding(.leading, -9)
                 }.frame(idealHeight: contentHeight, maxHeight: contentHeight)
             }
-        }.padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
+        }.padding(.horizontal, 12).padding(.vertical, Self.verticalPadding).frame(maxWidth: .infinity, alignment: .topLeading).detailCard()
+    }
+
+    private func sectionHeight(rowCount: Int) -> CGFloat {
+        CGFloat(rowCount + 1) * Self.rowHeight + Self.verticalPadding * 2
     }
 
     private func unavailable(_ reason: MonoDeckError) -> some View { VStack(alignment: .leading) { Label(preferences.text.string(.uiUnavailable), systemImage: "exclamationmark.circle"); IssueDescriptionView(message: preferences.text.message(reason), details: reason.message, text: preferences.text).foregroundStyle(.secondary) } }

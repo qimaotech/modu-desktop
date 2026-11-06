@@ -4,8 +4,13 @@ import AppKit
 struct GitSplitView<Upper: View, Lower: View>: View {
     var upper: Upper
     var lower: Lower
+    var upperHeight: CGFloat?
+    var lowerHeight: CGFloat
     let defaults: UserDefaults
-    var body: some View { NativeSplitView(first: upper, second: lower, vertical: false, defaults: defaults) }
+    var body: some View {
+        NativeSplitView(first: upper, second: lower, vertical: false, defaults: defaults,
+                        firstHeight: upperHeight, secondHeight: lowerHeight)
+    }
 }
 
 struct WorkspaceSplitView<Sidebar: View, Detail: View>: View {
@@ -20,6 +25,8 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
     var second: Second
     let vertical: Bool
     let defaults: UserDefaults?
+    var firstHeight: CGFloat?
+    var secondHeight: CGFloat?
 
     func makeNSView(context: Context) -> MonoDeckSplitView {
         let split = MonoDeckSplitView()
@@ -30,9 +37,10 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
         first.sizingOptions = []; second.sizingOptions = []
         split.addArrangedSubview(first.view); split.addArrangedSubview(second.view)
         if !vertical {
-            split.contentHeights = { width in
+            split.contentHeights = { [coordinator = context.coordinator] width in
                 let proposal = NSSize(width: width, height: .greatestFiniteMagnitude)
-                return (first.sizeThatFits(in: proposal).height, second.sizeThatFits(in: proposal).height)
+                return (coordinator.firstHeight ?? first.sizeThatFits(in: proposal).height,
+                        coordinator.secondHeight ?? second.sizeThatFits(in: proposal).height)
             }
         }
         // NSSplitView forwards sidebar action queries to its delegate; it must not delegate to itself.
@@ -41,20 +49,29 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ split: MonoDeckSplitView, context: Context) {
+        let heightsChanged = context.coordinator.firstHeight != firstHeight || context.coordinator.secondHeight != secondHeight
+        context.coordinator.firstHeight = firstHeight
+        context.coordinator.secondHeight = secondHeight
         context.coordinator.first.rootView = first
         context.coordinator.second.rootView = second
-        split.resizeSubviews(withOldSize: split.bounds.size)
+        if !vertical, heightsChanged || firstHeight == nil || secondHeight == nil {
+            split.resizeSubviews(withOldSize: split.bounds.size)
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(first: first, second: second) }
+    func makeCoordinator() -> Coordinator { Coordinator(first: first, second: second, firstHeight: firstHeight, secondHeight: secondHeight) }
 
     final class Coordinator: NSObject, NSSplitViewDelegate {
         let first: NSHostingController<First>
         let second: NSHostingController<Second>
+        var firstHeight: CGFloat?
+        var secondHeight: CGFloat?
 
-        init(first: First, second: Second) {
+        init(first: First, second: Second, firstHeight: CGFloat?, secondHeight: CGFloat?) {
             self.first = NSHostingController(rootView: first)
             self.second = NSHostingController(rootView: second)
+            self.firstHeight = firstHeight
+            self.secondHeight = secondHeight
         }
 
         func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
@@ -68,22 +85,33 @@ private struct NativeSplitView<First: View, Second: View>: NSViewRepresentable {
             return proposedEffectiveRect
         }
         func splitViewDidResizeSubviews(_ notification: Notification) {
-            (notification.object as? MonoDeckSplitView)?.saveDividerPosition()
+            guard notification.userInfo?["NSSplitViewUserResizeKey"] as? Bool == true else { return }
+            (notification.object as? MonoDeckSplitView)?.rememberDividerPosition()
         }
     }
 }
 
 final class MonoDeckSplitView: NSSplitView {
-    var defaults: UserDefaults?
+    var defaults: UserDefaults? {
+        didSet { preferredGitSplitRatio = defaults?.object(forKey: "gitSplitRatio").map { CGFloat(($0 as? Double) ?? 0.6) } }
+    }
     var contentHeights: ((CGFloat) -> (upper: CGFloat, lower: CGFloat))?
     private(set) var dividerRange: ClosedRange<CGFloat> = 0...0
     var canResize: Bool { dividerRange.lowerBound < dividerRange.upperBound }
     private var positioned = false
     private var resizing = false
+    private var preferredGitSplitRatio: CGFloat?
+    private var pendingDividerPosition: (key: String, value: Double)?
     override var dividerThickness: CGFloat { isVertical ? 1 : 12 }
 
     override func drawDivider(in rect: NSRect) {
         if isVertical { NSColor.separatorColor.setFill(); rect.fill() }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        // NSSplitView tracks the divider until mouse-up; persist once after tracking finishes.
+        defer { saveDividerPosition() }
+        super.mouseDown(with: event)
     }
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
@@ -94,6 +122,7 @@ final class MonoDeckSplitView: NSSplitView {
         let size: CGFloat
         let lowerHeight: CGFloat
         if let contentHeights, !isVertical {
+            let wasResizable = canResize
             let heights = contentHeights(bounds.width)
             let available = max(0, total - dividerThickness)
             if heights.upper + heights.lower <= available {
@@ -106,11 +135,11 @@ final class MonoDeckSplitView: NSSplitView {
                 let minimum = max(upperMinimum * minimumScale, available - heights.lower)
                 let maximum = max(minimum, min(heights.upper, available - lowerMinimum * minimumScale))
                 dividerRange = minimum...maximum
-                let preferred = defaults?.object(forKey: "gitSplitRatio").map { total * (($0 as? Double) ?? 0.6) } ?? total - 124
+                let preferred = preferredGitSplitRatio.map { total * $0 } ?? total - 124
                 size = min(maximum, max(minimum, preferred))
                 lowerHeight = available - size
             }
-            window?.invalidateCursorRects(for: self)
+            if wasResizable != canResize { window?.invalidateCursorRects(for: self) }
         } else {
             let preferred = !positioned || previous <= 0
                 ? defaults?.object(forKey: "sidebarWidth") as? Double ?? (total < 1100 ? 240 : 338)
@@ -129,10 +158,22 @@ final class MonoDeckSplitView: NSSplitView {
         positioned = true; resizing = false
     }
 
-    fileprivate func saveDividerPosition() {
-        guard positioned, !resizing, NSApp.currentEvent?.type == .leftMouseDragged else { return }
-        if isVertical { defaults?.set(arrangedSubviews[0].frame.width, forKey: "sidebarWidth") }
-        else if canResize, bounds.height > 0 { defaults?.set(arrangedSubviews[0].frame.height / bounds.height, forKey: "gitSplitRatio") }
+    func rememberDividerPosition() {
+        guard positioned, !resizing, arrangedSubviews.count == 2 else { return }
+        if isVertical { pendingDividerPosition = ("sidebarWidth", Double(arrangedSubviews[0].frame.width)) }
+        else if canResize, bounds.height > 0 {
+            let ratio = arrangedSubviews[0].frame.height / bounds.height
+            preferredGitSplitRatio = ratio
+            pendingDividerPosition = ("gitSplitRatio", Double(ratio))
+        }
+    }
+
+    func saveDividerPosition() {
+        guard let pending = pendingDividerPosition else { return }
+        pendingDividerPosition = nil
+        if defaults?.object(forKey: pending.key) as? Double != pending.value {
+            defaults?.set(pending.value, forKey: pending.key)
+        }
     }
 
     private func constrained(_ value: CGFloat) -> CGFloat {
